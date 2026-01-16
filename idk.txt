@@ -1,3 +1,7 @@
 jkjkkjkjk
 #include <stdio.h>
+<<<<<<< HEAD
+i like cats
+=======
 nice to meet you
+>>>>>>> main

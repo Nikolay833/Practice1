@@ -10,7 +10,7 @@ using System.Windows.Media.Imaging;
 using Dropshelf.Interop;
 using Dropshelf.Services;
 
-namespace Dropshelf.Shelf;
+namespace Dropshelf.Items;
 
 /// <summary>
 /// Produces file icons (SHGetFileInfo) and image thumbnails on one dedicated STA thread so the UI never

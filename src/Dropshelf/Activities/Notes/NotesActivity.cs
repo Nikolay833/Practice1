@@ -4,8 +4,8 @@ using Dropshelf.Services;
 
 namespace Dropshelf.Activities.Notes;
 
-/// <summary>An expanded-shelf tab that can take what is dropped onto it instead of the shelf.</summary>
-internal interface IShelfDropTarget
+/// <summary>An expanded-island tab that takes content dropped onto it (the Notes tab takes text).</summary>
+internal interface IIslandDropTarget
 {
     bool CanDrop(IDataObject data);
 
@@ -14,9 +14,9 @@ internal interface IShelfDropTarget
 
 /// <summary>
 /// Quick notes: the "Notes" tab with a note list on the left and a plain-text editor. Nothing on the pill. Dropping text onto
-/// the tab appends it to the current note; Ctrl+Shift+N opens the shelf on this tab with the editor focused.
+/// the tab appends it to the current note; Ctrl+Shift+N opens the island on this tab with the editor focused.
 /// </summary>
-internal sealed class NotesActivity : PillActivityBase, IShelfDropTarget, IDisposable
+internal sealed class NotesActivity : PillActivityBase, IIslandDropTarget, IDisposable
 {
     private NotesView? _view;
 
@@ -33,7 +33,7 @@ internal sealed class NotesActivity : PillActivityBase, IShelfDropTarget, IDispo
     public override int TabOrder => -70;
     public override bool HasExpanded => true;
 
-    /// <summary>Raised when the editor wants the shelf to let go of the keyboard (Esc).</summary>
+    /// <summary>Raised when the editor wants the island to let go of the keyboard (Esc).</summary>
     public event Action? ReleaseRequested;
 
     public override FrameworkElement? CreateExpanded()

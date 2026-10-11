@@ -44,7 +44,7 @@ internal sealed class BatteryActivity : PillActivityBase, IDisposable
     public BatteryActivity(SettingsService settings)
     {
         _settings = settings;
-        _pulseLoop = new FrameLoop(OnPulse);
+        _pulseLoop = new FrameLoop(OnPulse, maxFps: 30);
 
         _glyph = HudParts.Glyph("");
         _left = HudParts.Cell(_glyph, 22);

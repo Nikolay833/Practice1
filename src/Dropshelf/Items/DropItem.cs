@@ -5,9 +5,9 @@ using System.Threading.Tasks;
 using System.Windows.Media;
 using Dropshelf.Services;
 
-namespace Dropshelf.Shelf;
+namespace Dropshelf.Items;
 
-public enum ShelfItemKind
+public enum DropItemKind
 {
     File,
     Folder,
@@ -19,7 +19,7 @@ public enum ShelfItemKind
 /// One entry on the shelf or in the basket. Files are referenced by their original path (never copied);
 /// text and URL items are materialised as .txt / .url files in the Items folder.
 /// </summary>
-public sealed class ShelfItem : NotifyBase
+public sealed class DropItem : NotifyBase
 {
     private ImageSource? _icon;
     private bool _iconRequested;
@@ -30,7 +30,7 @@ public sealed class ShelfItem : NotifyBase
     public string DisplayName { get; set; } = string.Empty;
 
     [JsonConverter(typeof(JsonStringEnumConverter))]
-    public ShelfItemKind Kind { get; set; }
+    public DropItemKind Kind { get; set; }
 
     public DateTime AddedUtc { get; set; } = DateTime.UtcNow;
 
@@ -59,13 +59,13 @@ public sealed class ShelfItem : NotifyBase
     }
 
     [JsonIgnore]
-    public bool Exists => Kind == ShelfItemKind.Folder ? Directory.Exists(Path) : File.Exists(Path);
+    public bool Exists => Kind == DropItemKind.Folder ? Directory.Exists(Path) : File.Exists(Path);
 
     private async Task LoadIconAsync()
     {
         try
         {
-            var (image, thumbnail) = await IconLoader.LoadAsync(Path, Kind == ShelfItemKind.Folder);
+            var (image, thumbnail) = await IconLoader.LoadAsync(Path, Kind == DropItemKind.Folder);
             _icon = image;
             IsThumbnail = thumbnail;
             OnPropertyChanged(nameof(Icon));

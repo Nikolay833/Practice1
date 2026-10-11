@@ -20,10 +20,11 @@ using Dropshelf.Animation;
 using Dropshelf.Basket;
 using Dropshelf.Clipboard;
 using Dropshelf.Interop;
+using Dropshelf.Island;
 using Dropshelf.Screenshot;
 using Dropshelf.Services;
 using Dropshelf.Settings;
-using Dropshelf.Shelf;
+using Dropshelf.Items;
 using Dropshelf.Themes;
 using Dropshelf.Tools;
 
@@ -41,7 +42,6 @@ public partial class App : Application
     private bool _uninstalling;
     private bool _deleteDataOnUninstall;
     private SettingsService? _settings;
-    private ShelfStore? _shelf;
     private ItemStore? _basketStore;
     private MessageWindow? _messages;
     private HotkeyService? _hotkeys;
@@ -49,7 +49,7 @@ public partial class App : Application
     private MouseHook? _mouseHook;
     private ShakeDetector? _shake;
     private TrayService? _tray;
-    private ShelfWindow? _shelfWindow;
+    private IslandWindow? _island;
     private BasketWindow? _basketWindow;
     private ClipboardWindow? _clipboardWindow;
     private SettingsWindow? _settingsWindow;
@@ -143,8 +143,8 @@ public partial class App : Application
         AppPaths.EnsureDirectories();
         _settings = new SettingsService();
         AnimationSettings.Attach(_settings.Current);
-        _theme = new ThemeService(_settings); // accent + pill style resources; must exist before any window is created
-        _shelf = new ShelfStore(_settings);
+        _theme = new ThemeService(_settings); // accent resources; must exist before any window is created
+        TryStep("old shelf data", () => JsonFile.Delete(AppPaths.ShelfFile)); // the shelf is gone; its saved list is not needed
         _basketStore = new ItemStore();
 
         _messages = new MessageWindow();
@@ -166,41 +166,41 @@ public partial class App : Application
         _activityHost = new ActivityHost();
         StartActivities();
 
-        _shelfWindow = new ShelfWindow(_shelf, _settings, ShowSettings, _activityHost);
-        _shelfWindow.WheelRegionSink = region => _mouseHook.SetWheelRegion(region);
-        _shelfWindow.Show();
+        _island = new IslandWindow(_settings, ShowSettings, _activityHost);
+        _island.WheelRegionSink = region => _mouseHook.SetWheelRegion(region);
+        _island.Show();
 
         _fullscreen = new FullscreenWatcher(_settings);
         _fullscreen.Changed += fullscreen =>
         {
             _activityHost.SetFullscreen(fullscreen);
-            _shelfWindow.SetFullscreen(fullscreen);
+            _island.SetFullscreen(fullscreen);
         };
         if (_fullscreen.IsFullscreen)
         {
             _activityHost.SetFullscreen(true); // a fullscreen app was already in front at start-up
-            _shelfWindow.SetFullscreen(true);
+            _island.SetFullscreen(true);
         }
 
         _tray = new TrayService(
-            showShelf: () => _shelfWindow.ShowExpanded(),
+            showIsland: () => _island.ShowExpanded(),
             openBasket: ShowBasketAtCursor,
             openClipboard: () => ShowClipboard(fromHotkey: false),
             openSettings: ShowSettings,
             uninstall: PackageIdentity.IsPackaged ? OpenAppsSettings : Uninstall,
             quit: QuitByUser,
             screenshot: () => _screenshot?.Begin(),
-            quickNote: () => _shelfWindow.ShowNotes());
+            quickNote: () => _island.ShowNotes());
         OcrActions.Message += text => _tray?.ShowBalloon("Dropshelf", text);
 
-        _screenshot = new ScreenshotService(path => _shelfWindow.AddToShelf([path]), _toast!);
+        _screenshot = new ScreenshotService(_toast!);
 
         if (!_hotkeys.Register(HotkeyService.BasketId, NativeMethods.MOD_CONTROL | NativeMethods.MOD_SHIFT, NativeMethods.VK_B, ShowBasketAtCursor))
         {
             _tray.ShowBalloon("Dropshelf", "Ctrl+Shift+B is already used by another app, so the basket hotkey is unavailable.");
         }
 
-        if (!_hotkeys.Register(HotkeyService.NotesId, NativeMethods.MOD_CONTROL | NativeMethods.MOD_SHIFT, NativeMethods.VK_N, () => _shelfWindow.ShowNotes()))
+        if (!_hotkeys.Register(HotkeyService.NotesId, NativeMethods.MOD_CONTROL | NativeMethods.MOD_SHIFT, NativeMethods.VK_N, () => _island.ShowNotes()))
         {
             _tray.ShowBalloon("Dropshelf", "Ctrl+Shift+N is already used by another app, so the quick note hotkey is unavailable.");
         }
@@ -327,7 +327,7 @@ public partial class App : Application
 
         TryStep("timer", () =>
         {
-            _timer = new TimerActivity(_settings!, _toast, () => _shelfWindow?.Celebrate());
+            _timer = new TimerActivity(_settings!, _toast);
             _activityHost.Register(_timer);
         });
 
@@ -404,7 +404,7 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// Writes every debounced save that is still pending (notes, clipboard history, shelf, settings). Safe to call any number of times
+    /// Writes every debounced save that is still pending (notes, clipboard history, settings). Safe to call any number of times
     /// and from any thread: each store only writes when it has a pending change, and the work hops to the UI thread. Runs on
     /// session end (log-off, shutdown), before a crash relaunch and at exit.
     /// </summary>
@@ -419,7 +419,6 @@ public partial class App : Application
 
         TryStep("notes flush", () => _notes?.Store.Flush());
         TryStep("clipboard flush", () => _clipboard?.Flush());
-        TryStep("shelf flush", () => _shelf?.Flush());
         TryStep("settings flush", () => _settings?.Flush());
     }
 
@@ -467,9 +466,6 @@ public partial class App : Application
             case nameof(AppSettings.LaunchAtStartup):
                 StartupRegistration.Set(_settings.Current.LaunchAtStartup);
                 break;
-            case nameof(AppSettings.RememberShelf):
-                _shelf?.OnRememberChanged();
-                break;
             case nameof(AppSettings.ShakeToOpenBasket):
             case nameof(AppSettings.ScrollToChangeVolume):
                 ApplyMouseHookSetting();
@@ -481,7 +477,7 @@ public partial class App : Application
                 _fullscreen?.ApplySettings();
                 break;
             case nameof(AppSettings.Animations):
-                _shelfWindow?.OnAnimationModeChanged();
+                _island?.OnAnimationModeChanged();
                 break;
             case nameof(AppSettings.ClipboardHistoryEnabled):
                 // Only a real on/off toggle (re)tries the hotkey registration, so a taken hotkey is not retried
@@ -555,15 +551,15 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// The low-level mouse hook is only installed while it is needed: shake-to-open is enabled, or the wheel over the pill
+    /// The low-level mouse hook is only installed while it is needed: shake-to-open is enabled, or the wheel over the island
     /// changes the volume (which also needs a working volume control).
     /// </summary>
     private void ApplyMouseHookSetting()
     {
         bool wheel = _settings!.Current.ScrollToChangeVolume && _volume != null;
-        if (_shelfWindow != null)
+        if (_island != null)
         {
-            _shelfWindow.WheelEnabled = wheel;
+            _island.WheelEnabled = wheel;
         }
 
         if (_settings.Current.ShakeToOpenBasket || wheel)
@@ -603,7 +599,7 @@ public partial class App : Application
 
     private void ShowBasketAtCursor()
     {
-        _basketWindow ??= new BasketWindow(_basketStore!, _shelf!);
+        _basketWindow ??= new BasketWindow(_basketStore!);
         _basketWindow.ShowNearCursor();
     }
 

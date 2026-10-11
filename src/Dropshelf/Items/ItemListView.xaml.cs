@@ -18,10 +18,10 @@ using Dropshelf.Services;
 using Dropshelf.Settings;
 using Dropshelf.Tools;
 
-namespace Dropshelf.Shelf;
+namespace Dropshelf.Items;
 
 /// <summary>
-/// Reusable list of item tiles (shelf: one scrolling row; basket: wrapping grid) with multi-select,
+/// Reusable list of item tiles (one scrolling row, or a wrapping grid in the basket) with multi-select,
 /// drag-out, double-click open and a context menu.
 /// </summary>
 public partial class ItemListView : UserControl
@@ -36,7 +36,7 @@ public partial class ItemListView : UserControl
     private ItemStore? _store;
     private ScrollViewer? _scroll;
     private Point _pressPoint;
-    private ShelfItem? _pressedItem;
+    private DropItem? _pressedItem;
     private bool _deferSingleSelect;
     private bool _menuOpen;
     private bool _dragging;
@@ -99,28 +99,10 @@ public partial class ItemListView : UserControl
         }
     }
 
-    /// <summary>Flips the existing tiles in one after another (30 ms apart). Called when the shelf opens.</summary>
-    public void PlayOpenAnimation()
-    {
-        if (AnimationSettings.IsOff)
-        {
-            return;
-        }
-
-        int index = 0;
-        foreach (var item in List.Items)
-        {
-            if (List.ItemContainerGenerator.ContainerFromItem(item) is FrameworkElement container && container.IsLoaded)
-            {
-                TileAnimator.FlipIn(container, index++);
-            }
-        }
-    }
-
     private void Tile_Loaded(object sender, RoutedEventArgs e)
     {
         // Only tiles created by a drop a moment ago fly in; tiles realised for any other reason just appear.
-        if (sender is not FrameworkElement { DataContext: ShelfItem item } root || _dropPoint is not { } drop
+        if (sender is not FrameworkElement { DataContext: DropItem item } root || _dropPoint is not { } drop
             || Environment.TickCount64 - _dropTick > 1500 || (DateTime.UtcNow - item.AddedUtc).TotalSeconds > 3)
         {
             return;
@@ -138,38 +120,11 @@ public partial class ItemListView : UserControl
         }
     }
 
-    private static FrameworkElement? CardOf(FrameworkElement root) =>
-        root is Panel panel && panel.Children.Count > 0 ? panel.Children[0] as FrameworkElement : null;
-
-    private void Tile_MouseEnter(object sender, MouseEventArgs e)
-    {
-        if (sender is FrameworkElement root && CardOf(root) is { } card)
-        {
-            TileAnimator.HoverEnter(root, card);
-        }
-    }
-
-    private void Tile_MouseMove(object sender, MouseEventArgs e)
-    {
-        if (sender is FrameworkElement root)
-        {
-            TileAnimator.HoverMove(root, e.GetPosition(root));
-        }
-    }
-
-    private void Tile_MouseLeave(object sender, MouseEventArgs e)
-    {
-        if (sender is FrameworkElement root && CardOf(root) is { } card)
-        {
-            TileAnimator.HoverLeave(root, card);
-        }
-    }
-
     /// <summary>
     /// Removed tiles shrink and fade: a bitmap snapshot of each tile is taken before it leaves the list and animated on the
     /// overlay canvas (the real tile is already gone by the time the collection has changed).
     /// </summary>
-    private void OnItemsRemoving(IReadOnlyList<ShelfItem> items)
+    private void OnItemsRemoving(IReadOnlyList<DropItem> items)
     {
         if (AnimationSettings.IsOff || !IsVisible || ActualWidth < 1)
         {
@@ -272,7 +227,7 @@ public partial class ItemListView : UserControl
         return node as ListBoxItem;
     }
 
-    private IReadOnlyList<ShelfItem> SelectedItems() => List.SelectedItems.OfType<ShelfItem>().ToList();
+    private IReadOnlyList<DropItem> SelectedItems() => List.SelectedItems.OfType<DropItem>().ToList();
 
     private void List_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
@@ -280,7 +235,7 @@ public partial class ItemListView : UserControl
         _deferSingleSelect = false;
 
         var container = ContainerAt(e.OriginalSource);
-        if (container?.DataContext is not ShelfItem item)
+        if (container?.DataContext is not DropItem item)
         {
             return;
         }
@@ -336,14 +291,14 @@ public partial class ItemListView : UserControl
         StartDrag(pressed);
     }
 
-    private void StartDrag(ShelfItem pressed)
+    private void StartDrag(DropItem pressed)
     {
         if (_store == null)
         {
             return;
         }
 
-        var items = List.SelectedItems.Contains(pressed) ? SelectedItems() : new List<ShelfItem> { pressed };
+        var items = List.SelectedItems.Contains(pressed) ? SelectedItems() : new List<DropItem> { pressed };
         var existing = items.Where(i => i.Exists).ToList();
         if (existing.Count == 0)
         {
@@ -356,7 +311,7 @@ public partial class ItemListView : UserControl
 
         // File and folder items are references to the user's originals, so a drop must never move them (Explorer
         // moves on same-volume drops). Only the text/link files we created ourselves may be moved out.
-        bool ownedOnly = existing.All(i => i.Kind is ShelfItemKind.Text or ShelfItemKind.Url);
+        bool ownedOnly = existing.All(i => i.Kind is DropItemKind.Text or DropItemKind.Url);
         DragDropEffects allowed = ownedOnly ? DragDropEffects.Copy | DragDropEffects.Move : DragDropEffects.Copy;
 
         DragDropEffects result = DragDropEffects.None;
@@ -485,8 +440,8 @@ public partial class ItemListView : UserControl
     private void PrepareMenu(ContextMenu menu)
     {
         var existing = SelectedItems().Where(i => i.Exists).ToList();
-        var images = existing.Where(i => i.Kind == ShelfItemKind.File && ImageOps.IsImage(i.Path)).Select(i => i.Path).ToList();
-        var zips = existing.Where(i => i.Kind == ShelfItemKind.File && ZipOps.IsZip(i.Path)).Select(i => i.Path).ToList();
+        var images = existing.Where(i => i.Kind == DropItemKind.File && ImageOps.IsImage(i.Path)).Select(i => i.Path).ToList();
+        var zips = existing.Where(i => i.Kind == DropItemKind.File && ZipOps.IsZip(i.Path)).Select(i => i.Path).ToList();
         var all = existing.Select(i => i.Path).ToList();
 
         foreach (MenuItem item in menu.Items.OfType<MenuItem>())
@@ -557,7 +512,7 @@ public partial class ItemListView : UserControl
                 maxWidth = prompt.Value;
             }
 
-            ShelfItem? first = List.SelectedItems.OfType<ShelfItem>().FirstOrDefault();
+            DropItem? first = List.SelectedItems.OfType<DropItem>().FirstOrDefault();
             FrameworkElement? source = first == null ? null : List.ItemContainerGenerator.ContainerFromItem(first) as FrameworkElement;
             ToolResult result = await tools.RunAsync(kind, paths, maxWidth);
             if (result.Outputs.Count == 0)
@@ -589,7 +544,7 @@ public partial class ItemListView : UserControl
 
     private async void Ocr_Click(object sender, RoutedEventArgs e)
     {
-        var images = SelectedItems().Where(i => i.Exists && i.Kind == ShelfItemKind.File && ImageOps.IsImage(i.Path)).Select(i => i.Path).ToList();
+        var images = SelectedItems().Where(i => i.Exists && i.Kind == DropItemKind.File && ImageOps.IsImage(i.Path)).Select(i => i.Path).ToList();
         if (images.Count == 0)
         {
             return;
@@ -607,7 +562,7 @@ public partial class ItemListView : UserControl
 
     private void Remove_Click(object sender, RoutedEventArgs e) => _store?.Remove(SelectedItems());
 
-    private void OpenItems(IEnumerable<ShelfItem> items)
+    private void OpenItems(IEnumerable<DropItem> items)
     {
         foreach (var item in items)
         {

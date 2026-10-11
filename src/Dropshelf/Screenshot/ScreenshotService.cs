@@ -15,16 +15,14 @@ namespace Dropshelf.Screenshot;
 /// <summary>
 /// Ctrl+Shift+S: pick a region (<see cref="CaptureOverlay"/>), grab it with GDI (<c>CopyFromScreen</c>, physical pixels), save it
 /// as <c>Pictures\Screenshots\Dropshelf yyyy-MM-dd HH.mm.ss.png</c>, put the picture on the clipboard (flagged as our own copy so
-/// the clipboard history skips it), add it to the shelf and show a HUD with a thumbnail and a "Copy text" (OCR) button.
+/// the clipboard history skips it) and show a HUD on the island with a thumbnail and a "Copy text" (OCR) button.
 /// </summary>
 internal sealed class ScreenshotService
 {
-    private readonly Action<string> _addToShelf;
     private readonly ToastActivity _toast;
 
-    public ScreenshotService(Action<string> addToShelf, ToastActivity toast)
+    public ScreenshotService(ToastActivity toast)
     {
-        _addToShelf = addToShelf;
         _toast = toast;
     }
 
@@ -53,7 +51,6 @@ internal sealed class ScreenshotService
             // Decoding a big capture takes a while: do it (and the thumbnail) off the UI thread. Both come back frozen, so they can cross threads.
             (BitmapImage image, BitmapImage thumbnail) = await Task.Run(() => (Decode(png), Thumbnail(png)));
             await CopyToClipboardAsync(image);
-            _addToShelf(path);
 
             string captured = path;
             _toast.Show(new ToastSpec

@@ -15,7 +15,7 @@ using Dropshelf.Themes;
 
 namespace Dropshelf.Settings;
 
-/// <summary>Dark settings window bound directly to <see cref="AppSettings"/>; every change applies live.</summary>
+/// <summary>Settings in the style of macOS System Settings, bound directly to <see cref="AppSettings"/>; every change applies live.</summary>
 public partial class SettingsWindow : Window
 {
     private readonly AppSettings _settings;
@@ -29,8 +29,6 @@ public partial class SettingsWindow : Window
 
         ShowAnimationMode();
         BuildAccentSwatches();
-        StyleBlack.IsChecked = _settings.PillStyle == PillStyle.Black;
-        StyleGlass.IsChecked = _settings.PillStyle == PillStyle.Glass;
         UpdateInstallInfo();
         UnitCelsius.IsChecked = !_settings.WeatherFahrenheit;
         UnitFahrenheit.IsChecked = _settings.WeatherFahrenheit;
@@ -74,10 +72,10 @@ public partial class SettingsWindow : Window
 
     private RadioButton? _windowsSwatch;
 
-    /// <summary>One round swatch per accent preset; "Windows" shows the current Windows accent and follows it.</summary>
+    /// <summary>One round swatch per accent preset (Apple's order); "Windows" shows the current Windows accent and follows it.</summary>
     private void BuildAccentSwatches()
     {
-        foreach (AccentPreset preset in Enum.GetValues<AccentPreset>())
+        foreach (AccentPreset preset in ThemeService.SwatchOrder)
         {
             var swatch = new RadioButton
             {
@@ -86,11 +84,11 @@ public partial class SettingsWindow : Window
                 Tag = preset,
                 ToolTip = preset == AccentPreset.Windows ? "Windows accent color" : preset.ToString(),
                 Background = new SolidColorBrush(ThemeService.ColorOf(preset)),
+                Content = preset == AccentPreset.Windows ? "\uE790" : null,
                 IsChecked = _settings.Accent == preset,
             };
             if (preset == AccentPreset.Windows)
             {
-                swatch.Content = "\uE790"; // palette glyph marks "follow Windows"
                 _windowsSwatch = swatch;
             }
 
@@ -110,19 +108,6 @@ public partial class SettingsWindow : Window
         if (_windowsSwatch != null)
         {
             _windowsSwatch.Background = new SolidColorBrush(ThemeService.ColorOf(AccentPreset.Windows));
-        }
-    }
-
-    private void PillStyle_Checked(object sender, RoutedEventArgs e)
-    {
-        if (_initializing || sender is not RadioButton { Tag: string tag })
-        {
-            return;
-        }
-
-        if (Enum.TryParse(tag, out PillStyle style))
-        {
-            _settings.PillStyle = style;
         }
     }
 
@@ -221,7 +206,7 @@ public partial class SettingsWindow : Window
         {
             NotificationAccess.RequiresPackage => "Requires the MSIX version",
             NotificationAccess.Requesting => "Waiting for your answer in the Windows prompt...",
-            NotificationAccess.Allowed => "Notifications from your apps show on the pill for a few seconds",
+            NotificationAccess.Allowed => "Notifications from your apps show on the island for a few seconds",
             NotificationAccess.Denied => "Windows blocked access. Allow Dropshelf in Settings → Privacy & security → Notifications.",
             NotificationAccess.Unavailable => "Notifications can't be read on this PC",
             _ => "Windows asks once for permission to read your notifications",
@@ -237,8 +222,8 @@ public partial class SettingsWindow : Window
         MutedApps.Children.Clear();
         var apps = _settings.NotificationKnownApps.OrderBy(a => a.Value, StringComparer.CurrentCultureIgnoreCase).ToList();
         MutedAppsHint.Text = apps.Count == 0
-            ? "Apps appear here after their first notification. Tick an app to keep it off the pill."
-            : "Tick an app to keep its notifications off the pill (Windows still shows them).";
+            ? "Apps appear here after their first notification. Turn an app on to keep it off the island."
+            : "Turn an app on to keep its notifications off the island (Windows still shows them).";
         foreach ((string id, string name) in apps)
         {
             var box = new CheckBox
@@ -370,14 +355,14 @@ public partial class SettingsWindow : Window
     {
         string text = mode switch
         {
-            AnimationMode.Full => "Springs, 3D tile flips and tilts, and the mascot looks around.",
-            AnimationMode.Subtle => "Short fades and slides only: no tilts, flips or mascot look-around.",
+            AnimationMode.Full => "Fluid springs, like the Dynamic Island.",
+            AnimationMode.Subtle => "Short motion without bounce, like Reduce Motion.",
             _ => "No animation: everything appears instantly.",
         };
 
         if (_settings.Animations == null && !SystemParameters.ClientAreaAnimation)
         {
-            text += " Windows animation effects are off, so Subtle is used until you pick Full.";
+            text += " Windows animation effects are off, so Reduced is used until you pick Full.";
         }
 
         AnimationHint.Text = text;
@@ -397,22 +382,15 @@ public partial class SettingsWindow : Window
         }
     }
 
-    private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    protected override void OnSourceInitialized(EventArgs e)
     {
-        if (e.ButtonState == MouseButtonState.Pressed)
-        {
-            try
-            {
-                DragMove();
-            }
-            catch (InvalidOperationException)
-            {
-                // Released before the move began.
-            }
-        }
+        base.OnSourceInitialized(e);
+        Interop.GlassHelper.TryRoundCorners(new System.Windows.Interop.WindowInteropHelper(this).Handle);
     }
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
+
+    private void Minimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
 
     private void OpenFolder_Click(object sender, RoutedEventArgs e)
     {

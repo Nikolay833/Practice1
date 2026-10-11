@@ -30,7 +30,7 @@ internal sealed class ProgressRing : Grid
         _thickness = thickness;
         Width = size;
         Height = size;
-        _loop = new FrameLoop(OnSpin);
+        _loop = new FrameLoop(OnSpin, maxFps: 30);
 
         var track = new Ellipse { Margin = new Thickness(thickness / 2), StrokeThickness = thickness };
         track.Stroke = new SolidColorBrush(Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF));

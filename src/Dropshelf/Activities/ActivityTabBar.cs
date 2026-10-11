@@ -9,12 +9,12 @@ using Dropshelf.Animation;
 namespace Dropshelf.Activities;
 
 /// <summary>
-/// The tab strip at the top of the expanded shelf. A soft accent pill glides (spring) behind the selected tab.
-/// With a single tab it is just a bold title, like the shelf header used to be.
+/// The tabs at the top of the expanded island, drawn as an Apple segmented control: a rounded grey track with a lighter
+/// "thumb" that glides (spring) behind the selected segment. With a single tab it is just that tab's title.
 /// </summary>
-internal sealed class ActivityTabBar : Grid
+internal sealed class ActivityTabBar : Border
 {
-    private const double TabHeight = 24, TabPadding = 12, TabGap = 4;
+    private const double SegmentHeight = 24, SegmentPadding = 12, Inset = 2;
 
     private sealed class Tab
     {
@@ -23,35 +23,38 @@ internal sealed class ActivityTabBar : Grid
         public required TextBlock Text;
     }
 
-    private readonly Border _indicator;
-    private readonly TranslateTransform _indicatorShift = new();
+    private static readonly Brush TrackFill = Frozen(Color.FromArgb(0x3D, 0x76, 0x76, 0x80));  // tertiarySystemFill
+    private static readonly Brush ThumbFill = Frozen(Color.FromRgb(0x63, 0x63, 0x66));         // systemGray2
+
+    private readonly Border _thumb;
+    private readonly TranslateTransform _thumbShift = new();
     private readonly StackPanel _strip;
     private readonly List<Tab> _tabs = new();
-    private readonly Spring _x = new(0, 520, 0.9);
-    private readonly Spring _w = new(0, 520, 0.9);
+    private readonly Spring _x = new(0, 520, 0.85);
+    private readonly Spring _w = new(0, 520, 0.85);
     private readonly FrameLoop _loop;
     private string _selected = string.Empty;
 
     public ActivityTabBar()
     {
         _loop = new FrameLoop(OnFrame);
-        Height = TabHeight;
+        Height = SegmentHeight + 2 * Inset;
+        CornerRadius = new CornerRadius(Height / 2);
+        Padding = new Thickness(Inset);
 
-        _indicator = new Border
+        _thumb = new Border
         {
-            CornerRadius = new CornerRadius(8),
-            BorderThickness = new Thickness(1),
+            Height = SegmentHeight,
+            CornerRadius = new CornerRadius(SegmentHeight / 2),
+            Background = ThumbFill,
             HorizontalAlignment = HorizontalAlignment.Left,
             IsHitTestVisible = false,
             Visibility = Visibility.Collapsed,
-            RenderTransform = _indicatorShift,
+            RenderTransform = _thumbShift,
         };
-        _indicator.SetResourceReference(Border.BackgroundProperty, "AccentSoftBrush");
-        _indicator.SetResourceReference(Border.BorderBrushProperty, "AccentStrokeBrush");
-        Children.Add(_indicator);
 
         _strip = new StackPanel { Orientation = Orientation.Horizontal };
-        Children.Add(_strip);
+        Child = new Grid { Children = { _thumb, _strip } };
     }
 
     public event Action<string>? TabClicked;
@@ -67,18 +70,17 @@ internal sealed class ActivityTabBar : Grid
             var text = new TextBlock
             {
                 Text = title,
-                FontSize = 13,
+                FontSize = 12,
                 FontWeight = FontWeights.SemiBold,
                 VerticalAlignment = VerticalAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Center,
             };
             var root = new Border
             {
-                Height = TabHeight,
+                Height = SegmentHeight,
                 Background = Brushes.Transparent,
                 Cursor = Cursors.Hand,
                 Child = text,
-                Margin = new Thickness(0, 0, TabGap, 0),
             };
             var tab = new Tab { Id = id, Root = root, Text = text };
             root.MouseLeftButtonUp += (_, e) =>
@@ -117,10 +119,11 @@ internal sealed class ActivityTabBar : Grid
     private void ApplyTabLook()
     {
         bool single = _tabs.Count <= 1;
-        Margin = single ? new Thickness(0) : new Thickness(-TabPadding, 0, 0, 0); // the first label stays where the old title was
+        Background = single ? Brushes.Transparent : TrackFill;
         foreach (Tab tab in _tabs)
         {
-            tab.Root.Padding = single ? new Thickness(0) : new Thickness(TabPadding, 0, TabPadding, 0);
+            tab.Root.Padding = new Thickness(single ? 2 : SegmentPadding, 0, single ? 2 : SegmentPadding, 0);
+            tab.Text.FontSize = single ? 14 : 12;
             Restyle(tab, hover: false);
         }
     }
@@ -135,7 +138,7 @@ internal sealed class ActivityTabBar : Grid
     {
         if (_tabs.Count <= 1)
         {
-            _indicator.Visibility = Visibility.Collapsed;
+            _thumb.Visibility = Visibility.Collapsed;
             return;
         }
 
@@ -145,28 +148,28 @@ internal sealed class ActivityTabBar : Grid
             double width = tab.Root.ActualWidth;
             if (tab.Id == _selected)
             {
-                bool first = _indicator.Visibility != Visibility.Visible;
-                _indicator.Visibility = Visibility.Visible;
-                _indicator.Height = TabHeight;
+                bool first = _thumb.Visibility != Visibility.Visible;
+                _thumb.Visibility = Visibility.Visible;
                 _x.Target = x;
                 _w.Target = width;
-                if (!animate || first || AnimationSettings.IsOff)
+                if (!animate || first || AnimationSettings.IsOff || !IsVisible)
                 {
+                    _loop.Stop();
                     _x.Snap(x);
                     _w.Snap(width);
                     Apply();
                 }
                 else
                 {
-                    AnimationSettings.Configure(_x, 520, 0.9);
-                    AnimationSettings.Configure(_w, 520, 0.9);
+                    AnimationSettings.Configure(_x, 520, 0.85);
+                    AnimationSettings.Configure(_w, 520, 0.85);
                     _loop.Start();
                 }
 
                 return;
             }
 
-            x += width + TabGap;
+            x += width;
         }
     }
 
@@ -180,7 +183,14 @@ internal sealed class ActivityTabBar : Grid
 
     private void Apply()
     {
-        _indicatorShift.X = _x.Value;
-        _indicator.Width = Math.Max(0, _w.Value);
+        _thumbShift.X = _x.Value;
+        _thumb.Width = Math.Max(0, _w.Value);
+    }
+
+    private static Brush Frozen(Color color)
+    {
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+        return brush;
     }
 }

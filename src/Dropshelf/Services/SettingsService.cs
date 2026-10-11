@@ -8,7 +8,10 @@ using Dropshelf.Animation;
 
 namespace Dropshelf.Services;
 
-/// <summary>Accent colour choices. <see cref="Windows"/> follows the Windows accent colour live.</summary>
+/// <summary>
+/// Accent colour choices: Apple's system colours (dark appearance). <see cref="Windows"/> follows the Windows accent colour
+/// live. Saved by name, so new values are appended.
+/// </summary>
 public enum AccentPreset
 {
     Blue,
@@ -20,24 +23,18 @@ public enum AccentPreset
     Green,
     Teal,
     Windows,
-}
-
-/// <summary>Look of the pill: solid black, or dark translucent glass.</summary>
-public enum PillStyle
-{
-    Black,
-    Glass,
+    Yellow,
+    Graphite,
 }
 
 /// <summary>User-configurable options. Bound directly by the settings window.</summary>
 public sealed class AppSettings : NotifyBase
 {
     private bool _launchAtStartup = true; // on by default: Dropshelf is meant to be always running
-    private bool _rememberShelf = true;
     private bool _shakeToOpenBasket = true;
     private bool _clipboardHistoryEnabled = true;
     private int _clipboardHistorySize = 50;
-    private bool _expandShelfOnHover = true;
+    private bool _expandOnHover = true;
     private AnimationMode? _animations;
     private bool _showNowPlaying = true;
     private bool _showVolumeHud = true;
@@ -49,9 +46,6 @@ public sealed class AppSettings : NotifyBase
     private bool _hideInFullscreen = true;
     private bool _showVolumeHudInFullscreen;
     private AccentPreset _accent = AccentPreset.Blue;
-    private PillStyle _pillStyle = PillStyle.Black;
-    private bool _mascotFollowsAccent = true;
-    private bool _showMascot = true;
     private bool _screenshotHotkeyEnabled = true;
     private int _pomodoroWorkMinutes = 25;
     private int _pomodoroBreakMinutes = 5;
@@ -76,7 +70,6 @@ public sealed class AppSettings : NotifyBase
     private bool _portableCleanupOffered;
 
     public bool LaunchAtStartup { get => _launchAtStartup; set => SetField(ref _launchAtStartup, value); }
-    public bool RememberShelf { get => _rememberShelf; set => SetField(ref _rememberShelf, value); }
     public bool ShakeToOpenBasket { get => _shakeToOpenBasket; set => SetField(ref _shakeToOpenBasket, value); }
     public bool ClipboardHistoryEnabled { get => _clipboardHistoryEnabled; set => SetField(ref _clipboardHistoryEnabled, value); }
 
@@ -86,7 +79,9 @@ public sealed class AppSettings : NotifyBase
         set => SetField(ref _clipboardHistorySize, Math.Clamp(value, MinHistorySize, MaxHistorySize));
     }
 
-    public bool ExpandShelfOnHover { get => _expandShelfOnHover; set => SetField(ref _expandShelfOnHover, value); }
+    /// <summary>Resting the cursor on the island opens it (otherwise a click does). Keeps its old JSON name.</summary>
+    [JsonPropertyName("ExpandShelfOnHover")]
+    public bool ExpandOnHover { get => _expandOnHover; set => SetField(ref _expandOnHover, value); }
 
     /// <summary>
     /// Animation level chosen by the user. Null (never chosen) means Full, unless Windows' "Animation effects" is off,
@@ -116,12 +111,6 @@ public sealed class AppSettings : NotifyBase
     // ---- Appearance ----
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public AccentPreset Accent { get => _accent; set => SetField(ref _accent, value); }
-
-    [JsonConverter(typeof(JsonStringEnumConverter))]
-    public PillStyle PillStyle { get => _pillStyle; set => SetField(ref _pillStyle, value); }
-
-    public bool MascotFollowsAccent { get => _mascotFollowsAccent; set => SetField(ref _mascotFollowsAccent, value); }
-    public bool ShowMascot { get => _showMascot; set => SetField(ref _showMascot, value); }
 
     // ---- Screenshot ----
     /// <summary>Ctrl+Shift+S opens the region capture overlay.</summary>

@@ -1,14 +1,23 @@
 using System.Globalization;
+using System;
 using System.Windows;
+using System.Windows.Interop;
+using Dropshelf.Interop;
 using System.Windows.Input;
 
 namespace Dropshelf.Settings;
 
-/// <summary>A small dark dialog that asks for one whole number (the "Resize to max width" size). Enter accepts, Esc cancels.</summary>
+/// <summary>A small macOS-style alert that asks for one whole number (the "Resize to max width" size). Enter accepts, Esc cancels.</summary>
 public partial class NumberPromptWindow : Window
 {
     private readonly int _min;
     private readonly int _max;
+
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        GlassHelper.TryRoundCorners(new WindowInteropHelper(this).Handle);
+    }
 
     public NumberPromptWindow(string title, string hint, int initial, int min, int max)
     {

@@ -3,7 +3,7 @@ using System.Windows.Media;
 
 namespace Dropshelf.Themes;
 
-/// <summary>Small HSV helpers used to derive the accent family (hover, glow, mascot shades) from one colour.</summary>
+/// <summary>Small colour helpers used to derive the accent family (hover shade, text colour) from one colour.</summary>
 internal static class ColorUtil
 {
     public static void ToHsv(Color c, out double h, out double s, out double v)
@@ -58,32 +58,23 @@ internal static class ColorUtil
 
     public static Color WithAlpha(Color c, byte alpha) => Color.FromArgb(alpha, c.R, c.G, c.B);
 
-    /// <summary>Hover shade: same hue, a little paler and fully bright (blue #3B82F6 gives about #5B9BFF).</summary>
+    /// <summary>Hover shade: same hue, a little paler and fully bright.</summary>
     public static Color Hover(Color c)
     {
         ToHsv(c, out double h, out double s, out _);
         return FromHsv(h, s * 0.85, 1);
     }
 
-    /// <summary>Glow shade used for the bloom and lit rim: hue nudged toward violet, bright (about #5B7BFF for blue).</summary>
-    public static Color Glow(Color c)
+    /// <summary>Relative luminance (0..1, sRGB), to pick black or white text on a colour.</summary>
+    public static double Luminance(Color c)
     {
-        ToHsv(c, out double h, out double s, out _);
-        return FromHsv(h + 10, s * 0.85, 1);
-    }
+        static double Lin(byte v)
+        {
+            double x = v / 255.0;
+            return x <= 0.03928 ? x / 12.92 : Math.Pow((x + 0.055) / 1.055, 2.4);
+        }
 
-    /// <summary>Deep shade at the belly of the mascot and in its glow (about #3B5BFF for blue).</summary>
-    public static Color Deep(Color c)
-    {
-        ToHsv(c, out double h, out double s, out _);
-        return FromHsv(h + 12, s, 1);
-    }
-
-    /// <summary>Pale tip of the mascot (about #7DB2FF for blue).</summary>
-    public static Color Tip(Color c)
-    {
-        ToHsv(c, out double h, out double s, out _);
-        return FromHsv(h, s * 0.67, 1);
+        return 0.2126 * Lin(c.R) + 0.7152 * Lin(c.G) + 0.0722 * Lin(c.B);
     }
 
     public static Color Mix(Color a, Color b, double t) => Color.FromArgb(

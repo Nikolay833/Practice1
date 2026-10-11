@@ -8,21 +8,21 @@ using System.Threading.Tasks;
 using System.Windows.Threading;
 using Dropshelf.Services;
 
-namespace Dropshelf.Shelf;
+namespace Dropshelf.Items;
 
-/// <summary>An observable list of <see cref="ShelfItem"/>s with the add/remove rules shared by shelf and basket.</summary>
+/// <summary>An observable list of <see cref="DropItem"/>s with the add/remove rules shared by shelf and basket.</summary>
 public class ItemStore
 {
     private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher; // stores are created on the UI thread
     private volatile bool _pruning;
 
-    public ObservableCollection<ShelfItem> Items { get; } = new();
+    public ObservableCollection<DropItem> Items { get; } = new();
 
     /// <summary>
     /// Raised just before items leave <see cref="Items"/>, while their tiles still exist, so the UI can animate the removal
     /// (shrink + fade a snapshot of the tile).
     /// </summary>
-    public event Action<IReadOnlyList<ShelfItem>>? Removing;
+    public event Action<IReadOnlyList<DropItem>>? Removing;
 
     public int Count => Items.Count;
 
@@ -48,11 +48,11 @@ public class ItemStore
                 continue;
             }
 
-            Items.Add(new ShelfItem
+            Items.Add(new DropItem
             {
                 Path = path,
                 DisplayName = GetDisplayName(path),
-                Kind = isDir ? ShelfItemKind.Folder : ShelfItemKind.File,
+                Kind = isDir ? DropItemKind.Folder : DropItemKind.File,
             });
             added++;
         }
@@ -61,7 +61,7 @@ public class ItemStore
     }
 
     /// <summary>Stores dropped text as a .txt file so it can be dragged out like any other file.</summary>
-    public ShelfItem? AddText(string text)
+    public DropItem? AddText(string text)
     {
         if (string.IsNullOrWhiteSpace(text))
         {
@@ -76,13 +76,13 @@ public class ItemStore
             return null;
         }
 
-        var item = new ShelfItem { Path = path, DisplayName = display, Kind = ShelfItemKind.Text };
+        var item = new DropItem { Path = path, DisplayName = display, Kind = DropItemKind.Text };
         Items.Add(item);
         return item;
     }
 
     /// <summary>Stores a dropped link as an Internet Shortcut (.url) file.</summary>
-    public ShelfItem? AddUrl(string url)
+    public DropItem? AddUrl(string url)
     {
         url = url.Trim();
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
@@ -98,13 +98,13 @@ public class ItemStore
             return null;
         }
 
-        var item = new ShelfItem { Path = path, DisplayName = display, Kind = ShelfItemKind.Url };
+        var item = new DropItem { Path = path, DisplayName = display, Kind = DropItemKind.Url };
         Items.Add(item);
         return item;
     }
 
     /// <summary>Moves already-built items into this store (used for basket to shelf transfers).</summary>
-    public void AddRange(IEnumerable<ShelfItem> items)
+    public void AddRange(IEnumerable<DropItem> items)
     {
         foreach (var item in items)
         {
@@ -121,7 +121,7 @@ public class ItemStore
     /// Removes items. With <paramref name="deleteOwnedFiles"/> the .txt/.url files we created for text and
     /// link items are deleted too (not wanted when the file was dragged away or handed to another store).
     /// </summary>
-    public void Remove(IEnumerable<ShelfItem> items, bool deleteOwnedFiles = true)
+    public void Remove(IEnumerable<DropItem> items, bool deleteOwnedFiles = true)
     {
         var list = items.ToList();
         var present = list.Where(Items.Contains).ToList();
@@ -182,10 +182,10 @@ public class ItemStore
         }
     }
 
-    private static List<ShelfItem> FindMissing(List<ShelfItem> items)
+    private static List<DropItem> FindMissing(List<DropItem> items)
     {
         var volumes = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
-        var missing = new List<ShelfItem>();
+        var missing = new List<DropItem>();
         foreach (var item in items)
         {
             string? root = VolumeRoot(item.Path);
@@ -226,9 +226,9 @@ public class ItemStore
 
     private static bool IsSeparator(char c) => c == Path.DirectorySeparatorChar || c == Path.AltDirectorySeparatorChar;
 
-    private static void DeleteOwnedFile(ShelfItem item)
+    private static void DeleteOwnedFile(DropItem item)
     {
-        if (item.Kind is ShelfItemKind.Text or ShelfItemKind.Url && AppPaths.IsInside(item.Path, AppPaths.ItemsDir))
+        if (item.Kind is DropItemKind.Text or DropItemKind.Url && AppPaths.IsInside(item.Path, AppPaths.ItemsDir))
         {
             try
             {

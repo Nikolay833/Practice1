@@ -107,6 +107,12 @@ internal static class WindowHelper
             NativeMethods.SWP_NOACTIVATE);
     }
 
+    /// <summary>Moves a window (physical pixels) without resizing it and keeps it topmost without activating it.</summary>
+    public static void MoveTopmost(IntPtr hwnd, int x, int y)
+    {
+        NativeMethods.SetWindowPos(hwnd, NativeMethods.HWND_TOPMOST, x, y, 0, 0, NativeMethods.SWP_NOACTIVATE | NativeMethods.SWP_NOSIZE);
+    }
+
     /// <summary>Places <paramref name="window"/> at a pixel position using a size given in DIPs at the given scale.</summary>
     public static void Place(Window window, int xPx, int yPx, double widthDip, double heightDip, double scale)
     {
@@ -191,6 +197,23 @@ internal static class WindowHelper
 /// <summary>Acrylic blur and DWM tweaks for borderless windows. Every call fails soft.</summary>
 internal static class GlassHelper
 {
+    /// <summary>
+    /// Turns a borderless, non-layered window into a frosted popover: transparent client background composed by DWM,
+    /// rounded corners on Windows 11 and acrylic blur with the given AABBGGRR tint. Returns whether the blur is on; when it
+    /// is not, the window's own (translucent) XAML background shows instead.
+    /// </summary>
+    public static bool MakeFrosted(IntPtr hwnd, uint tintAabbggrr)
+    {
+        if (HwndSource.FromHwnd(hwnd)?.CompositionTarget is { } target)
+        {
+            target.BackgroundColor = System.Windows.Media.Colors.Transparent;
+        }
+
+        ExtendFrameIntoClient(hwnd);
+        TryRoundCorners(hwnd);
+        return TryEnableAcrylic(hwnd, tintAabbggrr);
+    }
+
     /// <summary>
     /// Enables acrylic blur-behind with the given AABBGGRR tint. Returns false when the OS rejected it
     /// (older Windows, remote session, transparency disabled...) so the caller can use an opaque fallback.

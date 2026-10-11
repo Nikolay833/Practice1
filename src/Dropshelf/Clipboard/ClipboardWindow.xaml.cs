@@ -14,8 +14,9 @@ using Dropshelf.Services;
 namespace Dropshelf.Clipboard;
 
 /// <summary>
-/// Centered, searchable clipboard history popup (Ctrl+Shift+V). Enter copies the entry back to the clipboard,
-/// hides the popup, restores the previously focused window and sends Ctrl+V to it.
+/// Centered, searchable clipboard history popup (Ctrl+Shift+V) in the style of Spotlight: a frosted panel with a large
+/// search field. Enter copies the entry back to the clipboard, hides the popup, restores the previously focused window and
+/// sends Ctrl+V to it. The list is virtualized, so only the visible rows exist however long the history is.
 /// </summary>
 public partial class ClipboardWindow : Window
 {
@@ -96,6 +97,11 @@ public partial class ClipboardWindow : Window
         if (!_styled)
         {
             WindowHelper.MakeToolWindow(hwnd, noActivate: false); // keep it out of Alt+Tab
+            if (GlassHelper.MakeFrosted(hwnd, 0xCC1E1C1C))
+            {
+                Panel.Background = Brushes.Transparent; // the acrylic tint replaces the XAML fill
+            }
+
             _styled = true;
         }
 
@@ -131,7 +137,7 @@ public partial class ClipboardWindow : Window
 
     // ---- Animations -----------------------------------------------------------------------------
 
-    /// <summary>Spring scale 0.94 to 1 with a fade and an 8 px slide up.</summary>
+    /// <summary>Spring scale 0.94 to 1 with a fade and an 8 px slide up (the panel only; the window does not move).</summary>
     private void StartOpenAnimation()
     {
         if (AnimationSettings.IsOff)
@@ -179,12 +185,13 @@ public partial class ClipboardWindow : Window
             return;
         }
 
-        int count = Math.Min(_view.Count, 12);
+        // Only the first screenful exists (the list is virtualized), and only that is worth animating.
+        int count = Math.Min(_view.Count, 10);
         for (int i = 0; i < count; i++)
         {
             if (EntryList.ItemContainerGenerator.ContainerFromIndex(i) is FrameworkElement row)
             {
-                TileAnimator.SlideFadeIn(row, i * 28);
+                TileAnimator.SlideFadeIn(row, i * 18);
             }
         }
     }

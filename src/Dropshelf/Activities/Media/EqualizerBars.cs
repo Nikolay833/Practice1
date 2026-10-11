@@ -37,7 +37,7 @@ internal sealed class EqualizerBars : Canvas
         Width = BarCount * BarWidth + (BarCount - 1) * BarGap;
         Height = BarHeight;
         IsHitTestVisible = false;
-        _loop = new FrameLoop(OnFrame);
+        _loop = new FrameLoop(OnFrame, maxFps: 30); // runs for as long as music plays: never at full refresh rate
 
         for (int i = 0; i < BarCount; i++)
         {

@@ -1,16 +1,24 @@
 <Window x:Class="Dropshelf.Settings.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Dropshelf Settings" Width="476" Height="780"
-        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
-        ResizeMode="NoResize" WindowStartupLocation="CenterScreen" UseLayoutRounding="True"
+        Title="Dropshelf Settings" Width="500" Height="760"
+        WindowStyle="None" AllowsTransparency="False" Background="{StaticResource PanelBrush}"
+        ResizeMode="CanMinimize" WindowStartupLocation="CenterScreen" UseLayoutRounding="True"
         FontFamily="{StaticResource UiFont}" Foreground="{StaticResource TextBrush}">
+    <!-- An ordinary (non-layered) window: DWM draws its shadow and, on Windows 11, its rounded corners. The title bar is ours. -->
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="52" ResizeBorderThickness="0" GlassFrameThickness="0,0,0,1" CornerRadius="0"
+                      UseAeroCaptionButtons="False"/>
+    </WindowChrome.WindowChrome>
     <Window.Resources>
+        <!-- An inset grouped section, like macOS System Settings. -->
         <Style x:Key="Card" TargetType="Border">
-            <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
-            <Setter Property="CornerRadius" Value="12"/>
-            <Setter Property="Padding" Value="16,12"/>
-            <Setter Property="Margin" Value="0,0,0,8"/>
+            <Setter Property="Background" Value="{StaticResource GroupBrush}"/>
+            <Setter Property="BorderBrush" Value="#12FFFFFF"/>
+            <Setter Property="BorderThickness" Value="0.5"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="Padding" Value="14,11"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
             <Style.Triggers>
                 <Trigger Property="IsEnabled" Value="False">
                     <Setter Property="Opacity" Value="0.45"/>
@@ -18,32 +26,32 @@
             </Style.Triggers>
         </Style>
 
-        <Style x:Key="SectionLabel" TargetType="TextBlock" BasedOn="{StaticResource TextSecondary}">
-            <Setter Property="FontSize" Value="11"/>
+        <Style x:Key="SectionLabel" TargetType="TextBlock" BasedOn="{StaticResource TextPrimary}">
+            <Setter Property="FontSize" Value="13"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Margin" Value="4,12,0,6"/>
+            <Setter Property="Margin" Value="4,14,0,8"/>
         </Style>
 
-        <!-- Segmented choice (Full / Subtle / Off) built from RadioButtons. -->
+        <!-- One segment of an Apple segmented control (the track is the Border around the group, style SegmentTrack). -->
         <Style x:Key="Segment" TargetType="RadioButton">
-            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="RadioButton">
-                        <Border x:Name="Bd" Background="#FF262626" CornerRadius="7" Padding="12,5" Margin="3,0,0,0">
+                        <Border x:Name="Bd" Background="Transparent" CornerRadius="5" Padding="14,3" MinWidth="44">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
                                               TextElement.Foreground="{TemplateBinding Foreground}"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource PressedBrush}"/>
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource HoverBrush}"/>
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource AccentBrush}"/>
-                                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#FF636366"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -51,27 +59,36 @@
             </Setter>
         </Style>
 
+        <Style x:Key="SegmentTrack" TargetType="Border">
+            <Setter Property="Background" Value="#3D767680"/>
+            <Setter Property="CornerRadius" Value="7"/>
+            <Setter Property="Padding" Value="2"/>
+            <Setter Property="HorizontalAlignment" Value="Right"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
         <Style x:Key="Divider" TargetType="Border">
-            <Setter Property="Height" Value="1"/>
-            <Setter Property="Margin" Value="0,11"/>
+            <Setter Property="Height" Value="0.5"/>
+            <Setter Property="Margin" Value="0,10"/>
             <Setter Property="Background" Value="{StaticResource StrokeBrush}"/>
         </Style>
 
-        <!-- Round colour swatch; the colour is the Background, a white ring marks the chosen one. -->
+        <!-- Accent swatch like the macOS picker: a colour dot; the chosen one gets a white centre and a ring. -->
         <Style x:Key="Swatch" TargetType="RadioButton">
-            <Setter Property="Width" Value="28"/>
-            <Setter Property="Height" Value="28"/>
-            <Setter Property="Margin" Value="0,0,8,6"/>
+            <Setter Property="Width" Value="26"/>
+            <Setter Property="Height" Value="26"/>
+            <Setter Property="Margin" Value="0,0,6,4"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="RadioButton">
                         <Grid Background="Transparent">
-                            <Ellipse x:Name="Ring" Stroke="White" StrokeThickness="2" Opacity="0"/>
+                            <Ellipse x:Name="Ring" Stroke="{TemplateBinding Background}" StrokeThickness="1.5" Opacity="0"/>
                             <Ellipse x:Name="Dot" Fill="{TemplateBinding Background}" Margin="4"/>
+                            <Ellipse x:Name="Center" Fill="White" Width="6" Height="6" Visibility="Collapsed"/>
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
-                                              TextElement.Foreground="White" TextElement.FontSize="11"
+                                              TextElement.Foreground="White" TextElement.FontSize="10"
                                               TextElement.FontFamily="{StaticResource IconFont}"/>
                         </Grid>
                         <ControlTemplate.Triggers>
@@ -80,6 +97,7 @@
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
                                 <Setter TargetName="Ring" Property="Opacity" Value="1"/>
+                                <Setter TargetName="Center" Property="Visibility" Value="Visible"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -88,437 +106,426 @@
         </Style>
 
         <Style x:Key="KeyCap" TargetType="Border">
-            <Setter Property="Background" Value="#FF262626"/>
-            <Setter Property="BorderBrush" Value="#FF363636"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius" Value="6"/>
-            <Setter Property="Padding" Value="8,3"/>
+            <Setter Property="Background" Value="#FF3A3A3C"/>
+            <Setter Property="CornerRadius" Value="5"/>
+            <Setter Property="Padding" Value="8,2"/>
+        </Style>
+
+        <!-- macOS window controls ("traffic lights"): the symbols show while the pointer is over the group. -->
+        <Style x:Key="TrafficLight" TargetType="Button">
+            <Setter Property="Width" Value="12"/>
+            <Setter Property="Height" Value="12"/>
+            <Setter Property="Margin" Value="0,0,8,0"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="WindowChrome.IsHitTestVisibleInChrome" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid>
+                            <Ellipse Fill="{TemplateBinding Background}" Stroke="#26000000" StrokeThickness="0.5"/>
+                            <TextBlock x:Name="Symbol" Text="{TemplateBinding Content}" FontFamily="{StaticResource IconFont}"
+                                       FontSize="6.5" Foreground="#B3000000" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       Visibility="Hidden"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <DataTrigger Binding="{Binding IsMouseOver, ElementName=Lights}" Value="True">
+                                <Setter TargetName="Symbol" Property="Visibility" Value="Visible"/>
+                            </DataTrigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter Property="Opacity" Value="0.7"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Background" Value="#FF4A4A4D"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
     </Window.Resources>
 
-    <Border Margin="16" CornerRadius="16" Background="#FF141414" BorderBrush="#FF2A2A2A" BorderThickness="1">
-        <Border.Effect>
-            <DropShadowEffect BlurRadius="24" ShadowDepth="4" Opacity="0.55" Color="Black"/>
-        </Border.Effect>
-        <Grid>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="52"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
 
-            <!-- Title bar -->
-            <Grid Grid.Row="0" Height="52" Background="Transparent" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
-                <TextBlock Text="Settings" Style="{StaticResource TextPrimary}" FontSize="16" FontWeight="SemiBold"
-                           VerticalAlignment="Center" Margin="22,0,0,0"/>
-                <Button Content="&#xE711;" Style="{StaticResource IconButton}" HorizontalAlignment="Right"
-                        VerticalAlignment="Center" Margin="0,0,12,0" ToolTip="Close" Click="Close_Click"/>
-            </Grid>
+        <!-- Title bar: traffic lights left, centred title. Dragging works anywhere on it (WindowChrome caption). -->
+        <Grid Grid.Row="0">
+            <StackPanel x:Name="Lights" Orientation="Horizontal" VerticalAlignment="Center" Margin="18,0,0,0"
+                        WindowChrome.IsHitTestVisibleInChrome="True" Background="Transparent">
+                <Button Style="{StaticResource TrafficLight}" Background="#FFFF5F57" Content="&#xE8BB;" ToolTip="Close" Click="Close_Click"/>
+                <Button Style="{StaticResource TrafficLight}" Background="#FFFEBC2E" Content="&#xE921;" ToolTip="Minimize" Click="Minimize_Click"/>
+                <Button Style="{StaticResource TrafficLight}" Background="#FF28C840" Content="&#xE740;" IsEnabled="False"/>
+            </StackPanel>
+            <TextBlock Text="Settings" Style="{StaticResource TextPrimary}" FontWeight="SemiBold"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </Grid>
 
-            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="0,0,0,0">
-                <StackPanel Margin="20,0,20,20">
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="20,0,20,20">
 
-                    <TextBlock Text="GENERAL" Style="{StaticResource SectionLabel}" Margin="4,0,0,6"/>
-                    <Border x:Name="ArmCard" Style="{StaticResource Card}" Visibility="Collapsed">
-                        <StackPanel>
-                            <TextBlock Text="You're on an Arm PC" Style="{StaticResource TextPrimary}"/>
-                            <TextBlock Text="The Arm version runs faster and uses less battery." Style="{StaticResource TextSecondary}"
-                                       Margin="0,2,0,0" TextWrapping="Wrap"/>
-                            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                                <Button x:Name="ArmGetButton" Content="Get Arm version" Style="{StaticResource AccentButton}"
-                                        Padding="14,5" Click="ArmGet_Click"/>
-                                <Button Content="Don't show again" Style="{StaticResource TextButton}" Margin="8,0,0,0" Click="ArmHide_Click"/>
+                <TextBlock Text="General" Style="{StaticResource SectionLabel}" Margin="4,2,0,8"/>
+                <Border x:Name="ArmCard" Style="{StaticResource Card}" Visibility="Collapsed">
+                    <StackPanel>
+                        <TextBlock Text="You're on an Arm PC" Style="{StaticResource TextPrimary}"/>
+                        <TextBlock Text="The Arm version runs faster and uses less battery." Style="{StaticResource TextSecondary}"
+                                   Margin="0,2,0,0" TextWrapping="Wrap"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <Button x:Name="ArmGetButton" Content="Get Arm version" Style="{StaticResource AccentButton}"
+                                    Padding="14,5" Click="ArmGet_Click"/>
+                            <Button Content="Don't show again" Style="{StaticResource TextButton}" Margin="8,0,0,0" Click="ArmHide_Click"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <CheckBox IsChecked="{Binding LaunchAtStartup, Mode=TwoWay}">
+                            <StackPanel>
+                                <TextBlock Text="Launch at startup" Style="{StaticResource TextPrimary}"/>
+                                <TextBlock x:Name="AutoStartStatus" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
                             </StackPanel>
-                        </StackPanel>
-                    </Border>
-                    <Border Style="{StaticResource Card}">
-                        <StackPanel>
-                            <CheckBox IsChecked="{Binding LaunchAtStartup, Mode=TwoWay}">
-                                <StackPanel>
-                                    <TextBlock Text="Launch at startup" Style="{StaticResource TextPrimary}"/>
-                                    <TextBlock Text="Start Dropshelf when you sign in to Windows" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
-                                </StackPanel>
-                            </CheckBox>
-                            <TextBlock x:Name="AutoStartStatus" Style="{StaticResource TextSecondary}" FontSize="11"
-                                       TextWrapping="Wrap" Margin="26,8,0,0"/>
-                        </StackPanel>
-                    </Border>
-                    <Border Style="{StaticResource Card}">
+                        </CheckBox>
+                        <Border Style="{StaticResource Divider}"/>
                         <CheckBox IsChecked="{Binding HideInFullscreen, Mode=TwoWay}">
                             <StackPanel>
                                 <TextBlock Text="Hide in fullscreen apps" Style="{StaticResource TextPrimary}"/>
-                                <TextBlock Text="The pill slides away while a game, video or presentation is fullscreen" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
+                                <TextBlock Text="The island slides away while a game, video or presentation is fullscreen" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
                             </StackPanel>
                         </CheckBox>
-                    </Border>
-                    <Border Style="{StaticResource Card}">
-                        <StackPanel>
-                            <TextBlock Text="Install location" Style="{StaticResource TextPrimary}"/>
-                            <TextBlock x:Name="InstallPath" Style="{StaticResource TextSecondary}" FontSize="11"
-                                       TextWrapping="Wrap" Margin="0,3,0,0"/>
-                        </StackPanel>
-                    </Border>
+                        <Border Style="{StaticResource Divider}"/>
+                        <TextBlock Text="Install location" Style="{StaticResource TextPrimary}"/>
+                        <TextBlock x:Name="InstallPath" Style="{StaticResource TextSecondary}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                    </StackPanel>
+                </Border>
 
-                    <TextBlock Text="SHELF" Style="{StaticResource SectionLabel}"/>
-                    <Border Style="{StaticResource Card}">
-                        <StackPanel>
-                            <CheckBox IsChecked="{Binding RememberShelf, Mode=TwoWay}">
-                                <StackPanel>
-                                    <TextBlock Text="Remember shelf items" Style="{StaticResource TextPrimary}"/>
-                                    <TextBlock Text="Keep what is on the shelf after a restart" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
-                                </StackPanel>
-                            </CheckBox>
-                            <Border Style="{StaticResource Divider}"/>
-                            <CheckBox IsChecked="{Binding ExpandShelfOnHover, Mode=TwoWay}">
-                                <StackPanel>
-                                    <TextBlock Text="Expand shelf on hover" Style="{StaticResource TextPrimary}"/>
-                                    <TextBlock Text="When off, the shelf opens only when you drag over it or click it" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
-                                </StackPanel>
-                            </CheckBox>
-                            <Border Style="{StaticResource Divider}"/>
-                            <CheckBox IsChecked="{Binding ShakeToOpenBasket, Mode=TwoWay}">
-                                <StackPanel>
-                                    <TextBlock Text="Shake to open basket" Style="{StaticResource TextPrimary}"/>
-                                    <TextBlock Text="Shake the mouse left and right while dragging" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
-                                </StackPanel>
-                            </CheckBox>
-                        </StackPanel>
-                    </Border>
+                <TextBlock Text="Island" Style="{StaticResource SectionLabel}"/>
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <CheckBox IsChecked="{Binding ExpandOnHover, Mode=TwoWay}">
+                            <StackPanel>
+                                <TextBlock Text="Open on hover" Style="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="When off, click the island to open it" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
+                            </StackPanel>
+                        </CheckBox>
+                        <Border Style="{StaticResource Divider}"/>
+                        <CheckBox IsChecked="{Binding ScrollToChangeVolume, Mode=TwoWay}">
+                            <StackPanel>
+                                <TextBlock Text="Scroll over the island to change volume" Style="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="Turn the mouse wheel on the closed island" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
+                            </StackPanel>
+                        </CheckBox>
+                        <Border Style="{StaticResource Divider}"/>
+                        <CheckBox IsChecked="{Binding ShakeToOpenBasket, Mode=TwoWay}">
+                            <StackPanel>
+                                <TextBlock Text="Shake to open basket" Style="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="Shake the mouse left and right while dragging" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
+                            </StackPanel>
+                        </CheckBox>
+                    </StackPanel>
+                </Border>
 
-                    <TextBlock Text="MEDIA &amp; HUD" Style="{StaticResource SectionLabel}"/>
-                    <Border Style="{StaticResource Card}">
-                        <StackPanel>
-                            <CheckBox IsChecked="{Binding ShowNowPlaying, Mode=TwoWay}">
-                                <StackPanel>
-                                    <TextBlock Text="Show now playing" Style="{StaticResource TextPrimary}"/>
-                                    <TextBlock Text="Album art and equalizer on the pill, and a Now Playing tab with controls" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
-                                </StackPanel>
-                            </CheckBox>
-                            <Border Style="{StaticResource Divider}"/>
-                            <CheckBox IsChecked="{Binding ShowVolumeHud, Mode=TwoWay}">
-                                <StackPanel>
-                                    <TextBlock Text="Volume HUD" Style="{StaticResource TextPrimary}"/>
-                                    <TextBlock Text="Show the volume on the pill when it changes" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
-                                </StackPanel>
-                            </CheckBox>
-                            <Border Style="{StaticResource Divider}"/>
-                            <CheckBox IsChecked="{Binding ReplaceWindowsOsd, Mode=TwoWay}">
-                                <StackPanel>
-                                    <TextBlock Text="Replace Windows volume popup" Style="{StaticResource TextPrimary}"/>
-                                    <TextBlock Text="Hide the native volume and brightness popup (best effort; if it cannot be hidden both show)" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
-                                </StackPanel>
-                            </CheckBox>
-                            <Border Style="{StaticResource Divider}"/>
-                            <CheckBox IsChecked="{Binding ScrollToChangeVolume, Mode=TwoWay}">
-                                <StackPanel>
-                                    <TextBlock Text="Scroll over the pill to change volume" Style="{StaticResource TextPrimary}"/>
-                                    <TextBlock Text="Turn the mouse wheel on the collapsed pill" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
-                                </StackPanel>
-                            </CheckBox>
-                            <Border Style="{StaticResource Divider}"/>
-                            <CheckBox IsChecked="{Binding ShowVolumeHudInFullscreen, Mode=TwoWay}" IsEnabled="{Binding HideInFullscreen}">
-                                <StackPanel>
-                                    <TextBlock Text="Show volume HUD in fullscreen" Style="{StaticResource TextPrimary}"/>
-                                    <TextBlock Text="Let the volume HUD slide in over a fullscreen app" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
-                                </StackPanel>
-                            </CheckBox>
-                        </StackPanel>
-                    </Border>
-                    <Border Style="{StaticResource Card}">
-                        <StackPanel>
-                            <CheckBox IsChecked="{Binding ShowBrightnessHud, Mode=TwoWay}">
-                                <StackPanel>
-                                    <TextBlock Text="Brightness HUD" Style="{StaticResource TextPrimary}"/>
-                                    <TextBlock Text="Laptop screens only" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
-                                </StackPanel>
-                            </CheckBox>
-                            <Border Style="{StaticResource Divider}"/>
-                            <CheckBox IsChecked="{Binding ShowBatteryHud, Mode=TwoWay}">
-                                <StackPanel>
-                                    <TextBlock Text="Battery notices" Style="{StaticResource TextPrimary}"/>
-                                    <TextBlock Text="Charger plugged in or removed, low battery at 20% and 10%, fully charged" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
-                                </StackPanel>
-                            </CheckBox>
-                            <Border Style="{StaticResource Divider}"/>
-                            <CheckBox IsChecked="{Binding ShowBluetoothHud, Mode=TwoWay}">
-                                <StackPanel>
-                                    <TextBlock Text="Bluetooth devices" Style="{StaticResource TextPrimary}"/>
-                                    <TextBlock Text="Headphones, keyboards and mice connecting or disconnecting" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
-                                </StackPanel>
-                            </CheckBox>
-                        </StackPanel>
-                    </Border>
+                <TextBlock Text="Live Activities" Style="{StaticResource SectionLabel}"/>
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <CheckBox IsChecked="{Binding ShowNowPlaying, Mode=TwoWay}">
+                            <StackPanel>
+                                <TextBlock Text="Now Playing" Style="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="Album art and a waveform on the island, and a Now Playing tab with controls" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </CheckBox>
+                        <Border Style="{StaticResource Divider}"/>
+                        <CheckBox IsChecked="{Binding ShowVolumeHud, Mode=TwoWay}">
+                            <StackPanel>
+                                <TextBlock Text="Volume" Style="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="Show the volume on the island when it changes" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
+                            </StackPanel>
+                        </CheckBox>
+                        <Border Style="{StaticResource Divider}"/>
+                        <CheckBox IsChecked="{Binding ReplaceWindowsOsd, Mode=TwoWay}">
+                            <StackPanel>
+                                <TextBlock Text="Replace the Windows volume popup" Style="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="Hide the native volume and brightness popup (best effort; if it cannot be hidden both show)" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </CheckBox>
+                        <Border Style="{StaticResource Divider}"/>
+                        <CheckBox IsChecked="{Binding ShowVolumeHudInFullscreen, Mode=TwoWay}" IsEnabled="{Binding HideInFullscreen}">
+                            <StackPanel>
+                                <TextBlock Text="Show volume in fullscreen" Style="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="Let the volume slide in over a fullscreen app" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
+                            </StackPanel>
+                        </CheckBox>
+                        <Border Style="{StaticResource Divider}"/>
+                        <CheckBox IsChecked="{Binding ShowBrightnessHud, Mode=TwoWay}">
+                            <StackPanel>
+                                <TextBlock Text="Brightness" Style="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="Laptop screens only" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
+                            </StackPanel>
+                        </CheckBox>
+                        <Border Style="{StaticResource Divider}"/>
+                        <CheckBox IsChecked="{Binding ShowBatteryHud, Mode=TwoWay}">
+                            <StackPanel>
+                                <TextBlock Text="Battery" Style="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="Charger plugged in or removed, low battery at 20% and 10%, fully charged" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </CheckBox>
+                        <Border Style="{StaticResource Divider}"/>
+                        <CheckBox IsChecked="{Binding ShowBluetoothHud, Mode=TwoWay}">
+                            <StackPanel>
+                                <TextBlock Text="Bluetooth devices" Style="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="Headphones, keyboards and mice connecting or disconnecting" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
+                            </StackPanel>
+                        </CheckBox>
+                    </StackPanel>
+                </Border>
 
-                    <TextBlock Text="NOTIFICATIONS" Style="{StaticResource SectionLabel}"/>
-                    <Border x:Name="NotificationsCard" Style="{StaticResource Card}">
-                        <StackPanel>
-                            <CheckBox IsChecked="{Binding NotificationsEnabled, Mode=TwoWay}">
-                                <StackPanel>
-                                    <TextBlock Text="Show notifications on the pill" Style="{StaticResource TextPrimary}"/>
-                                    <TextBlock x:Name="NotificationsStatus" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
-                                </StackPanel>
-                            </CheckBox>
-                            <Button x:Name="NotificationsPrivacyLink" Content="Open notification privacy settings" Style="{StaticResource TextButton}"
-                                    HorizontalAlignment="Left" Margin="26,6,0,0" Visibility="Collapsed" Click="NotificationsPrivacy_Click"/>
-                            <Border Style="{StaticResource Divider}"/>
-                            <CheckBox IsChecked="{Binding HideNotificationContent, Mode=TwoWay}" IsEnabled="{Binding NotificationsEnabled}">
-                                <StackPanel>
-                                    <TextBlock Text="Hide notification content (privacy)" Style="{StaticResource TextPrimary}"/>
-                                    <TextBlock Text="Show only the app name and &quot;New notification&quot;, never the title or text" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
-                                </StackPanel>
-                            </CheckBox>
-                            <Border Style="{StaticResource Divider}"/>
-                            <CheckBox IsChecked="{Binding NotificationsDndFullscreen, Mode=TwoWay}" IsEnabled="{Binding HideInFullscreen}">
-                                <StackPanel>
-                                    <TextBlock Text="Do not disturb in fullscreen" Style="{StaticResource TextPrimary}"/>
-                                    <TextBlock Text="No notifications on the pill while a fullscreen app is in front (needs &quot;Hide in fullscreen apps&quot;)" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
-                                </StackPanel>
-                            </CheckBox>
-                            <Border Style="{StaticResource Divider}"/>
-                            <TextBlock Text="Muted apps" Style="{StaticResource TextPrimary}"/>
-                            <TextBlock x:Name="MutedAppsHint" Style="{StaticResource TextSecondary}" FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap"/>
-                            <StackPanel x:Name="MutedApps"/>
-                        </StackPanel>
-                    </Border>
+                <TextBlock Text="Notifications" Style="{StaticResource SectionLabel}"/>
+                <Border x:Name="NotificationsCard" Style="{StaticResource Card}">
+                    <StackPanel>
+                        <CheckBox IsChecked="{Binding NotificationsEnabled, Mode=TwoWay}">
+                            <StackPanel>
+                                <TextBlock Text="Show notifications on the island" Style="{StaticResource TextPrimary}"/>
+                                <TextBlock x:Name="NotificationsStatus" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </CheckBox>
+                        <Button x:Name="NotificationsPrivacyLink" Content="Open notification privacy settings" Style="{StaticResource TextButton}"
+                                HorizontalAlignment="Left" Margin="-6,6,0,0" Visibility="Collapsed" Click="NotificationsPrivacy_Click"/>
+                        <Border Style="{StaticResource Divider}"/>
+                        <CheckBox IsChecked="{Binding HideNotificationContent, Mode=TwoWay}" IsEnabled="{Binding NotificationsEnabled}">
+                            <StackPanel>
+                                <TextBlock Text="Hide notification content" Style="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="Show only the app name and &quot;New notification&quot;, never the title or text" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </CheckBox>
+                        <Border Style="{StaticResource Divider}"/>
+                        <CheckBox IsChecked="{Binding NotificationsDndFullscreen, Mode=TwoWay}" IsEnabled="{Binding HideInFullscreen}">
+                            <StackPanel>
+                                <TextBlock Text="Do not disturb in fullscreen" Style="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="No notifications on the island while a fullscreen app is in front (needs &quot;Hide in fullscreen apps&quot;)" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </CheckBox>
+                        <Border Style="{StaticResource Divider}"/>
+                        <TextBlock Text="Muted apps" Style="{StaticResource TextPrimary}"/>
+                        <TextBlock x:Name="MutedAppsHint" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                        <StackPanel x:Name="MutedApps"/>
+                    </StackPanel>
+                </Border>
 
-                    <TextBlock Text="APPEARANCE" Style="{StaticResource SectionLabel}"/>
-                    <Border Style="{StaticResource Card}">
-                        <StackPanel>
-                            <TextBlock Text="Accent color" Style="{StaticResource TextPrimary}"/>
-                            <WrapPanel x:Name="AccentSwatches" Margin="0,10,0,0"/>
-                            <Border Style="{StaticResource Divider}"/>
-                            <Grid>
-                                <TextBlock Text="Pill style" Style="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
-                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                    <RadioButton x:Name="StyleBlack" Content="Black" Tag="Black" GroupName="PillStyle"
-                                                 Style="{StaticResource Segment}" Checked="PillStyle_Checked"/>
-                                    <RadioButton x:Name="StyleGlass" Content="Glass" Tag="Glass" GroupName="PillStyle"
-                                                 Style="{StaticResource Segment}" Checked="PillStyle_Checked"/>
-                                </StackPanel>
-                            </Grid>
-                            <Border Style="{StaticResource Divider}"/>
-                            <CheckBox IsChecked="{Binding ShowMascot, Mode=TwoWay}">
-                                <StackPanel>
-                                    <TextBlock Text="Show mascot" Style="{StaticResource TextPrimary}"/>
-                                    <TextBlock Text="The little drop on the pill" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
-                                </StackPanel>
-                            </CheckBox>
-                            <Border Style="{StaticResource Divider}"/>
-                            <CheckBox IsChecked="{Binding MascotFollowsAccent, Mode=TwoWay}" IsEnabled="{Binding ShowMascot}">
-                                <StackPanel>
-                                    <TextBlock Text="Mascot follows accent color" Style="{StaticResource TextPrimary}"/>
-                                    <TextBlock Text="When off, the mascot stays blue" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
-                                </StackPanel>
-                            </CheckBox>
-                        </StackPanel>
-                    </Border>
-
-                    <TextBlock Text="ANIMATIONS" Style="{StaticResource SectionLabel}"/>
-                    <Border Style="{StaticResource Card}">
-                        <StackPanel>
-                            <Grid>
-                                <TextBlock Text="Animations" Style="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
-                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <TextBlock Text="Appearance" Style="{StaticResource SectionLabel}"/>
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Text="Accent color" Style="{StaticResource TextPrimary}"/>
+                        <WrapPanel x:Name="AccentSwatches" Margin="-4,8,0,0"/>
+                        <Border Style="{StaticResource Divider}"/>
+                        <Grid>
+                            <TextBlock Text="Animations" Style="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
+                            <Border Style="{StaticResource SegmentTrack}">
+                                <StackPanel Orientation="Horizontal">
                                     <RadioButton x:Name="AnimFull" Content="Full" Tag="Full" GroupName="Animations"
                                                  Style="{StaticResource Segment}" Checked="Animation_Checked"/>
-                                    <RadioButton x:Name="AnimSubtle" Content="Subtle" Tag="Subtle" GroupName="Animations"
+                                    <RadioButton x:Name="AnimSubtle" Content="Reduced" Tag="Subtle" GroupName="Animations"
                                                  Style="{StaticResource Segment}" Checked="Animation_Checked"/>
                                     <RadioButton x:Name="AnimOff" Content="Off" Tag="Off" GroupName="Animations"
                                                  Style="{StaticResource Segment}" Checked="Animation_Checked"/>
                                 </StackPanel>
-                            </Grid>
-                            <TextBlock x:Name="AnimationHint" Style="{StaticResource TextSecondary}" FontSize="11"
-                                       TextWrapping="Wrap" Margin="0,8,0,0"/>
-                        </StackPanel>
-                    </Border>
+                            </Border>
+                        </Grid>
+                        <TextBlock x:Name="AnimationHint" Style="{StaticResource TextSecondary}" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                    </StackPanel>
+                </Border>
 
-                    <TextBlock Text="CLIPBOARD" Style="{StaticResource SectionLabel}"/>
-                    <Border Style="{StaticResource Card}">
+                <TextBlock Text="Clipboard" Style="{StaticResource SectionLabel}"/>
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
                         <CheckBox IsChecked="{Binding ClipboardHistoryEnabled, Mode=TwoWay}">
                             <StackPanel>
                                 <TextBlock Text="Clipboard history" Style="{StaticResource TextPrimary}"/>
                                 <TextBlock Text="Remember text, images and files you copy" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
                             </StackPanel>
                         </CheckBox>
-                    </Border>
-                    <Border Style="{StaticResource Card}" IsEnabled="{Binding ClipboardHistoryEnabled}">
-                        <StackPanel>
+                        <Border Style="{StaticResource Divider}"/>
+                        <StackPanel IsEnabled="{Binding ClipboardHistoryEnabled}">
                             <Grid>
                                 <TextBlock Text="History size" Style="{StaticResource TextPrimary}"/>
                                 <TextBlock Text="{Binding ClipboardHistorySize, StringFormat={}{0} entries}"
                                            Style="{StaticResource TextSecondary}" HorizontalAlignment="Right"/>
                             </Grid>
                             <Slider Minimum="10" Maximum="500" TickFrequency="10" IsSnapToTickEnabled="True"
-                                    SmallChange="10" LargeChange="50" Margin="0,10,0,0"
+                                    SmallChange="10" LargeChange="50" Margin="0,8,0,0"
                                     Value="{Binding ClipboardHistorySize, Mode=TwoWay}"/>
-                            <TextBlock Text="Pinned entries are never removed" Style="{StaticResource TextSecondary}"
-                                       FontSize="11" Margin="0,6,0,0"/>
+                            <TextBlock Text="Pinned entries are never removed" Style="{StaticResource TextSecondary}" Margin="0,4,0,0"/>
                         </StackPanel>
-                    </Border>
+                    </StackPanel>
+                </Border>
 
-                    <TextBlock Text="SCREENSHOT" Style="{StaticResource SectionLabel}"/>
-                    <Border Style="{StaticResource Card}">
-                        <CheckBox IsChecked="{Binding ScreenshotHotkeyEnabled, Mode=TwoWay}">
+                <TextBlock Text="Screenshot" Style="{StaticResource SectionLabel}"/>
+                <Border Style="{StaticResource Card}">
+                    <CheckBox IsChecked="{Binding ScreenshotHotkeyEnabled, Mode=TwoWay}">
+                        <StackPanel>
+                            <TextBlock Text="Screenshot shortcut (Ctrl + Shift + S)" Style="{StaticResource TextPrimary}"/>
+                            <TextBlock Text="Drag a region: it is saved to Pictures\Screenshots and copied to the clipboard, with a Copy text (OCR) button on the island" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </CheckBox>
+                </Border>
+
+                <TextBlock Text="Timer" Style="{StaticResource SectionLabel}"/>
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <Grid>
+                            <TextBlock Text="Pomodoro: focus" Style="{StaticResource TextPrimary}"/>
+                            <TextBlock Text="{Binding PomodoroWorkMinutes, StringFormat={}{0} min}" Style="{StaticResource TextSecondary}" HorizontalAlignment="Right"/>
+                        </Grid>
+                        <Slider Minimum="5" Maximum="90" TickFrequency="5" IsSnapToTickEnabled="True" SmallChange="5" LargeChange="5" Margin="0,6,0,0"
+                                Value="{Binding PomodoroWorkMinutes, Mode=TwoWay}"/>
+                        <Border Style="{StaticResource Divider}"/>
+                        <Grid>
+                            <TextBlock Text="Short break" Style="{StaticResource TextPrimary}"/>
+                            <TextBlock Text="{Binding PomodoroBreakMinutes, StringFormat={}{0} min}" Style="{StaticResource TextSecondary}" HorizontalAlignment="Right"/>
+                        </Grid>
+                        <Slider Minimum="1" Maximum="30" TickFrequency="1" IsSnapToTickEnabled="True" SmallChange="1" LargeChange="5" Margin="0,6,0,0"
+                                Value="{Binding PomodoroBreakMinutes, Mode=TwoWay}"/>
+                        <Border Style="{StaticResource Divider}"/>
+                        <Grid>
+                            <TextBlock Text="Long break" Style="{StaticResource TextPrimary}"/>
+                            <TextBlock Text="{Binding PomodoroLongBreakMinutes, StringFormat={}{0} min}" Style="{StaticResource TextSecondary}" HorizontalAlignment="Right"/>
+                        </Grid>
+                        <Slider Minimum="5" Maximum="60" TickFrequency="5" IsSnapToTickEnabled="True" SmallChange="5" LargeChange="5" Margin="0,6,0,0"
+                                Value="{Binding PomodoroLongBreakMinutes, Mode=TwoWay}"/>
+                        <Border Style="{StaticResource Divider}"/>
+                        <Grid>
+                            <TextBlock Text="Rounds before the long break" Style="{StaticResource TextPrimary}"/>
+                            <TextBlock Text="{Binding PomodoroRounds}" Style="{StaticResource TextSecondary}" HorizontalAlignment="Right"/>
+                        </Grid>
+                        <Slider Minimum="2" Maximum="8" TickFrequency="1" IsSnapToTickEnabled="True" SmallChange="1" LargeChange="1" Margin="0,6,0,0"
+                                Value="{Binding PomodoroRounds, Mode=TwoWay}"/>
+                        <Border Style="{StaticResource Divider}"/>
+                        <CheckBox IsChecked="{Binding TimerSound, Mode=TwoWay}">
                             <StackPanel>
-                                <TextBlock Text="Screenshot hotkey (Ctrl + Shift + S)" Style="{StaticResource TextPrimary}"/>
-                                <TextBlock Text="Drag a region: it is saved to Pictures\Screenshots, copied to the clipboard and put on the shelf, with a Copy text (OCR) button on the pill" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                                <TextBlock Text="Chime when a timer ends" Style="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="A short soft bell; turn it off to mute" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
                             </StackPanel>
                         </CheckBox>
-                    </Border>
+                    </StackPanel>
+                </Border>
 
-                    <TextBlock Text="TIMER" Style="{StaticResource SectionLabel}"/>
-                    <Border Style="{StaticResource Card}">
-                        <StackPanel>
-                            <Grid>
-                                <TextBlock Text="Pomodoro: work" Style="{StaticResource TextPrimary}"/>
-                                <TextBlock Text="{Binding PomodoroWorkMinutes, StringFormat={}{0} min}" Style="{StaticResource TextSecondary}" HorizontalAlignment="Right"/>
-                            </Grid>
-                            <Slider Minimum="5" Maximum="90" TickFrequency="5" IsSnapToTickEnabled="True" SmallChange="5" LargeChange="5" Margin="0,8,0,0"
-                                    Value="{Binding PomodoroWorkMinutes, Mode=TwoWay}"/>
-                            <Border Style="{StaticResource Divider}"/>
-                            <Grid>
-                                <TextBlock Text="Short break" Style="{StaticResource TextPrimary}"/>
-                                <TextBlock Text="{Binding PomodoroBreakMinutes, StringFormat={}{0} min}" Style="{StaticResource TextSecondary}" HorizontalAlignment="Right"/>
-                            </Grid>
-                            <Slider Minimum="1" Maximum="30" TickFrequency="1" IsSnapToTickEnabled="True" SmallChange="1" LargeChange="5" Margin="0,8,0,0"
-                                    Value="{Binding PomodoroBreakMinutes, Mode=TwoWay}"/>
-                            <Border Style="{StaticResource Divider}"/>
-                            <Grid>
-                                <TextBlock Text="Long break" Style="{StaticResource TextPrimary}"/>
-                                <TextBlock Text="{Binding PomodoroLongBreakMinutes, StringFormat={}{0} min}" Style="{StaticResource TextSecondary}" HorizontalAlignment="Right"/>
-                            </Grid>
-                            <Slider Minimum="5" Maximum="60" TickFrequency="5" IsSnapToTickEnabled="True" SmallChange="5" LargeChange="5" Margin="0,8,0,0"
-                                    Value="{Binding PomodoroLongBreakMinutes, Mode=TwoWay}"/>
-                            <Border Style="{StaticResource Divider}"/>
-                            <Grid>
-                                <TextBlock Text="Rounds before the long break" Style="{StaticResource TextPrimary}"/>
-                                <TextBlock Text="{Binding PomodoroRounds}" Style="{StaticResource TextSecondary}" HorizontalAlignment="Right"/>
-                            </Grid>
-                            <Slider Minimum="2" Maximum="8" TickFrequency="1" IsSnapToTickEnabled="True" SmallChange="1" LargeChange="1" Margin="0,8,0,0"
-                                    Value="{Binding PomodoroRounds, Mode=TwoWay}"/>
-                            <Border Style="{StaticResource Divider}"/>
-                            <CheckBox IsChecked="{Binding TimerSound, Mode=TwoWay}">
-                                <StackPanel>
-                                    <TextBlock Text="Chime when a timer ends" Style="{StaticResource TextPrimary}"/>
-                                    <TextBlock Text="A short soft bell; turn it off to mute" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
-                                </StackPanel>
-                            </CheckBox>
-                        </StackPanel>
-                    </Border>
-
-                    <TextBlock Text="CALENDAR &amp; WEATHER" Style="{StaticResource SectionLabel}"/>
-                    <Border Style="{StaticResource Card}">
-                        <StackPanel>
-                            <CheckBox IsChecked="{Binding CalendarEnabled, Mode=TwoWay}">
-                                <StackPanel>
-                                    <TextBlock Text="Calendar" Style="{StaticResource TextPrimary}"/>
-                                    <TextBlock Text="Today's and tomorrow's events in the Today tab" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
-                                </StackPanel>
-                            </CheckBox>
-                            <Border Style="{StaticResource Divider}"/>
-                            <CheckBox IsChecked="{Binding MeetingAlerts, Mode=TwoWay}" IsEnabled="{Binding CalendarEnabled}">
-                                <StackPanel>
-                                    <TextBlock Text="Meeting alerts" Style="{StaticResource TextPrimary}"/>
-                                    <TextBlock Text="&quot;Meeting in 5 min&quot; on the pill for events starting within 10 minutes" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
-                                </StackPanel>
-                            </CheckBox>
-                            <Border Style="{StaticResource Divider}"/>
-                            <CheckBox IsChecked="{Binding CalendarUseWindows, Mode=TwoWay}" IsEnabled="{Binding CalendarEnabled}">
-                                <StackPanel>
-                                    <TextBlock Text="Windows calendars" Style="{StaticResource TextPrimary}"/>
-                                    <TextBlock x:Name="WindowsCalendarStatus" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
-                                </StackPanel>
-                            </CheckBox>
-                            <Button x:Name="CalendarPrivacyLink" Content="Open calendar privacy settings" Style="{StaticResource TextButton}"
-                                    HorizontalAlignment="Left" Margin="26,6,0,0" Visibility="Collapsed" Click="CalendarPrivacy_Click"/>
-                            <Border Style="{StaticResource Divider}"/>
-                            <TextBlock Text="Calendar links (ICS), one per line" Style="{StaticResource TextPrimary}"/>
-                            <TextBlock Text="Stored encrypted. Fetched every 15 minutes. https:// and webcal:// links only." Style="{StaticResource TextSecondary}" FontSize="11" Margin="0,2,0,0"/>
-                            <TextBox x:Name="IcsUrlsBox" AcceptsReturn="True" TextWrapping="NoWrap" Height="64" Margin="0,8,0,0" FontSize="12"
-                                     VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" LostFocus="IcsUrls_LostFocus"/>
-                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                                <Button x:Name="IcsTestButton" Content="Test" Style="{StaticResource AccentButton}" Padding="14,5" Click="IcsTest_Click"/>
-                                <TextBlock x:Name="IcsTestResult" Style="{StaticResource TextSecondary}" FontSize="11" VerticalAlignment="Center"
-                                           Margin="10,0,0,0" TextWrapping="Wrap" MaxWidth="290"/>
+                <TextBlock Text="Calendar &amp; Weather" Style="{StaticResource SectionLabel}"/>
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <CheckBox IsChecked="{Binding CalendarEnabled, Mode=TwoWay}">
+                            <StackPanel>
+                                <TextBlock Text="Calendar" Style="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="Today's and tomorrow's events in the Today tab" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
                             </StackPanel>
+                        </CheckBox>
+                        <Border Style="{StaticResource Divider}"/>
+                        <CheckBox IsChecked="{Binding MeetingAlerts, Mode=TwoWay}" IsEnabled="{Binding CalendarEnabled}">
+                            <StackPanel>
+                                <TextBlock Text="Meeting alerts" Style="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="&quot;Meeting in 5 min&quot; on the island for events starting within 10 minutes" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </CheckBox>
+                        <Border Style="{StaticResource Divider}"/>
+                        <CheckBox IsChecked="{Binding CalendarUseWindows, Mode=TwoWay}" IsEnabled="{Binding CalendarEnabled}">
+                            <StackPanel>
+                                <TextBlock Text="Windows calendars" Style="{StaticResource TextPrimary}"/>
+                                <TextBlock x:Name="WindowsCalendarStatus" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </CheckBox>
+                        <Button x:Name="CalendarPrivacyLink" Content="Open calendar privacy settings" Style="{StaticResource TextButton}"
+                                HorizontalAlignment="Left" Margin="-6,6,0,0" Visibility="Collapsed" Click="CalendarPrivacy_Click"/>
+                        <Border Style="{StaticResource Divider}"/>
+                        <TextBlock Text="Calendar links (ICS), one per line" Style="{StaticResource TextPrimary}"/>
+                        <TextBlock Text="Stored encrypted. Fetched every 15 minutes. https:// and webcal:// links only." Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                        <TextBox x:Name="IcsUrlsBox" AcceptsReturn="True" TextWrapping="NoWrap" Height="64" Margin="0,8,0,0" FontSize="12"
+                                 VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" LostFocus="IcsUrls_LostFocus"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <Button x:Name="IcsTestButton" Content="Test" Padding="16,4" Click="IcsTest_Click"/>
+                            <TextBlock x:Name="IcsTestResult" Style="{StaticResource TextSecondary}" VerticalAlignment="Center"
+                                       Margin="10,0,0,0" TextWrapping="Wrap" MaxWidth="320"/>
                         </StackPanel>
-                    </Border>
-                    <Border Style="{StaticResource Card}">
-                        <StackPanel>
-                            <CheckBox IsChecked="{Binding WeatherEnabled, Mode=TwoWay}">
-                                <StackPanel>
-                                    <TextBlock Text="Weather" Style="{StaticResource TextPrimary}"/>
-                                    <TextBlock Text="From open-meteo.com. Turning it on sends your approximate location (or the city below) to that service." Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
-                                </StackPanel>
-                            </CheckBox>
-                            <Border Style="{StaticResource Divider}"/>
-                            <CheckBox IsChecked="{Binding WeatherUseLocation, Mode=TwoWay}" IsEnabled="{Binding WeatherEnabled}">
-                                <StackPanel>
-                                    <TextBlock Text="Use my device location" Style="{StaticResource TextPrimary}"/>
-                                    <TextBlock Text="Needs location access for desktop apps in Windows privacy settings; otherwise the city is used" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
-                                </StackPanel>
-                            </CheckBox>
-                            <Border Style="{StaticResource Divider}"/>
-                            <Grid>
-                                <TextBlock Text="City" Style="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
-                                <TextBox Width="220" HorizontalAlignment="Right" Padding="8,5" FontSize="13" IsEnabled="{Binding WeatherEnabled}"
-                                         Text="{Binding WeatherCity, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
-                            </Grid>
-                            <Border Style="{StaticResource Divider}"/>
-                            <Grid>
-                                <TextBlock Text="Units" Style="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
-                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <CheckBox IsChecked="{Binding WeatherEnabled, Mode=TwoWay}">
+                            <StackPanel>
+                                <TextBlock Text="Weather" Style="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="From open-meteo.com. Turning it on sends your approximate location (or the city below) to that service." Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </CheckBox>
+                        <Border Style="{StaticResource Divider}"/>
+                        <CheckBox IsChecked="{Binding WeatherUseLocation, Mode=TwoWay}" IsEnabled="{Binding WeatherEnabled}">
+                            <StackPanel>
+                                <TextBlock Text="Use my device location" Style="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="Needs location access for desktop apps in Windows privacy settings; otherwise the city is used" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </CheckBox>
+                        <Border Style="{StaticResource Divider}"/>
+                        <Grid>
+                            <TextBlock Text="City" Style="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
+                            <TextBox Width="220" HorizontalAlignment="Right" Padding="8,4" IsEnabled="{Binding WeatherEnabled}"
+                                     Text="{Binding WeatherCity, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
+                        </Grid>
+                        <Border Style="{StaticResource Divider}"/>
+                        <Grid>
+                            <TextBlock Text="Units" Style="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
+                            <Border Style="{StaticResource SegmentTrack}">
+                                <StackPanel Orientation="Horizontal">
                                     <RadioButton x:Name="UnitCelsius" Content="&#xB0;C" Tag="C" GroupName="WeatherUnits"
                                                  Style="{StaticResource Segment}" Checked="Units_Checked"/>
                                     <RadioButton x:Name="UnitFahrenheit" Content="&#xB0;F" Tag="F" GroupName="WeatherUnits"
                                                  Style="{StaticResource Segment}" Checked="Units_Checked"/>
                                 </StackPanel>
-                            </Grid>
-                            <Border Style="{StaticResource Divider}"/>
-                            <CheckBox IsChecked="{Binding ShowWeatherOnPill, Mode=TwoWay}" IsEnabled="{Binding WeatherEnabled}">
-                                <StackPanel>
-                                    <TextBlock Text="Show temperature on the pill" Style="{StaticResource TextPrimary}"/>
-                                    <TextBlock Text="When nothing else is showing. The item count badge is hidden then." Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
-                                </StackPanel>
-                            </CheckBox>
-                        </StackPanel>
-                    </Border>
+                            </Border>
+                        </Grid>
+                        <Border Style="{StaticResource Divider}"/>
+                        <CheckBox IsChecked="{Binding ShowWeatherOnPill, Mode=TwoWay}" IsEnabled="{Binding WeatherEnabled}">
+                            <StackPanel>
+                                <TextBlock Text="Show temperature on the island" Style="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="When nothing else is showing" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </CheckBox>
+                    </StackPanel>
+                </Border>
 
-                    <TextBlock Text="HOTKEYS" Style="{StaticResource SectionLabel}"/>
-                    <Border Style="{StaticResource Card}">
-                        <StackPanel>
-                            <Grid>
-                                <TextBlock Text="Open basket" Style="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
-                                <Border Style="{StaticResource KeyCap}" HorizontalAlignment="Right">
-                                    <TextBlock Text="Ctrl + Shift + B" Style="{StaticResource TextSecondary}"/>
-                                </Border>
-                            </Grid>
-                            <Grid Margin="0,12,0,0">
-                                <TextBlock Text="Clipboard history" Style="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
-                                <Border Style="{StaticResource KeyCap}" HorizontalAlignment="Right">
-                                    <TextBlock Text="Ctrl + Shift + V" Style="{StaticResource TextSecondary}"/>
-                                </Border>
-                            </Grid>
-                            <Grid Margin="0,12,0,0">
-                                <TextBlock Text="Screenshot to shelf" Style="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
-                                <Border Style="{StaticResource KeyCap}" HorizontalAlignment="Right">
-                                    <TextBlock Text="Ctrl + Shift + S" Style="{StaticResource TextSecondary}"/>
-                                </Border>
-                            </Grid>
-                            <Grid Margin="0,12,0,0">
-                                <TextBlock Text="Quick note" Style="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
-                                <Border Style="{StaticResource KeyCap}" HorizontalAlignment="Right">
-                                    <TextBlock Text="Ctrl + Shift + N" Style="{StaticResource TextSecondary}"/>
-                                </Border>
-                            </Grid>
-                        </StackPanel>
-                    </Border>
+                <TextBlock Text="Keyboard Shortcuts" Style="{StaticResource SectionLabel}"/>
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <Grid>
+                            <TextBlock Text="Open basket" Style="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
+                            <Border Style="{StaticResource KeyCap}" HorizontalAlignment="Right">
+                                <TextBlock Text="Ctrl Shift B" Style="{StaticResource TextSecondary}"/>
+                            </Border>
+                        </Grid>
+                        <Border Style="{StaticResource Divider}"/>
+                        <Grid>
+                            <TextBlock Text="Clipboard history" Style="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
+                            <Border Style="{StaticResource KeyCap}" HorizontalAlignment="Right">
+                                <TextBlock Text="Ctrl Shift V" Style="{StaticResource TextSecondary}"/>
+                            </Border>
+                        </Grid>
+                        <Border Style="{StaticResource Divider}"/>
+                        <Grid>
+                            <TextBlock Text="Take screenshot" Style="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
+                            <Border Style="{StaticResource KeyCap}" HorizontalAlignment="Right">
+                                <TextBlock Text="Ctrl Shift S" Style="{StaticResource TextSecondary}"/>
+                            </Border>
+                        </Grid>
+                        <Border Style="{StaticResource Divider}"/>
+                        <Grid>
+                            <TextBlock Text="Quick note" Style="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
+                            <Border Style="{StaticResource KeyCap}" HorizontalAlignment="Right">
+                                <TextBlock Text="Ctrl Shift N" Style="{StaticResource TextSecondary}"/>
+                            </Border>
+                        </Grid>
+                    </StackPanel>
+                </Border>
 
-                    <Button Content="Open data folder" Style="{StaticResource TextButton}" HorizontalAlignment="Left"
-                            Margin="0,8,0,0" Click="OpenFolder_Click"/>
-                    <TextBlock Style="{StaticResource TextSecondary}" FontSize="11" TextWrapping="Wrap" Margin="8,6,0,0"
-                               Text="Dropshelf is an independent Windows app. It is not affiliated with any macOS product."/>
-                </StackPanel>
-            </ScrollViewer>
-        </Grid>
-    </Border>
+                <Button Content="Open data folder" Style="{StaticResource TextButton}" HorizontalAlignment="Left"
+                        Margin="-2,4,0,0" Click="OpenFolder_Click"/>
+                <TextBlock Style="{StaticResource TextSecondary}" FontSize="11" TextWrapping="Wrap" Margin="4,6,0,0"
+                           Text="Dropshelf is an independent Windows app. It is not affiliated with Apple or any macOS product."/>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
 </Window>

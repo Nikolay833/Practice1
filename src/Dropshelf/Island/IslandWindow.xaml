@@ -1,0 +1,68 @@
+<Window x:Class="Dropshelf.Island.IslandWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:act="clr-namespace:Dropshelf.Activities"
+        Title="Dropshelf" Width="196" Height="32"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        ResizeMode="NoResize" ShowInTaskbar="False" ShowActivated="False" Topmost="True"
+        WindowStartupLocation="Manual" Left="0" Top="0" AllowDrop="True"
+        UseLayoutRounding="True" SnapsToDevicePixels="True"
+        FontFamily="{StaticResource UiFont}" Foreground="{StaticResource TextBrush}">
+    <!-- The window is at least as large as the island and only resized when an animation needs more room (and once more
+         when it settles); the island itself is sized inside it every frame. Pixels outside the island are fully
+         transparent, so the layered window lets clicks through there. -->
+    <Grid x:Name="Island" HorizontalAlignment="Center" VerticalAlignment="Top" Width="196" Height="32">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="6"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="6"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- The concave "shoulders" where a MacBook notch meets the top edge of the screen. -->
+        <Path Grid.Column="0" VerticalAlignment="Top" Fill="{StaticResource BlackBrush}" Data="M0,0 L6,0 L6,6 A6,6 0 0 0 0,0 Z"/>
+        <Path Grid.Column="2" VerticalAlignment="Top" Fill="{StaticResource BlackBrush}" Data="M6,0 L0,0 L0,6 A6,6 0 0 1 6,0 Z"/>
+
+        <Border x:Name="Body" Grid.Column="1" Background="{StaticResource BlackBrush}" CornerRadius="0,0,11,11" ClipToBounds="True">
+            <Grid>
+                <!-- Compact activity content (now playing, timer, HUDs): leading view at the left edge, trailing view at the
+                     right edge, like the Dynamic Island. ApplyLayout sizes this layer to the collapsed island. -->
+                <Grid x:Name="CompactLayer" Width="184" Height="32" VerticalAlignment="Top" HorizontalAlignment="Center"
+                      IsHitTestVisible="False">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition x:Name="CenterGap" Width="40"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                </Grid>
+
+                <!-- Expanded panel (fixed size; the island clips it while animating). -->
+                <Grid x:Name="ExpandedPanel" Width="640" Height="188" VerticalAlignment="Top" HorizontalAlignment="Center"
+                      Opacity="0" IsHitTestVisible="False" RenderTransformOrigin="0.5,0">
+                    <Grid.RenderTransform>
+                        <ScaleTransform x:Name="ExpandedScale"/>
+                    </Grid.RenderTransform>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0" Margin="18,12,14,0" Height="28">
+                        <act:ActivityTabBar x:Name="Tabs" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                        <Button Content="&#xE713;" Style="{StaticResource CircleButton}" HorizontalAlignment="Right"
+                                ToolTip="Settings" Click="Settings_Click"/>
+                    </Grid>
+
+                    <act:CrossfadeHost x:Name="Pages" Grid.Row="1" Margin="18,10,18,16"/>
+                    <TextBlock x:Name="EmptyText" Grid.Row="1" Visibility="Collapsed" Style="{StaticResource TextSecondary}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               Text="Turn on Now Playing, Timer, Notes or Today in Settings"/>
+
+                    <!-- Drag-over highlight for a tab that takes drops (text onto Notes). -->
+                    <Border x:Name="TabDropHighlight" Grid.Row="1" Margin="18,10,18,16" Visibility="Collapsed" IsHitTestVisible="False"
+                            CornerRadius="12" BorderThickness="1.5" BorderBrush="{DynamicResource AccentBrush}"
+                            Background="{DynamicResource AccentWashBrush}"/>
+                </Grid>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

@@ -6,29 +6,30 @@ using WinForms = System.Windows.Forms;
 
 namespace Dropshelf.Services;
 
-/// <summary>System tray icon and its (dark-themed) context menu.</summary>
+/// <summary>System tray icon and its context menu, styled like a macOS dark menu (accent-blue highlight).</summary>
 internal sealed class TrayService : IDisposable
 {
     private readonly WinForms.NotifyIcon _icon;
     private readonly WinForms.ContextMenuStrip _menu;
     private readonly Drawing.Icon? _ownedIcon;
 
-    public TrayService(Action showShelf, Action openBasket, Action openClipboard, Action openSettings, Action uninstall, Action quit,
+    public TrayService(Action showIsland, Action openBasket, Action openClipboard, Action openSettings, Action uninstall, Action quit,
         Action screenshot, Action quickNote)
     {
         _menu = new WinForms.ContextMenuStrip
         {
             Renderer = new WinForms.ToolStripProfessionalRenderer(new DarkColorTable()) { RoundedEdges = false },
             ShowImageMargin = false,
-            BackColor = Drawing.Color.FromArgb(28, 28, 28),
+            BackColor = DarkColorTable.Background,
             ForeColor = Drawing.Color.White,
-            Font = new Drawing.Font("Segoe UI", 9.5f),
+            Font = MenuFont(),
+            Padding = new WinForms.Padding(4),
         };
 
-        AddItem("Show shelf", showShelf);
+        AddItem("Open Dropshelf", showIsland);
         AddItem("Open basket", openBasket);
         AddItem("Clipboard history", openClipboard);
-        AddItem("Screenshot to shelf", screenshot);
+        AddItem("Take screenshot", screenshot);
         AddItem("Quick note", quickNote);
         _menu.Items.Add(new WinForms.ToolStripSeparator());
         AddItem("Settings…", openSettings);
@@ -49,7 +50,7 @@ internal sealed class TrayService : IDisposable
         {
             if (e.Button == WinForms.MouseButtons.Left)
             {
-                showShelf();
+                showIsland();
             }
         };
     }
@@ -74,6 +75,25 @@ internal sealed class TrayService : IDisposable
             }
         };
         _menu.Items.Add(item);
+    }
+
+    /// <summary>San Francisco when it is installed, otherwise Segoe UI (WinForms would silently fall back to MS Sans Serif).</summary>
+    private static Drawing.Font MenuFont()
+    {
+        foreach (string family in new[] { "SF Pro Text", "Segoe UI Variable Text", "Segoe UI" })
+        {
+            try
+            {
+                using var probe = new Drawing.FontFamily(family);
+                return new Drawing.Font(probe, 9.75f);
+            }
+            catch (ArgumentException)
+            {
+                // Not installed: try the next one.
+            }
+        }
+
+        return WinForms.Control.DefaultFont;
     }
 
     private static Drawing.Icon? LoadIcon()
@@ -103,12 +123,12 @@ internal sealed class TrayService : IDisposable
         _ownedIcon?.Dispose();
     }
 
-    /// <summary>Dark palette for the WinForms menu renderer.</summary>
+    /// <summary>macOS dark menu palette for the WinForms menu renderer: grey menu, systemBlue highlight.</summary>
     private sealed class DarkColorTable : WinForms.ProfessionalColorTable
     {
-        private static readonly Drawing.Color Background = Drawing.Color.FromArgb(28, 28, 28);
-        private static readonly Drawing.Color Hover = Drawing.Color.FromArgb(48, 48, 48);
-        private static readonly Drawing.Color Border = Drawing.Color.FromArgb(52, 52, 52);
+        public static readonly Drawing.Color Background = Drawing.Color.FromArgb(40, 40, 40);
+        private static readonly Drawing.Color Hover = Drawing.Color.FromArgb(10, 132, 255);
+        private static readonly Drawing.Color Border = Drawing.Color.FromArgb(58, 58, 58);
 
         public override Drawing.Color ToolStripDropDownBackground => Background;
         public override Drawing.Color ImageMarginGradientBegin => Background;

@@ -11,7 +11,7 @@ namespace Dropshelf.Activities;
 /// Decides what the collapsed pill shows and which tabs the expanded shelf has. A HUD that was requested within the last
 /// ~1.8 s wins, otherwise the active live activity with the highest priority, otherwise nothing. The two
 /// <see cref="CrossfadeHost"/>s (<see cref="LeftView"/> / <see cref="RightView"/>) crossfade between activities; the
-/// shelf window springs the pill to <see cref="Content"/>'s size whenever <see cref="CompactChanged"/> is raised.
+/// island window springs the pill to <see cref="Content"/>'s size whenever <see cref="CompactChanged"/> is raised.
 /// </summary>
 internal sealed class ActivityHost
 {
@@ -28,8 +28,9 @@ internal sealed class ActivityHost
 
     public ActivityHost()
     {
-        LeftView = new CrossfadeHost { ChildHorizontalAlignment = HorizontalAlignment.Right, ChildVerticalAlignment = VerticalAlignment.Center };
-        RightView = new CrossfadeHost { ChildHorizontalAlignment = HorizontalAlignment.Left, ChildVerticalAlignment = VerticalAlignment.Center };
+        // Leading content hugs the left edge of the island and trailing content the right edge, like the Dynamic Island.
+        LeftView = new CrossfadeHost { ChildHorizontalAlignment = HorizontalAlignment.Left, ChildVerticalAlignment = VerticalAlignment.Center };
+        RightView = new CrossfadeHost { ChildHorizontalAlignment = HorizontalAlignment.Right, ChildVerticalAlignment = VerticalAlignment.Center };
         _hudTimer = new DispatcherTimer { Interval = HudDuration };
         _hudTimer.Tick += (_, _) =>
         {
@@ -39,10 +40,10 @@ internal sealed class ActivityHost
         };
     }
 
-    /// <summary>Hosts the content left of the mascot (children are right-aligned).</summary>
+    /// <summary>Hosts the leading content (children are left-aligned).</summary>
     public FrameworkElement LeftView { get; }
 
-    /// <summary>Hosts the content right of the mascot (children are left-aligned).</summary>
+    /// <summary>Hosts the trailing content (children are right-aligned).</summary>
     public FrameworkElement RightView { get; }
 
     public IReadOnlyList<IPillActivity> Activities => _activities;
@@ -57,7 +58,7 @@ internal sealed class ActivityHost
     /// <summary>The pill content or its size changed.</summary>
     public event Action? CompactChanged;
 
-    /// <summary>The set of expanded-shelf tabs changed.</summary>
+    /// <summary>The set of expanded-island tabs changed.</summary>
     public event Action? TabsChanged;
 
     /// <summary>Activities that currently have an expanded tab, in <see cref="IPillActivity.TabOrder"/>.</summary>
@@ -77,7 +78,7 @@ internal sealed class ActivityHost
         OnStateChanged(activity, EventArgs.Empty);
     }
 
-    /// <summary>The expanded shelf is open: HUDs stay away (the shelf covers the pill) and live content is not recomputed.</summary>
+    /// <summary>The island is expanded: HUDs stay away (the panel covers them) and are queued if they asked to be.</summary>
     public void SetExpandedOpen(bool open)
     {
         if (_expandedOpen == open)
@@ -92,7 +93,7 @@ internal sealed class ActivityHost
         }
         else if (_queuedHud != null)
         {
-            // Something finished while the shelf was open ("Converted 3 files"): say so now that the pill is visible again.
+            // Something finished while the island was open ("Converted 3 files"): say so now that the pill is visible again.
             IPillActivity queued = _queuedHud;
             bool fresh = Environment.TickCount64 - _queuedAt < 15_000;
             _queuedHud = null;

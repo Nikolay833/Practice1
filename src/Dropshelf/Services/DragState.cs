@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using Dropshelf.Shelf;
+using Dropshelf.Items;
 
 namespace Dropshelf.Services;
 
@@ -10,10 +10,10 @@ namespace Dropshelf.Services;
 internal static class DragState
 {
     public static ItemStore? Origin { get; private set; }
-    public static IReadOnlyList<ShelfItem> Items { get; private set; } = [];
+    public static IReadOnlyList<DropItem> Items { get; private set; } = [];
     public static bool IsActive => Origin != null;
 
-    public static void Begin(ItemStore origin, IReadOnlyList<ShelfItem> items)
+    public static void Begin(ItemStore origin, IReadOnlyList<DropItem> items)
     {
         Origin = origin;
         Items = items;

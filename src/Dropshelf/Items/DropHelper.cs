@@ -4,7 +4,7 @@ using System.Linq;
 using System.Windows;
 using Dropshelf.Services;
 
-namespace Dropshelf.Shelf;
+namespace Dropshelf.Items;
 
 /// <summary>Turns drag-and-drop payloads (files, text, links) into items and decides which drags we accept.</summary>
 internal static class DropHelper

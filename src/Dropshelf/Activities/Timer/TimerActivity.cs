@@ -15,7 +15,7 @@ namespace Dropshelf.Activities.Timer;
 /// Timer and Pomodoro. Collapsed pill while one is running or paused: a progress ring around a small stopwatch on the left,
 /// the remaining time (tabular digits) on the right; the ring turns from the accent (or green on a break) to orange during the
 /// last minute. The "Timer" tab has presets, custom mm:ss, start / pause / reset and the Pomodoro cycle. When a phase ends the
-/// pill grows with a spring "ding" HUD, the mascot celebrates and a soft chime plays (unless muted in Settings).
+/// island grows with a spring "ding" HUD and a soft chime plays (unless muted in Settings).
 /// The only timer in here ticks once per second while a countdown runs, and is off otherwise.
 /// </summary>
 internal sealed class TimerActivity : PillActivityBase, IDisposable
@@ -25,7 +25,6 @@ internal sealed class TimerActivity : PillActivityBase, IDisposable
 
     private readonly SettingsService _settings;
     private readonly ToastActivity _toast;
-    private readonly Action _celebrate;
     private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
     private readonly DispatcherTimer _tick;
     private readonly ProgressRing _ring;
@@ -37,11 +36,10 @@ internal sealed class TimerActivity : PillActivityBase, IDisposable
     private bool _followAccent = true;
     private bool _disposed;
 
-    public TimerActivity(SettingsService settings, ToastActivity toast, Action celebrate)
+    public TimerActivity(SettingsService settings, ToastActivity toast)
     {
         _settings = settings;
         _toast = toast;
-        _celebrate = celebrate;
         Engine = new TimerEngine();
         ApplyPlan();
 
@@ -307,7 +305,6 @@ internal sealed class TimerActivity : PillActivityBase, IDisposable
             ExtraHeight = 8,
             Duration = TimeSpan.FromMilliseconds(3400),
         });
-        _celebrate();
         if (_settings.Current.TimerSound)
         {
             Chime.Play();

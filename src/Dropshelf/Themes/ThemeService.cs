@@ -10,26 +10,38 @@ using Windows.UI.ViewManagement;
 namespace Dropshelf.Themes;
 
 /// <summary>
-/// Applies the accent colour and the pill style by replacing entries in the application resources. Everything that
-/// uses the accent refers to these keys with <c>DynamicResource</c>, so a change shows up live in every window:
-/// <c>AccentColor</c>, <c>AccentBrush</c>, <c>AccentHoverBrush</c>, <c>AccentSoftBrush</c>, <c>AccentStrokeBrush</c>,
-/// <c>AccentWashBrush</c> and the glow colours; <c>PillBrush</c> / <c>PillBorderBrush</c> carry the pill style.
+/// Applies the accent colour by replacing entries in the application resources. Everything that uses the accent refers to
+/// these keys with <c>DynamicResource</c>, so a change shows up live in every window: <c>AccentColor</c>,
+/// <c>AccentBrush</c>, <c>AccentHoverBrush</c>, <c>AccentSoftBrush</c>, <c>AccentStrokeBrush</c>, <c>AccentWashBrush</c>
+/// and <c>AccentTextBrush</c> (black on light accents such as yellow, white otherwise).
 /// "Windows accent" follows <see cref="UISettings"/> (registry fallback) and updates when the user changes it.
 /// </summary>
 internal sealed class ThemeService : IDisposable
 {
-    public static readonly Color DefaultAccent = Color.FromRgb(0x3B, 0x82, 0xF6);
+    /// <summary>Apple's systemBlue (dark appearance).</summary>
+    public static readonly Color DefaultAccent = Color.FromRgb(0x0A, 0x84, 0xFF);
 
+    // Apple system colours, dark appearance (macOS / iOS Human Interface Guidelines).
     private static readonly Dictionary<AccentPreset, Color> Presets = new()
     {
         [AccentPreset.Blue] = DefaultAccent,
-        [AccentPreset.Indigo] = Color.FromRgb(0x63, 0x66, 0xF1),
-        [AccentPreset.Purple] = Color.FromRgb(0xA8, 0x55, 0xF7),
-        [AccentPreset.Pink] = Color.FromRgb(0xEC, 0x48, 0x99),
-        [AccentPreset.Red] = Color.FromRgb(0xEF, 0x44, 0x44),
-        [AccentPreset.Orange] = Color.FromRgb(0xF9, 0x73, 0x16),
-        [AccentPreset.Green] = Color.FromRgb(0x22, 0xC5, 0x5E),
-        [AccentPreset.Teal] = Color.FromRgb(0x14, 0xB8, 0xA6),
+        [AccentPreset.Purple] = Color.FromRgb(0xBF, 0x5A, 0xF2),
+        [AccentPreset.Pink] = Color.FromRgb(0xFF, 0x37, 0x5F),
+        [AccentPreset.Red] = Color.FromRgb(0xFF, 0x45, 0x3A),
+        [AccentPreset.Orange] = Color.FromRgb(0xFF, 0x9F, 0x0A),
+        [AccentPreset.Yellow] = Color.FromRgb(0xFF, 0xD6, 0x0A),
+        [AccentPreset.Green] = Color.FromRgb(0x30, 0xD1, 0x58),
+        [AccentPreset.Teal] = Color.FromRgb(0x40, 0xC8, 0xE0),
+        [AccentPreset.Indigo] = Color.FromRgb(0x5E, 0x5C, 0xE6),
+        [AccentPreset.Graphite] = Color.FromRgb(0x8E, 0x8E, 0x93),
+    };
+
+    /// <summary>The order the swatches appear in Settings (the macOS order, then the extra iOS colours).</summary>
+    public static readonly AccentPreset[] SwatchOrder =
+    {
+        AccentPreset.Blue, AccentPreset.Purple, AccentPreset.Pink, AccentPreset.Red, AccentPreset.Orange,
+        AccentPreset.Yellow, AccentPreset.Green, AccentPreset.Teal, AccentPreset.Indigo, AccentPreset.Graphite,
+        AccentPreset.Windows,
     };
 
     private readonly SettingsService _settings;
@@ -46,14 +58,11 @@ internal sealed class ThemeService : IDisposable
         Apply();
     }
 
-    /// <summary>The live instance (views such as the mascot use it to follow the accent without extra plumbing).</summary>
+    /// <summary>The live instance (views use it to follow the accent without extra plumbing).</summary>
     public static ThemeService? Current { get; private set; }
 
     /// <summary>The effective accent colour.</summary>
     public Color Accent { get; private set; } = DefaultAccent;
-
-    /// <summary>The colour the mascot is tinted with (the accent, or the default blue when it does not follow).</summary>
-    public Color MascotAccent => _settings.Current.MascotFollowsAccent ? Accent : DefaultAccent;
 
     /// <summary>Raised on the UI thread after the resources changed.</summary>
     public event Action? Changed;
@@ -64,7 +73,7 @@ internal sealed class ThemeService : IDisposable
 
     private void OnSettingChanged(string name)
     {
-        if (name is nameof(AppSettings.Accent) or nameof(AppSettings.PillStyle) or nameof(AppSettings.MascotFollowsAccent))
+        if (name == nameof(AppSettings.Accent))
         {
             Apply();
         }
@@ -77,35 +86,16 @@ internal sealed class ThemeService : IDisposable
         Accent = accent;
 
         Color hover = ColorUtil.Hover(accent);
-        Color glow = ColorUtil.Glow(accent);
-        Color deep = ColorUtil.Deep(accent);
 
         ResourceDictionary r = Application.Current.Resources;
         r["AccentColor"] = accent;
         r["AccentHoverColor"] = hover;
-        r["AccentGlowColor"] = glow;
-        r["AccentBloomStartColor"] = ColorUtil.WithAlpha(deep, 0x80);
-        r["AccentBloomEndColor"] = ColorUtil.WithAlpha(deep, 0x00);
-        r["AccentRimTopColor"] = ColorUtil.WithAlpha(accent, 0x00);
         r["AccentBrush"] = ColorUtil.Brush(accent);
         r["AccentHoverBrush"] = ColorUtil.Brush(hover);
         r["AccentSoftBrush"] = ColorUtil.Brush(ColorUtil.WithAlpha(accent, 0x33));
         r["AccentStrokeBrush"] = ColorUtil.Brush(ColorUtil.WithAlpha(accent, 0x99));
         r["AccentWashBrush"] = ColorUtil.Brush(ColorUtil.WithAlpha(accent, 0x14));
-
-        if (s.PillStyle == PillStyle.Glass)
-        {
-            // The window is layered (AllowsTransparency), so "glass" is a semi-transparent dark fill with a light rim.
-            var fill = new LinearGradientBrush(Color.FromArgb(0xB8, 0x24, 0x26, 0x2C), Color.FromArgb(0x9E, 0x0C, 0x0D, 0x10), 90);
-            fill.Freeze();
-            r["PillBrush"] = fill;
-            r["PillBorderBrush"] = ColorUtil.Brush(Color.FromArgb(0x38, 0xFF, 0xFF, 0xFF));
-        }
-        else
-        {
-            r["PillBrush"] = ColorUtil.Brush(Colors.Black);
-            r["PillBorderBrush"] = ColorUtil.Brush(Color.FromRgb(0x1A, 0x1A, 0x1A));
-        }
+        r["AccentTextBrush"] = ColorUtil.Brush(ColorUtil.Luminance(accent) > 0.6 ? Colors.Black : Colors.White);
 
         Changed?.Invoke();
     }

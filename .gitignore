@@ -1,0 +1,19 @@
+# .NET build output
+bin/
+obj/
+out/
+publish/
+
+# IDEs
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.rsuser
+
+# Misc
+*.log
+TestResults/
+*.tmp
+__pycache__/

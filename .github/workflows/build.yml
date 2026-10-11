@@ -2,12 +2,22 @@ name: Build
 
 on:
   push:
+    branches: ['**']
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
+    inputs:
+      release:
+        description: Publish a GitHub release with both builds
+        type: boolean
+        default: true
 
 jobs:
   build:
     runs-on: windows-latest
+    strategy:
+      matrix:
+        arch: [x64, arm64]
     steps:
       - uses: actions/checkout@v4
 
@@ -19,16 +29,58 @@ jobs:
       - name: Publish (single-file, self-contained)
         run: >
           dotnet publish src/Dropshelf/Dropshelf.csproj
-          -c Release -r win-x64 --self-contained true
+          -c Release -r win-${{ matrix.arch }} --self-contained true
           -p:Version=1.0.${{ github.run_number }}
           -p:PublishSingleFile=true
           -p:IncludeNativeLibrariesForSelfExtract=true
           -p:EnableCompressionInSingleFile=true
           -o out
 
+      - name: Name exe after its architecture
+        run: Rename-Item out/Dropshelf.exe Dropshelf-${{ matrix.arch }}.exe
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Dropshelf-win-x64
-          path: out/Dropshelf.exe
+          name: Dropshelf-win-${{ matrix.arch }}
+          path: out/Dropshelf-${{ matrix.arch }}.exe
           if-no-files-found: error
+
+  release:
+    # Runs on pushes to main, on v* tags, or from the Actions tab via "Run workflow".
+    if: (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))) || (github.event_name == 'workflow_dispatch' && inputs.release)
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_type == 'tag' && github.ref_name || format('v1.0.{0}', github.run_number) }}
+        run: |
+          cp tools/install.ps1 tools/Install-Dropshelf.cmd dist/
+          cat > notes.md <<'EOF'
+          ## Which file do I download?
+
+          **Easiest:** download `Install-Dropshelf.cmd` and double-click it. It detects your PC and installs the right version.
+
+          Or pick one yourself:
+
+          | Your PC | Download |
+          |---|---|
+          | Intel or AMD processor (most PCs) | `Dropshelf-x64.exe` |
+          | Arm processor (Snapdragon, Surface Pro X / Pro 11, Copilot+ PCs) | `Dropshelf-arm64.exe` |
+
+          Not sure? Open **Settings → System → About** and look at **System type**: "x64-based processor" means x64, "ARM-based processor" means arm64.
+
+          Running the exe installs Dropshelf and starts it at every sign-in. Running a newer exe later updates it.
+          EOF
+          gh release create "$TAG" dist/* --title "Dropshelf $TAG" --notes-file notes.md --target "$GITHUB_SHA" --latest --verify-tag=false

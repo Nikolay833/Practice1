@@ -9,6 +9,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
 using Dropshelf.Activities;
+using Dropshelf.Activities.Notes;
 using Dropshelf.Animation;
 using Dropshelf.Interop;
 using Dropshelf.Services;
@@ -77,6 +78,8 @@ public partial class ShelfWindow : Window
     private bool _wheelEnabled;
     private int _wheelX = int.MinValue, _wheelY, _wheelW, _wheelH;
     private bool _wheelPublished;
+    private bool _activationAllowed;   // WS_EX_NOACTIVATE is off while a text box in the shelf needs the keyboard
+    private IntPtr _previousForeground;
 
     internal ShelfWindow(ShelfStore store, SettingsService settings, Action openSettings, ActivityHost activities)
     {
@@ -86,6 +89,10 @@ public partial class ShelfWindow : Window
         _openSettings = openSettings;
         _activities = activities;
         _loop = new FrameLoop(OnFrame);
+        foreach (NotesActivity notes in _activities.Activities.OfType<NotesActivity>())
+        {
+            notes.ReleaseRequested += ReleaseKeyboard;
+        }
 
         // Activities: compact views around the mascot, tabs in the expanded shelf.
         Grid.SetColumn(_activities.LeftView, 0);
@@ -134,12 +141,21 @@ public partial class ShelfWindow : Window
         MouseLeave += (_, _) => ScheduleCollapse();
 
         // Click on the collapsed pill expands it (the only way in when hover-expand is off).
-        PreviewMouseLeftButtonDown += (_, _) =>
+        PreviewMouseLeftButtonDown += (_, e) =>
         {
-            if (!_expanded)
+            // A button on an interactive HUD ("Copy text") is a click on that button, not a request to open the shelf.
+            if (!_expanded && FindAncestor<System.Windows.Controls.Primitives.ButtonBase>(e.OriginalSource as DependencyObject) == null)
             {
                 Expand();
             }
+        };
+
+        // A click into a text box (notes, custom timer) lets the no-activate window take the keyboard.
+        PreviewMouseDown += OnPreviewMouseDown;
+        Deactivated += (_, _) =>
+        {
+            RestoreNoActivate();
+            ScheduleCollapse();
         };
 
         DragEnter += OnDragOverOrEnter;
@@ -147,6 +163,7 @@ public partial class ShelfWindow : Window
         DragLeave += (_, _) =>
         {
             DropHighlight.Visibility = Visibility.Collapsed;
+            TabDropHighlight.Visibility = Visibility.Collapsed;
             SetDragOver(false);
             ScheduleCollapse();
         };
@@ -260,9 +277,12 @@ public partial class ShelfWindow : Window
         }
 
         _expanded = false;
+        Keyboard.ClearFocus();
+        RestoreNoActivate();
         _activities.SetExpandedOpen(false);
         ExpandedPanel.IsHitTestVisible = false;
         DropHighlight.Visibility = Visibility.Collapsed;
+        TabDropHighlight.Visibility = Visibility.Collapsed;
         _dragOver = false;
         UpdateGlowTarget();
         AnimateTo(0);
@@ -304,11 +324,17 @@ public partial class ShelfWindow : Window
         bool onPill = WindowHelper.ContainsCursor(_hwnd);
         int dragMargin = (int)Math.Round(DragMarginDip * _monitor.Scale);
 
-        bool solid = (dragging && WindowHelper.ContainsCursor(_hwnd, dragMargin)) || (!hoverExpand && onPill);
+        // An interactive HUD (screenshot "Copy text") needs the mouse: solid under the cursor, no hover-expand, and it stays up.
+        bool interactiveHud = _activities.IsHudShowing && _activities.Content is { Interactive: true };
+        bool solid = (dragging && WindowHelper.ContainsCursor(_hwnd, dragMargin)) || (!hoverExpand && onPill) || (interactiveHud && onPill);
         WindowHelper.SetClickThrough(_hwnd, !solid);
         UpdateMagnet(dragging);
+        if (interactiveHud && onPill)
+        {
+            _activities.KeepHudAlive();
+        }
 
-        if (hoverExpand && onPill && !leftDown)
+        if (hoverExpand && onPill && !leftDown && !interactiveHud)
         {
             long now = Environment.TickCount64;
             if (_hoverSince == 0)
@@ -372,6 +398,12 @@ public partial class ShelfWindow : Window
         if (ItemsView.IsBusy)
         {
             return; // BusyChanged reschedules once the menu closes / drag ends
+        }
+
+        if (_activationAllowed && IsActive && Keyboard.FocusedElement is System.Windows.Controls.Primitives.TextBoxBase)
+        {
+            _collapseTimer.Start(); // typing in a note: the shelf stays open for as long as the text box has the keyboard
+            return;
         }
 
         if (WindowHelper.ContainsCursor(_hwnd) || Environment.TickCount64 < _holdUntilTick)
@@ -607,16 +639,25 @@ public partial class ShelfWindow : Window
         _collapseTimer.Stop();
 
         bool fromThisShelf = DragState.IsActive && ReferenceEquals(DragState.Origin, _store);
-        bool accept = !fromThisShelf && DropHelper.CanAccept(e.Data);
 
-        e.Effects = !accept ? DragDropEffects.None : DragState.IsActive ? DropHelper.InternalEffect(e) : DragDropEffects.Copy;
+        // Text dropped while the Notes tab is showing goes into the note; everything else lands on the shelf.
+        IShelfDropTarget? tabTarget = _expanded && !DragState.IsActive ? CurrentDropTarget() : null;
+        bool tabAccepts = tabTarget != null && tabTarget.CanDrop(e.Data);
+        bool accept = tabAccepts || (!fromThisShelf && DropHelper.CanAccept(e.Data));
+
+        e.Effects = !accept ? DragDropEffects.None : tabAccepts ? DragDropEffects.Copy : DragState.IsActive ? DropHelper.InternalEffect(e) : DragDropEffects.Copy;
         e.Handled = true;
 
         SetDragOver(accept);
         if (accept)
         {
-            SelectTab(ShelfTabId); // files dragged in always land on the shelf
-            DropHighlight.Visibility = _expanded ? Visibility.Visible : Visibility.Collapsed;
+            if (!tabAccepts)
+            {
+                SelectTab(ShelfTabId); // files dragged in always land on the shelf
+            }
+
+            DropHighlight.Visibility = _expanded && !tabAccepts ? Visibility.Visible : Visibility.Collapsed;
+            TabDropHighlight.Visibility = _expanded && tabAccepts ? Visibility.Visible : Visibility.Collapsed;
             Expand();
         }
     }
@@ -624,7 +665,23 @@ public partial class ShelfWindow : Window
     private void OnDrop(object sender, DragEventArgs e)
     {
         DropHighlight.Visibility = Visibility.Collapsed;
+        TabDropHighlight.Visibility = Visibility.Collapsed;
         SetDragOver(false);
+
+        if (_expanded && !DragState.IsActive && CurrentDropTarget() is { } tabTarget && tabTarget.CanDrop(e.Data))
+        {
+            bool taken = tabTarget.Drop(e.Data);
+            e.Effects = taken ? DragDropEffects.Copy : DragDropEffects.None;
+            e.Handled = true;
+            if (taken)
+            {
+                Mascot.Gulp();
+            }
+
+            ScheduleCollapse();
+            return;
+        }
+
         ItemsView.NoteDropPoint(e.GetPosition(this), this); // new tiles fly in from where they were dropped
         bool internalDrag = DragState.IsActive;
         int added = DropHelper.Accept(e.Data, _store);
@@ -632,6 +689,130 @@ public partial class ShelfWindow : Window
         e.Handled = true;
         ScheduleCollapse();
     }
+
+    // ---- Keyboard input (notes, custom timer) ------------------------------------------------------
+
+    /// <summary>
+    /// The shelf is a no-activate window so it never steals focus from the app you are working in. A click into one of its text
+    /// boxes is the exception: it turns WS_EX_NOACTIVATE off, activates the window and gives the box the keyboard. The flag comes
+    /// back when the window is deactivated or collapses, and focus returns to the window that had it before.
+    /// </summary>
+    private void OnPreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (!_expanded || e.OriginalSource is not DependencyObject source)
+        {
+            return;
+        }
+
+        var box = FindAncestor<System.Windows.Controls.Primitives.TextBoxBase>(source);
+        if (box == null)
+        {
+            return;
+        }
+
+        AllowActivation();
+        Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(() => Keyboard.Focus(box)));
+    }
+
+    /// <summary>Lets the window take the keyboard: removes WS_EX_NOACTIVATE and brings it to the foreground.</summary>
+    private void AllowActivation()
+    {
+        if (_hwnd == IntPtr.Zero)
+        {
+            return;
+        }
+
+        if (!_activationAllowed)
+        {
+            _activationAllowed = true;
+            IntPtr foreground = NativeMethods.GetForegroundWindow();
+            _previousForeground = foreground == _hwnd ? IntPtr.Zero : foreground;
+            WindowHelper.SetNoActivate(_hwnd, false);
+        }
+
+        _collapseTimer.Stop();
+        Activate();
+        if (!IsActive)
+        {
+            WindowHelper.ForceForeground(_hwnd);
+        }
+    }
+
+    /// <summary>Puts WS_EX_NOACTIVATE back. If the shelf still has the foreground, it goes back to the window it came from.</summary>
+    private void RestoreNoActivate()
+    {
+        if (!_activationAllowed)
+        {
+            return;
+        }
+
+        _activationAllowed = false;
+        WindowHelper.SetNoActivate(_hwnd, true);
+        IntPtr previous = _previousForeground;
+        _previousForeground = IntPtr.Zero;
+        if (previous != IntPtr.Zero && NativeMethods.GetForegroundWindow() == _hwnd && NativeMethods.IsWindow(previous))
+        {
+            WindowHelper.ForceForeground(previous);
+        }
+    }
+
+    /// <summary>Esc in a text box: give the keyboard back; the shelf closes when the pointer is elsewhere.</summary>
+    private void ReleaseKeyboard()
+    {
+        Keyboard.ClearFocus();
+        RestoreNoActivate();
+        ScheduleCollapse();
+    }
+
+    private static T? FindAncestor<T>(DependencyObject? node) where T : DependencyObject
+    {
+        while (node != null)
+        {
+            if (node is T match)
+            {
+                return match;
+            }
+
+            node = node is Visual or System.Windows.Media.Media3D.Visual3D
+                ? VisualTreeHelper.GetParent(node)
+                : LogicalTreeHelper.GetParent(node);
+        }
+
+        return null;
+    }
+
+    /// <summary>Ctrl+Shift+N: opens the shelf on the Notes tab with the caret in the editor.</summary>
+    public void ShowNotes()
+    {
+        NotesActivity? notes = _activities.Activities.OfType<NotesActivity>().FirstOrDefault();
+        if (notes == null)
+        {
+            ShowExpanded();
+            return;
+        }
+
+        _holdUntilTick = Environment.TickCount64 + 4000;
+        SelectTab(notes.Id, instant: !_expanded);
+        Expand();
+        AllowActivation();
+        notes.FocusEditor();
+    }
+
+    /// <summary>The expanded tab that accepts dropped content itself (the Notes tab takes text), or null.</summary>
+    private IShelfDropTarget? CurrentDropTarget() =>
+        _tab == ShelfTabId ? null : _activities.TabActivities.FirstOrDefault(a => a.Id == _tab) as IShelfDropTarget;
+
+    // ---- Called by the app --------------------------------------------------------------------------
+
+    /// <summary>Adds files to the shelf; the new tiles fly in from the top centre of the pill.</summary>
+    public void AddToShelf(IEnumerable<string> paths)
+    {
+        ItemsView.NoteDropPoint(new Point(Math.Max(1, ActualWidth) / 2, 0), this);
+        _store.AddPaths(paths);
+    }
+
+    /// <summary>The timer finished: the mascot bounces.</summary>
+    public void Celebrate() => Mascot.Celebrate();
 
     // ---- Header buttons / counters ----------------------------------------------------------------
 
@@ -746,6 +927,7 @@ public partial class ShelfWindow : Window
         _collapsedW.Target = targetW;
         _collapsedH.Target = targetH;
         _compact.Target = content != null ? 1 : 0;
+        CompactLayer.IsHitTestVisible = content is { Interactive: true };
 
         if (AnimationSettings.IsOff)
         {

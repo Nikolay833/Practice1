@@ -13,7 +13,8 @@ internal sealed class TrayService : IDisposable
     private readonly WinForms.ContextMenuStrip _menu;
     private readonly Drawing.Icon? _ownedIcon;
 
-    public TrayService(Action showShelf, Action openBasket, Action openClipboard, Action openSettings, Action uninstall, Action quit)
+    public TrayService(Action showShelf, Action openBasket, Action openClipboard, Action openSettings, Action uninstall, Action quit,
+        Action screenshot, Action quickNote)
     {
         _menu = new WinForms.ContextMenuStrip
         {
@@ -27,6 +28,8 @@ internal sealed class TrayService : IDisposable
         AddItem("Show shelf", showShelf);
         AddItem("Open basket", openBasket);
         AddItem("Clipboard history", openClipboard);
+        AddItem("Screenshot to shelf", screenshot);
+        AddItem("Quick note", quickNote);
         _menu.Items.Add(new WinForms.ToolStripSeparator());
         AddItem("Settings…", openSettings);
         AddItem("Uninstall…", uninstall);

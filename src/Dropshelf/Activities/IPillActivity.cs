@@ -20,8 +20,9 @@ internal enum PillActivityKind
 /// </summary>
 internal sealed class CompactContent
 {
-    private CompactContent(FrameworkElement? left, double leftWidth, FrameworkElement? right, double rightWidth, double extraHeight)
+    private CompactContent(FrameworkElement? left, double leftWidth, FrameworkElement? right, double rightWidth, double extraHeight, bool interactive)
     {
+        Interactive = interactive;
         Left = left;
         LeftWidth = leftWidth;
         Right = right;
@@ -37,9 +38,15 @@ internal sealed class CompactContent
     /// <summary>Extra pill height (DIPs) while this is shown; HUDs grow the pill a little.</summary>
     public double ExtraHeight { get; }
 
+    /// <summary>
+    /// True when the elements contain buttons. The pill then receives mouse input while this is shown (it is click-through
+    /// otherwise), does not expand on hover and a click on a button does not open the shelf.
+    /// </summary>
+    public bool Interactive { get; }
+
     /// <summary>Builds content and measures the elements to get their widths.</summary>
-    public static CompactContent Of(FrameworkElement? left, FrameworkElement? right, double extraHeight = 0) =>
-        new(left, Measure(left), right, Measure(right), extraHeight);
+    public static CompactContent Of(FrameworkElement? left, FrameworkElement? right, double extraHeight = 0, bool interactive = false) =>
+        new(left, Measure(left), right, Measure(right), extraHeight, interactive);
 
     private static double Measure(FrameworkElement? element)
     {
@@ -55,7 +62,7 @@ internal sealed class CompactContent
     public bool SameAs(CompactContent? other) =>
         other != null && ReferenceEquals(Left, other.Left) && ReferenceEquals(Right, other.Right)
         && Math.Abs(LeftWidth - other.LeftWidth) < 0.5 && Math.Abs(RightWidth - other.RightWidth) < 0.5
-        && Math.Abs(ExtraHeight - other.ExtraHeight) < 0.5;
+        && Math.Abs(ExtraHeight - other.ExtraHeight) < 0.5 && Interactive == other.Interactive;
 }
 
 /// <summary>
@@ -76,6 +83,18 @@ internal interface IPillActivity
 
     /// <summary>Title of the tab in the expanded shelf, or null when the activity has no expanded view.</summary>
     string? TabTitle { get; }
+
+    /// <summary>Position of the tab after "Shelf" (ascending). Defaults to <c>-Priority</c>.</summary>
+    int TabOrder { get; }
+
+    /// <summary>
+    /// HUDs only: a request that arrives while the expanded shelf covers the pill is kept (for up to 15 s) and shown when the
+    /// shelf closes, instead of being dropped. For results the user is waiting for ("Converted 3 files"), not for volume changes.
+    /// </summary>
+    bool QueueHudWhileExpanded { get; }
+
+    /// <summary>HUDs only: how long the HUD stays after its last request. Defaults to <see cref="ActivityHost.HudDuration"/>.</summary>
+    TimeSpan HudDuration { get; }
 
     /// <summary>The tab exists right now (the activity is enabled and has something to show).</summary>
     bool HasExpanded { get; }
@@ -104,6 +123,9 @@ internal abstract class PillActivityBase : IPillActivity
     public virtual PillActivityKind Kind => PillActivityKind.Live;
     public virtual bool IsActive => false;
     public virtual string? TabTitle => null;
+    public virtual int TabOrder => -Priority;
+    public virtual TimeSpan HudDuration => ActivityHost.HudDuration;
+    public virtual bool QueueHudWhileExpanded => false;
     public virtual bool HasExpanded => false;
     public virtual bool ShowInFullscreen => false;
 

@@ -9,6 +9,8 @@ internal sealed class HotkeyService : IDisposable
 {
     public const int BasketId = 1;
     public const int ClipboardId = 2;
+    public const int ScreenshotId = 3;
+    public const int NotesId = 4;
 
     private readonly MessageWindow _window;
     private readonly Dictionary<int, Action> _actions = new();

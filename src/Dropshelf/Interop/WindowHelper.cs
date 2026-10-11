@@ -86,6 +86,20 @@ internal static class WindowHelper
         AddExStyle(hwnd, style);
     }
 
+    /// <summary>
+    /// Turns WS_EX_NOACTIVATE on or off. The shelf is a no-activate window so it never steals focus; it is allowed to activate
+    /// only while a text box in it needs the keyboard.
+    /// </summary>
+    public static void SetNoActivate(IntPtr hwnd, bool noActivate)
+    {
+        int ex = NativeMethods.GetWindowLong(hwnd, NativeMethods.GWL_EXSTYLE);
+        int updated = noActivate ? ex | NativeMethods.WS_EX_NOACTIVATE : ex & ~NativeMethods.WS_EX_NOACTIVATE;
+        if (updated != ex)
+        {
+            NativeMethods.SetWindowLong(hwnd, NativeMethods.GWL_EXSTYLE, updated);
+        }
+    }
+
     /// <summary>Moves/resizes a window using physical pixels and keeps it topmost without activating it.</summary>
     public static void SetBoundsTopmost(IntPtr hwnd, int x, int y, int width, int height)
     {

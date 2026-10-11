@@ -8,6 +8,8 @@
             <MenuItem Header="Open" Click="Open_Click"/>
             <MenuItem Header="Show in Explorer" Click="ShowInExplorer_Click"/>
             <MenuItem Header="Copy" Click="Copy_Click"/>
+            <MenuItem Header="Copy text (OCR)" Tag="ocr" Click="Ocr_Click"/>
+            <MenuItem Header="Tools" Tag="tools"/>
             <Separator/>
             <MenuItem Header="Remove" Click="Remove_Click"/>
         </ContextMenu>

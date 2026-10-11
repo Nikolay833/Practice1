@@ -2,10 +2,12 @@ using System;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using Dropshelf.Activities.Calendar;
 using Dropshelf.Animation;
 using Dropshelf.Services;
 using Dropshelf.Themes;
@@ -29,6 +31,10 @@ public partial class SettingsWindow : Window
         StyleBlack.IsChecked = _settings.PillStyle == PillStyle.Black;
         StyleGlass.IsChecked = _settings.PillStyle == PillStyle.Glass;
         UpdateInstallInfo();
+        UnitCelsius.IsChecked = !_settings.WeatherFahrenheit;
+        UnitFahrenheit.IsChecked = _settings.WeatherFahrenheit;
+        IcsUrlsBox.Text = string.Join(Environment.NewLine, CalendarService.Current?.IcsUrls ?? Array.Empty<string>());
+        UpdateWindowsCalendarStatus();
         _initializing = false;
 
         _settings.PropertyChanged += OnSettingChanged;
@@ -103,6 +109,12 @@ public partial class SettingsWindow : Window
 
     private void OnSettingChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName is nameof(AppSettings.CalendarUseWindows) or nameof(AppSettings.CalendarEnabled))
+        {
+            // The calendar service refreshes in its own handler; show the state it ends up with a moment later.
+            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, new Action(UpdateWindowsCalendarStatus));
+        }
+
         // The app updates the registry in its own handler, which runs before this one.
         if (e.PropertyName == nameof(AppSettings.LaunchAtStartup))
         {
@@ -125,6 +137,92 @@ public partial class SettingsWindow : Window
             : StartupRegistration.IsEnabled()
                 ? "Starts automatically when you sign in"
                 : "Does not start automatically when you sign in";
+    }
+
+    // ---- Calendar & weather ---------------------------------------------------------------------
+
+    private void Units_Checked(object sender, RoutedEventArgs e)
+    {
+        if (_initializing || sender is not RadioButton { Tag: string tag })
+        {
+            return;
+        }
+
+        _settings.WeatherFahrenheit = tag == "F";
+    }
+
+    private void UpdateWindowsCalendarStatus()
+    {
+        WindowsCalendarStatus.Text = CalendarService.Current?.Windows switch
+        {
+            WindowsCalendarState.Available => "Connected: events from your Windows calendars are included",
+            WindowsCalendarState.Unavailable => "Available in the installed (MSIX) version",
+            _ => "Reads the calendars of the Windows Calendar / Mail apps (installed MSIX version only)",
+        };
+    }
+
+    private void IcsUrls_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (_initializing)
+        {
+            return;
+        }
+
+        CalendarService.Current?.SetIcsUrls(IcsLines());
+    }
+
+    private string[] IcsLines() =>
+        IcsUrlsBox.Text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    /// <summary>Fetches every link once and reports how many events were found (errors name only the host: the rest of a link may be a secret).</summary>
+    private async void IcsTest_Click(object sender, RoutedEventArgs e)
+    {
+        string[] urls = IcsLines();
+        if (urls.Length == 0)
+        {
+            IcsTestResult.Text = "Add a link first.";
+            return;
+        }
+
+        IcsTestButton.IsEnabled = false;
+        IcsTestResult.Text = "Fetching...";
+        try
+        {
+            int total = 0, week = 0, failed = 0;
+            string? firstError = null;
+            foreach (string url in urls)
+            {
+                (int t, int w, string? error) = await CalendarService.TestAsync(url);
+                if (error == null)
+                {
+                    total += t;
+                    week += w;
+                }
+                else
+                {
+                    failed++;
+                    firstError ??= (CalendarService.TryNormalize(url, out Uri? uri) ? uri!.Host : "invalid link") + ": " + error;
+                }
+            }
+
+            string text = $"{total} events, {week} in the next 7 days";
+            if (failed > 0)
+            {
+                text += $" ({failed} of {urls.Length} links failed: {firstError})";
+            }
+
+            IcsTestResult.Text = text;
+            CalendarService.Current?.SetIcsUrls(urls);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("ICS test failed", ex);
+            IcsTestResult.Text = "Test failed.";
+        }
+        finally
+        {
+            IcsTestButton.IsEnabled = true;
+        }
     }
 
     private void ShowAnimationMode()

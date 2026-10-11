@@ -50,6 +50,20 @@ public sealed class AppSettings : NotifyBase
     private PillStyle _pillStyle = PillStyle.Black;
     private bool _mascotFollowsAccent = true;
     private bool _showMascot = true;
+    private bool _screenshotHotkeyEnabled = true;
+    private int _pomodoroWorkMinutes = 25;
+    private int _pomodoroBreakMinutes = 5;
+    private int _pomodoroLongBreakMinutes = 15;
+    private int _pomodoroRounds = 4;
+    private bool _timerSound = true;
+    private bool _weatherEnabled;
+    private bool _weatherUseLocation = true;
+    private string _weatherCity = string.Empty;
+    private bool _weatherFahrenheit = !System.Globalization.RegionInfo.CurrentRegion.IsMetric;
+    private bool _showWeatherOnPill;
+    private bool _calendarEnabled = true;
+    private bool _calendarUseWindows = true;
+    private bool _meetingAlerts = true;
 
     public bool LaunchAtStartup { get => _launchAtStartup; set => SetField(ref _launchAtStartup, value); }
     public bool RememberShelf { get => _rememberShelf; set => SetField(ref _rememberShelf, value); }
@@ -98,6 +112,42 @@ public sealed class AppSettings : NotifyBase
 
     public bool MascotFollowsAccent { get => _mascotFollowsAccent; set => SetField(ref _mascotFollowsAccent, value); }
     public bool ShowMascot { get => _showMascot; set => SetField(ref _showMascot, value); }
+
+    // ---- Screenshot ----
+    /// <summary>Ctrl+Shift+S opens the region capture overlay.</summary>
+    public bool ScreenshotHotkeyEnabled { get => _screenshotHotkeyEnabled; set => SetField(ref _screenshotHotkeyEnabled, value); }
+
+    // ---- Timer / Pomodoro ----
+    public int PomodoroWorkMinutes { get => _pomodoroWorkMinutes; set => SetField(ref _pomodoroWorkMinutes, Math.Clamp(value, 1, 180)); }
+    public int PomodoroBreakMinutes { get => _pomodoroBreakMinutes; set => SetField(ref _pomodoroBreakMinutes, Math.Clamp(value, 1, 60)); }
+    public int PomodoroLongBreakMinutes { get => _pomodoroLongBreakMinutes; set => SetField(ref _pomodoroLongBreakMinutes, Math.Clamp(value, 1, 120)); }
+    public int PomodoroRounds { get => _pomodoroRounds; set => SetField(ref _pomodoroRounds, Math.Clamp(value, 1, 12)); }
+
+    /// <summary>Play the soft chime when a timer finishes.</summary>
+    public bool TimerSound { get => _timerSound; set => SetField(ref _timerSound, value); }
+
+    // ---- Calendar & weather ----
+    /// <summary>Off by default: turning it on sends the approximate location (or the city) to open-meteo.com.</summary>
+    public bool WeatherEnabled { get => _weatherEnabled; set => SetField(ref _weatherEnabled, value); }
+
+    /// <summary>Ask Windows for the device location first; the city below is the fallback (or the only source when this is off).</summary>
+    public bool WeatherUseLocation { get => _weatherUseLocation; set => SetField(ref _weatherUseLocation, value); }
+
+    public string WeatherCity { get => _weatherCity; set => SetField(ref _weatherCity, value ?? string.Empty); }
+
+    /// <summary>False = degrees Celsius. The default follows the region (metric = Celsius).</summary>
+    public bool WeatherFahrenheit { get => _weatherFahrenheit; set => SetField(ref _weatherFahrenheit, value); }
+
+    /// <summary>Show the current temperature on the collapsed pill when nothing else is active.</summary>
+    public bool ShowWeatherOnPill { get => _showWeatherOnPill; set => SetField(ref _showWeatherOnPill, value); }
+
+    public bool CalendarEnabled { get => _calendarEnabled; set => SetField(ref _calendarEnabled, value); }
+
+    /// <summary>Read the Windows calendars (appointment store). Only works in the installed (MSIX) version.</summary>
+    public bool CalendarUseWindows { get => _calendarUseWindows; set => SetField(ref _calendarUseWindows, value); }
+
+    /// <summary>"Meeting in 5 min" on the pill for events starting within 10 minutes.</summary>
+    public bool MeetingAlerts { get => _meetingAlerts; set => SetField(ref _meetingAlerts, value); }
 
     [JsonIgnore] public static int MinHistorySize => 10;
     [JsonIgnore] public static int MaxHistorySize => 500;

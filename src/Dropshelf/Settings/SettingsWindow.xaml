@@ -1,7 +1,7 @@
 <Window x:Class="Dropshelf.Settings.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Dropshelf Settings" Width="476" Height="740"
+        Title="Dropshelf Settings" Width="476" Height="780"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         ResizeMode="NoResize" WindowStartupLocation="CenterScreen" UseLayoutRounding="True"
         FontFamily="{StaticResource UiFont}" Foreground="{StaticResource TextBrush}">
@@ -311,6 +311,132 @@
                         </StackPanel>
                     </Border>
 
+                    <TextBlock Text="SCREENSHOT" Style="{StaticResource SectionLabel}"/>
+                    <Border Style="{StaticResource Card}">
+                        <CheckBox IsChecked="{Binding ScreenshotHotkeyEnabled, Mode=TwoWay}">
+                            <StackPanel>
+                                <TextBlock Text="Screenshot hotkey (Ctrl + Shift + S)" Style="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="Drag a region: it is saved to Pictures\Screenshots, copied to the clipboard and put on the shelf, with a Copy text (OCR) button on the pill" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </CheckBox>
+                    </Border>
+
+                    <TextBlock Text="TIMER" Style="{StaticResource SectionLabel}"/>
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <Grid>
+                                <TextBlock Text="Pomodoro: work" Style="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="{Binding PomodoroWorkMinutes, StringFormat={}{0} min}" Style="{StaticResource TextSecondary}" HorizontalAlignment="Right"/>
+                            </Grid>
+                            <Slider Minimum="5" Maximum="90" TickFrequency="5" IsSnapToTickEnabled="True" SmallChange="5" LargeChange="5" Margin="0,8,0,0"
+                                    Value="{Binding PomodoroWorkMinutes, Mode=TwoWay}"/>
+                            <Border Style="{StaticResource Divider}"/>
+                            <Grid>
+                                <TextBlock Text="Short break" Style="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="{Binding PomodoroBreakMinutes, StringFormat={}{0} min}" Style="{StaticResource TextSecondary}" HorizontalAlignment="Right"/>
+                            </Grid>
+                            <Slider Minimum="1" Maximum="30" TickFrequency="1" IsSnapToTickEnabled="True" SmallChange="1" LargeChange="5" Margin="0,8,0,0"
+                                    Value="{Binding PomodoroBreakMinutes, Mode=TwoWay}"/>
+                            <Border Style="{StaticResource Divider}"/>
+                            <Grid>
+                                <TextBlock Text="Long break" Style="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="{Binding PomodoroLongBreakMinutes, StringFormat={}{0} min}" Style="{StaticResource TextSecondary}" HorizontalAlignment="Right"/>
+                            </Grid>
+                            <Slider Minimum="5" Maximum="60" TickFrequency="5" IsSnapToTickEnabled="True" SmallChange="5" LargeChange="5" Margin="0,8,0,0"
+                                    Value="{Binding PomodoroLongBreakMinutes, Mode=TwoWay}"/>
+                            <Border Style="{StaticResource Divider}"/>
+                            <Grid>
+                                <TextBlock Text="Rounds before the long break" Style="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="{Binding PomodoroRounds}" Style="{StaticResource TextSecondary}" HorizontalAlignment="Right"/>
+                            </Grid>
+                            <Slider Minimum="2" Maximum="8" TickFrequency="1" IsSnapToTickEnabled="True" SmallChange="1" LargeChange="1" Margin="0,8,0,0"
+                                    Value="{Binding PomodoroRounds, Mode=TwoWay}"/>
+                            <Border Style="{StaticResource Divider}"/>
+                            <CheckBox IsChecked="{Binding TimerSound, Mode=TwoWay}">
+                                <StackPanel>
+                                    <TextBlock Text="Chime when a timer ends" Style="{StaticResource TextPrimary}"/>
+                                    <TextBlock Text="A short soft bell; turn it off to mute" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
+                                </StackPanel>
+                            </CheckBox>
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock Text="CALENDAR &amp; WEATHER" Style="{StaticResource SectionLabel}"/>
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <CheckBox IsChecked="{Binding CalendarEnabled, Mode=TwoWay}">
+                                <StackPanel>
+                                    <TextBlock Text="Calendar" Style="{StaticResource TextPrimary}"/>
+                                    <TextBlock Text="Today's and tomorrow's events in the Today tab" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
+                                </StackPanel>
+                            </CheckBox>
+                            <Border Style="{StaticResource Divider}"/>
+                            <CheckBox IsChecked="{Binding MeetingAlerts, Mode=TwoWay}" IsEnabled="{Binding CalendarEnabled}">
+                                <StackPanel>
+                                    <TextBlock Text="Meeting alerts" Style="{StaticResource TextPrimary}"/>
+                                    <TextBlock Text="&quot;Meeting in 5 min&quot; on the pill for events starting within 10 minutes" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </CheckBox>
+                            <Border Style="{StaticResource Divider}"/>
+                            <CheckBox IsChecked="{Binding CalendarUseWindows, Mode=TwoWay}" IsEnabled="{Binding CalendarEnabled}">
+                                <StackPanel>
+                                    <TextBlock Text="Windows calendars" Style="{StaticResource TextPrimary}"/>
+                                    <TextBlock x:Name="WindowsCalendarStatus" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </CheckBox>
+                            <Border Style="{StaticResource Divider}"/>
+                            <TextBlock Text="Calendar links (ICS), one per line" Style="{StaticResource TextPrimary}"/>
+                            <TextBlock Text="Stored encrypted. Fetched every 15 minutes. webcal:// links work too." Style="{StaticResource TextSecondary}" FontSize="11" Margin="0,2,0,0"/>
+                            <TextBox x:Name="IcsUrlsBox" AcceptsReturn="True" TextWrapping="NoWrap" Height="64" Margin="0,8,0,0" FontSize="12"
+                                     VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" LostFocus="IcsUrls_LostFocus"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <Button x:Name="IcsTestButton" Content="Test" Style="{StaticResource AccentButton}" Padding="14,5" Click="IcsTest_Click"/>
+                                <TextBlock x:Name="IcsTestResult" Style="{StaticResource TextSecondary}" FontSize="11" VerticalAlignment="Center"
+                                           Margin="10,0,0,0" TextWrapping="Wrap" MaxWidth="290"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <CheckBox IsChecked="{Binding WeatherEnabled, Mode=TwoWay}">
+                                <StackPanel>
+                                    <TextBlock Text="Weather" Style="{StaticResource TextPrimary}"/>
+                                    <TextBlock Text="From open-meteo.com. Turning it on sends your approximate location (or the city below) to that service." Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </CheckBox>
+                            <Border Style="{StaticResource Divider}"/>
+                            <CheckBox IsChecked="{Binding WeatherUseLocation, Mode=TwoWay}" IsEnabled="{Binding WeatherEnabled}">
+                                <StackPanel>
+                                    <TextBlock Text="Use my device location" Style="{StaticResource TextPrimary}"/>
+                                    <TextBlock Text="Needs location access for desktop apps in Windows privacy settings; otherwise the city is used" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </CheckBox>
+                            <Border Style="{StaticResource Divider}"/>
+                            <Grid>
+                                <TextBlock Text="City" Style="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
+                                <TextBox Width="220" HorizontalAlignment="Right" Padding="8,5" FontSize="13" IsEnabled="{Binding WeatherEnabled}"
+                                         Text="{Binding WeatherCity, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"/>
+                            </Grid>
+                            <Border Style="{StaticResource Divider}"/>
+                            <Grid>
+                                <TextBlock Text="Units" Style="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                    <RadioButton x:Name="UnitCelsius" Content="&#xB0;C" Tag="C" GroupName="WeatherUnits"
+                                                 Style="{StaticResource Segment}" Checked="Units_Checked"/>
+                                    <RadioButton x:Name="UnitFahrenheit" Content="&#xB0;F" Tag="F" GroupName="WeatherUnits"
+                                                 Style="{StaticResource Segment}" Checked="Units_Checked"/>
+                                </StackPanel>
+                            </Grid>
+                            <Border Style="{StaticResource Divider}"/>
+                            <CheckBox IsChecked="{Binding ShowWeatherOnPill, Mode=TwoWay}" IsEnabled="{Binding WeatherEnabled}">
+                                <StackPanel>
+                                    <TextBlock Text="Show temperature on the pill" Style="{StaticResource TextPrimary}"/>
+                                    <TextBlock Text="When nothing else is showing. The item count badge is hidden then." Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </CheckBox>
+                        </StackPanel>
+                    </Border>
+
                     <TextBlock Text="HOTKEYS" Style="{StaticResource SectionLabel}"/>
                     <Border Style="{StaticResource Card}">
                         <StackPanel>
@@ -324,6 +450,18 @@
                                 <TextBlock Text="Clipboard history" Style="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
                                 <Border Style="{StaticResource KeyCap}" HorizontalAlignment="Right">
                                     <TextBlock Text="Ctrl + Shift + V" Style="{StaticResource TextSecondary}"/>
+                                </Border>
+                            </Grid>
+                            <Grid Margin="0,12,0,0">
+                                <TextBlock Text="Screenshot to shelf" Style="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
+                                <Border Style="{StaticResource KeyCap}" HorizontalAlignment="Right">
+                                    <TextBlock Text="Ctrl + Shift + S" Style="{StaticResource TextSecondary}"/>
+                                </Border>
+                            </Grid>
+                            <Grid Margin="0,12,0,0">
+                                <TextBlock Text="Quick note" Style="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
+                                <Border Style="{StaticResource KeyCap}" HorizontalAlignment="Right">
+                                    <TextBlock Text="Ctrl + Shift + N" Style="{StaticResource TextSecondary}"/>
                                 </Border>
                             </Grid>
                         </StackPanel>

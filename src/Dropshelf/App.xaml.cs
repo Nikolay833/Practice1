@@ -4,18 +4,24 @@ using System.Linq;
 using System.Threading;
 using System.Windows;
 using Dropshelf.Activities;
+using Dropshelf.Activities.Calendar;
 using Dropshelf.Activities.Devices;
 using Dropshelf.Activities.Hud;
 using Dropshelf.Activities.Media;
+using Dropshelf.Activities.Notes;
 using Dropshelf.Activities.Power;
+using Dropshelf.Activities.Timer;
+using Dropshelf.Activities.Weather;
 using Dropshelf.Animation;
 using Dropshelf.Basket;
 using Dropshelf.Clipboard;
 using Dropshelf.Interop;
+using Dropshelf.Screenshot;
 using Dropshelf.Services;
 using Dropshelf.Settings;
 using Dropshelf.Shelf;
 using Dropshelf.Themes;
+using Dropshelf.Tools;
 
 namespace Dropshelf;
 
@@ -55,6 +61,18 @@ public partial class App : Application
     private BluetoothActivity? _bluetooth;
     private OsdSuppressor? _osd;
     private FullscreenWatcher? _fullscreen;
+    private ToastActivity? _toast;
+    private ProgressActivity? _progress;
+    private ToolsService? _tools;
+    private TimerActivity? _timer;
+    private NotesActivity? _notes;
+    private CalendarService? _calendar;
+    private WeatherService? _weather;
+    private TodayActivity? _today;
+    private MeetingActivity? _meeting;
+    private WeatherPillActivity? _weatherPill;
+    private ScreenshotService? _screenshot;
+    private bool _screenshotHotkeyRegistered;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -159,11 +177,21 @@ public partial class App : Application
             openClipboard: () => ShowClipboard(fromHotkey: false),
             openSettings: ShowSettings,
             uninstall: Uninstall,
-            quit: QuitByUser);
+            quit: QuitByUser,
+            screenshot: () => _screenshot?.Begin(),
+            quickNote: () => _shelfWindow.ShowNotes());
+        OcrActions.Message += text => _tray?.ShowBalloon("Dropshelf", text);
+
+        _screenshot = new ScreenshotService(path => _shelfWindow.AddToShelf([path]), _toast!);
 
         if (!_hotkeys.Register(HotkeyService.BasketId, NativeMethods.MOD_CONTROL | NativeMethods.MOD_SHIFT, NativeMethods.VK_B, ShowBasketAtCursor))
         {
             _tray.ShowBalloon("Dropshelf", "Ctrl+Shift+B is already used by another app, so the basket hotkey is unavailable.");
+        }
+
+        if (!_hotkeys.Register(HotkeyService.NotesId, NativeMethods.MOD_CONTROL | NativeMethods.MOD_SHIFT, NativeMethods.VK_N, () => _shelfWindow.ShowNotes()))
+        {
+            _tray.ShowBalloon("Dropshelf", "Ctrl+Shift+N is already used by another app, so the quick note hotkey is unavailable.");
         }
 
         // Keep the registry entry pointing at the installed exe (this also writes it on the first run after install),
@@ -192,6 +220,7 @@ public partial class App : Application
         _settings.Changed += OnSettingChanged;
         ApplyMouseHookSetting();
         ApplyClipboardSetting();
+        ApplyScreenshotSetting();
     }
 
     /// <summary>
@@ -239,6 +268,45 @@ public partial class App : Application
             _activityHost!.Register(_bluetooth);
             _bluetooth.Start();
         });
+
+        // Round 2: toast HUD + progress (shared by tools, screenshot, timer, meetings), then the features on top of them.
+        _toast = new ToastActivity();
+        _activityHost!.Register(_toast);
+        _progress = new ProgressActivity();
+        _activityHost.Register(_progress);
+        _tools = new ToolsService(_progress, _toast);
+
+        TryStep("timer", () =>
+        {
+            _timer = new TimerActivity(_settings!, _toast, () => _shelfWindow?.Celebrate());
+            _activityHost.Register(_timer);
+        });
+
+        TryStep("notes", () =>
+        {
+            _notes = new NotesActivity();
+            _activityHost.Register(_notes);
+        });
+
+        TryStep("weather", () =>
+        {
+            _weather = new WeatherService(_settings!);
+            _weatherPill = new WeatherPillActivity(_settings!, _weather);
+            _activityHost.Register(_weatherPill);
+        });
+
+        TryStep("calendar", () =>
+        {
+            _calendar = new CalendarService(_settings!);
+            _meeting = new MeetingActivity(_settings!, _calendar, _toast);
+            _activityHost.Register(_meeting);
+        });
+
+        TryStep("today tab", () =>
+        {
+            _today = new TodayActivity(_settings!);
+            _activityHost.Register(_today);
+        });
     }
 
     protected override void OnExit(ExitEventArgs e)
@@ -246,6 +314,12 @@ public partial class App : Application
         // Tear down in reverse order; every step tolerates a half-started app (second instance) and a failing
         // step never stops the later ones (tray icon, settings flush and mutex release must always run).
         TryStep("fullscreen watcher", () => _fullscreen?.Dispose());
+        TryStep("meeting alerts", () => _meeting?.Dispose());
+        TryStep("calendar", () => _calendar?.Dispose());
+        TryStep("weather pill", () => _weatherPill?.Dispose());
+        TryStep("weather", () => _weather?.Dispose());
+        TryStep("notes", () => _notes?.Dispose());
+        TryStep("timer", () => _timer?.Dispose());
         TryStep("Bluetooth HUD", () => _bluetooth?.Dispose());
         TryStep("battery HUD", () => _battery?.Dispose());
         TryStep("brightness HUD", () => _brightness?.Dispose());
@@ -347,6 +421,62 @@ public partial class App : Application
             case nameof(AppSettings.ClipboardHistorySize):
                 _clipboard!.ApplySettings();
                 break;
+            case nameof(AppSettings.ScreenshotHotkeyEnabled):
+                ApplyScreenshotSetting();
+                break;
+            case nameof(AppSettings.PomodoroWorkMinutes):
+            case nameof(AppSettings.PomodoroBreakMinutes):
+            case nameof(AppSettings.PomodoroLongBreakMinutes):
+            case nameof(AppSettings.PomodoroRounds):
+                _timer?.ApplySettings();
+                break;
+            case nameof(AppSettings.WeatherEnabled):
+                _weather?.ApplySettings();
+                _weatherPill?.ApplySettings();
+                _today?.ApplySettings();
+                break;
+            case nameof(AppSettings.WeatherUseLocation):
+            case nameof(AppSettings.WeatherCity):
+                _weather?.LocationSettingsChanged();
+                break;
+            case nameof(AppSettings.WeatherFahrenheit):
+                _weather?.ApplySettings(); // only redraws: temperatures are stored in Celsius
+                break;
+            case nameof(AppSettings.ShowWeatherOnPill):
+                _weatherPill?.ApplySettings();
+                break;
+            case nameof(AppSettings.CalendarEnabled):
+                _calendar?.ApplySettings();
+                _meeting?.ApplySettings();
+                _today?.ApplySettings();
+                break;
+            case nameof(AppSettings.CalendarUseWindows):
+                _calendar?.ApplySettings();
+                break;
+            case nameof(AppSettings.MeetingAlerts):
+                _meeting?.ApplySettings();
+                break;
+        }
+    }
+
+    /// <summary>Ctrl+Shift+S is only registered while the screenshot setting is on; a taken combination is announced once.</summary>
+    private void ApplyScreenshotSetting()
+    {
+        bool enabled = _settings!.Current.ScreenshotHotkeyEnabled;
+        if (enabled && !_screenshotHotkeyRegistered)
+        {
+            _screenshotHotkeyRegistered = _hotkeys!.Register(
+                HotkeyService.ScreenshotId, NativeMethods.MOD_CONTROL | NativeMethods.MOD_SHIFT, NativeMethods.VK_S,
+                () => _screenshot?.Begin());
+            if (!_screenshotHotkeyRegistered)
+            {
+                _tray?.ShowBalloon("Dropshelf", "Ctrl+Shift+S is already used by another app, so the screenshot hotkey is unavailable.");
+            }
+        }
+        else if (!enabled && _screenshotHotkeyRegistered)
+        {
+            _hotkeys!.Unregister(HotkeyService.ScreenshotId);
+            _screenshotHotkeyRegistered = false;
         }
     }
 

@@ -21,6 +21,8 @@ internal sealed class ActivityHost
     private readonly Dictionary<IPillActivity, FrameworkElement> _expanded = new();
     private readonly DispatcherTimer _hudTimer;
     private IPillActivity? _hud;
+    private IPillActivity? _queuedHud;
+    private long _queuedAt;
     private bool _expandedOpen;
     private bool _fullscreen;
 
@@ -58,9 +60,9 @@ internal sealed class ActivityHost
     /// <summary>The set of expanded-shelf tabs changed.</summary>
     public event Action? TabsChanged;
 
-    /// <summary>Activities that currently have an expanded tab, highest priority first.</summary>
+    /// <summary>Activities that currently have an expanded tab, in <see cref="IPillActivity.TabOrder"/>.</summary>
     public IReadOnlyList<IPillActivity> TabActivities =>
-        _activities.Where(a => a.HasExpanded && a.TabTitle != null).OrderByDescending(a => a.Priority).ToList();
+        _activities.Where(a => a.HasExpanded && a.TabTitle != null).OrderBy(a => a.TabOrder).ToList();
 
     public void Register(IPillActivity activity)
     {
@@ -87,6 +89,17 @@ internal sealed class ActivityHost
         if (open)
         {
             EndHud();
+        }
+        else if (_queuedHud != null)
+        {
+            // Something finished while the shelf was open ("Converted 3 files"): say so now that the pill is visible again.
+            IPillActivity queued = _queuedHud;
+            bool fresh = Environment.TickCount64 - _queuedAt < 15_000;
+            _queuedHud = null;
+            if (fresh)
+            {
+                OnHudRequested(queued, EventArgs.Empty);
+            }
         }
     }
 
@@ -141,15 +154,37 @@ internal sealed class ActivityHost
 
     private void OnHudRequested(object? sender, EventArgs e)
     {
-        if (sender is not IPillActivity activity || !CanShowHud(activity))
+        if (sender is not IPillActivity activity)
         {
+            return;
+        }
+
+        if (!CanShowHud(activity))
+        {
+            if (_expandedOpen && activity.QueueHudWhileExpanded)
+            {
+                _queuedHud = activity;
+                _queuedAt = Environment.TickCount64;
+            }
+
             return;
         }
 
         _hud = activity;
         _hudTimer.Stop();
+        _hudTimer.Interval = activity.HudDuration;
         _hudTimer.Start();
         Reevaluate();
+    }
+
+    /// <summary>An interactive HUD is under the pointer: restart its timer so it does not vanish under the cursor.</summary>
+    public void KeepHudAlive()
+    {
+        if (_hud != null && _hudTimer.IsEnabled)
+        {
+            _hudTimer.Stop();
+            _hudTimer.Start();
+        }
     }
 
     private void EndHud()

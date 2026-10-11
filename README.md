@@ -47,6 +47,38 @@ derived from Droppy or its authors, and it uses no Droppy code or assets.
     20 % and 10 % (red pulse) and a fully-charged notice; Bluetooth devices connecting or disconnecting with their name,
     an icon (headphones, keyboard, mouse...) and their battery level when Windows reports it. Nothing is shown on a
     desktop without a battery.
+- **Convert & compress** - right-click a shelf or basket item (several can be selected) > **Tools**. Images (PNG, JPG, BMP,
+  GIF, TIFF, and WebP / HEIC / AVIF when Windows has the codec): *Convert to PNG / JPG*, *Resize 50 % / 25 % / to a max width*,
+  *Compress JPG (quality 80 / 60)*. Any files or folders: *Compress to ZIP* (named after the item, or `Archive.zip`), and
+  *Extract here* for `.zip` files (into a new folder named after the archive). The EXIF orientation is applied to the pixels.
+  Results are new files next to the source (or in `Downloads` when that folder is read-only), named like
+  `photo (converted).png`, made unique with ` (2)`, ` (3)`..., never overwriting anything; they appear on the shelf with a
+  fly-in. The work runs off the UI thread; a job that takes longer than a moment shows a progress ring on the pill, and the
+  result is a HUD such as *Converted 3 files*. (Windows ships no WebP *encoder*, so WebP can be read but not written.)
+- **Screenshot to shelf + OCR** - `Ctrl+Shift+S` dims every monitor; drag a rectangle (live size label, handles that spring in),
+  release to capture, `Enter` to capture while dragging, `F` or the *Full screen* button for the whole monitor under the cursor,
+  `Esc` / right-click to cancel. The PNG is saved as `Pictures\Screenshots\Dropshelf yyyy-MM-dd HH.mm.ss.png`, copied to the
+  clipboard (the clipboard history ignores it), added to the shelf, and the pill shows a thumbnail with a **Copy text** button
+  that runs Windows OCR on it and copies the recognized lines. Image items have *Copy text (OCR)* in their context menu too. OCR
+  needs a Windows language pack (Settings > Time & language); without one you get a message instead.
+- **Timer / Pomodoro** - the *Timer* tab has presets (5, 10, 25 min), a custom `mm:ss` box, start / pause / reset and a Pomodoro
+  mode (work, short break, ... a long break after the last round; lengths in Settings). While it runs the pill shows a progress
+  ring around a stopwatch and the remaining time; the ring goes from the accent (green on breaks) to orange in the last minute.
+  When a phase ends the pill grows with a spring *ding*, the mascot bounces and a soft chime plays (mute it in Settings). Time is
+  kept as an end timestamp, so it is exact, survives sleep, and a running timer survives a restart.
+- **Quick notes** - the *Notes* tab has a note list and a plain-text editor, auto-saved 500 ms after you stop typing to
+  `notes.json`, encrypted with Windows DPAPI like the clipboard history. The first line is the title. Drop text onto the tab to
+  append it. `Ctrl+Shift+N` opens the shelf on the tab with the caret in the editor. The shelf is normally a no-activate window;
+  clicking into a text box (or the hotkey) lets it take the keyboard, it stays open while the box has focus, and focus goes back to
+  your previous window when you press `Esc`, click elsewhere or it collapses.
+- **Calendar & weather** - the *Today* tab: a weather card (temperature, condition, high / low, five-day strip) and today's and
+  tomorrow's agenda with a "now" marker. Events come from calendar links (**ICS** URLs, parsed by Dropshelf itself: time zones,
+  all-day events and common recurrence rules; the URLs are stored encrypted) and, in the installed (MSIX) build, from the Windows
+  calendars. Within ten minutes of an event the pill shows *Meeting in 5 min - Title* with a countdown and a HUD when it
+  starts. Weather comes from [Open-Meteo](https://open-meteo.com) (no key): the device location if Windows allows it, otherwise
+  the city from Settings; refreshed every 30 minutes and after sleep, cached, shown as *offline* when it cannot be reached.
+  Weather is **off by default** because turning it on sends your approximate location (or the city) to open-meteo.com; Settings >
+  Calendar & Weather also has the unit (C / F), an optional temperature on the idle pill and a *Test* button for calendar links.
 - **Appearance** - eight accent colours (Blue default, Indigo, Purple, Pink, Red, Orange, Green, Teal) plus *Windows accent*,
   which follows the accent colour you set in Windows. The accent applies live everywhere, including the mascot (optional).
   Pill style *Black* (default) or *Glass* (dark, translucent). The mascot can be hidden.
@@ -54,11 +86,11 @@ derived from Droppy or its authors, and it uses no Droppy code or assets.
   monitor, and HUDs stay quiet (optionally except the volume HUD).
 - **Always running** - installs itself on first run, starts with Windows, relaunches after a crash and comes back after
   update reboots (see [Always running](#always-running)).
-- **Tray icon** - Show shelf, Open basket, Clipboard history, Settings, Uninstall, Quit. Only one instance runs at a time.
+- **Tray icon** - Show shelf, Open basket, Clipboard history, Screenshot to shelf, Quick note, Settings, Uninstall, Quit. Only one instance runs at a time.
 - **Settings** - grouped into General (launch at startup, hide in fullscreen apps, install location), Shelf (remember items,
   expand on hover, shake to open basket), Media & HUD (now playing, volume / brightness / battery / Bluetooth HUDs, replace the
-  Windows volume popup, scroll for volume, volume HUD in fullscreen), Appearance (accent, pill style, mascot), Animations and
-  Clipboard (on/off and size). Changes apply immediately.
+  Windows volume popup, scroll for volume, volume HUD in fullscreen), Appearance (accent, pill style, mascot), Animations,
+  Clipboard (on/off and size), Screenshot, Timer (Pomodoro lengths, chime) and Calendar & Weather. Changes apply immediately.
 - **Animations** - everything is spring-driven and runs at the display's frame rate; frames are only produced while
   something is moving (see [Animations](#animations)).
 
@@ -108,6 +140,11 @@ without touching the shelf window.
   views while an activity is shown. Nothing runs while nothing changes: WinRT / COM events are marshalled to the UI thread,
   and frames are only produced while a spring moves.
 
+- Round 2 additions to the base: a `CompactContent` can be *interactive* (the pill then takes mouse input, does not open on
+  hover and a click on its button does not open the shelf: the screenshot HUD's *Copy text*), a HUD can set its own duration and
+  ask to be kept until the shelf closes (results of tools), and a tab can pick its position (`TabOrder`). A tab may also take
+  drops itself (`IShelfDropTarget`, used by Notes).
+
 Every activity is created inside a `try`; on a machine where its API is missing (no Core Audio, no WinRT media controls, no
 WMI brightness class...) the feature is simply off and the rest keeps working.
 
@@ -154,6 +191,9 @@ Command-line switches: `--no-install` (run from where it is, never self-install)
 | --- | --- |
 | `Ctrl+Shift+B` | Open the basket at the cursor |
 | `Ctrl+Shift+V` | Open clipboard history |
+| `Ctrl+Shift+S` | Screenshot: drag a region (`Enter` / release = capture, `F` = full screen, `Esc` = cancel) |
+| `Ctrl+Shift+N` | Quick note: open the shelf on the Notes tab with the editor focused |
+| `Ctrl+N`, `Esc` | In the notes editor: new note, release the keyboard |
 | `Up` / `Down`, `Enter` | In clipboard history: move, copy back and paste |
 | `Ctrl+P`, `Delete`, `Esc` | In clipboard history: pin/unpin, remove entry, close |
 
@@ -187,7 +227,9 @@ The app icon is generated by `tools/make_icon.py` (needs Pillow).
 
 ## Data
 
-Everything lives in `%LOCALAPPDATA%\Dropshelf`: `settings.json`, `shelf.json`, `clipboard.json` (encrypted), the `Items` folder
+Everything lives in `%LOCALAPPDATA%\Dropshelf`: `settings.json`, `shelf.json`, `clipboard.json` (encrypted), `notes.json` (encrypted),
+`calendar.json` (the ICS links, encrypted), `weather.json` (last forecast and location, encrypted), `timer.json` (a running timer),
+the `Items` folder
 (text/link items), the `Clipboard` folder (copied images), `restarts.json` (crash-loop guard) and `dropshelf.log`.
 The installed program is in `%LOCALAPPDATA%\Programs\Dropshelf`.
 
@@ -198,9 +240,15 @@ src/Dropshelf/
   Animation/  spring integrator, animation setting, 3D mascot (MascotView, TeardropMesh), tile animations
   Activities/ pill activity base (IPillActivity, ActivityHost, CrossfadeHost, tab bar)
     Media/    now playing (Windows.Media.Control session, equalizer, Now Playing tab)
-    Hud/      volume + brightness HUD, HUD building blocks, native popup suppression
+    Hud/      volume + brightness HUD, HUD building blocks, native popup suppression, toast HUD, progress ring + progress pill
     Power/    battery HUD
     Devices/  Bluetooth HUD
+    Timer/    timer + Pomodoro (engine, pill, tab, chime)
+    Notes/    quick notes (store, tab)
+    Calendar/ ICS parser, calendar service, meeting pill, Today tab
+    Weather/  Open-Meteo service, WMO codes, vector weather icons, idle-pill temperature
+  Tools/      convert / resize / compress images, zip / extract, output naming, background runner
+  Screenshot/ region-capture overlay (one window per monitor), capture + save, Windows OCR
   Shelf/      notch window, item model, drag/drop, shared tile list
   Basket/     floating basket window
   Clipboard/  history service, popup window

@@ -95,6 +95,11 @@
                             Background="{DynamicResource AccentWashBrush}"/>
                   </Grid>
                 </act:CrossfadeHost>
+
+                <!-- Drag-over highlight for a tab that takes drops itself (text onto Notes) -->
+                <Border x:Name="TabDropHighlight" Grid.Row="1" Margin="14,6,14,14" Visibility="Collapsed" IsHitTestVisible="False"
+                        CornerRadius="14" BorderThickness="1.5" BorderBrush="{DynamicResource AccentBrush}"
+                        Background="{DynamicResource AccentWashBrush}"/>
             </Grid>
 
             <!-- "Drop" the mascot, left side of the pill; sized and placed by ShelfWindow.ApplyLayout (22 px collapsed) -->

@@ -56,6 +56,8 @@ public partial class MascotView : UserControl
     private bool _cursorNear;
     private bool _excited;
     private double _excitedClock;
+    private double _celebrateClock = -1;     // >= 0 while celebrating (the timer finished)
+    private int _celebrateBounces;
     private double _blinkClock = -1;
     private bool _doubleBlink;
     private double _breathClock = -1;
@@ -155,6 +157,21 @@ public partial class MascotView : UserControl
         EnsureLoop();
     }
 
+    /// <summary>The timer finished: four happy bounces with wide eyes, about two seconds.</summary>
+    public void Celebrate()
+    {
+        if (AnimationSettings.IsOff || !IsVisible)
+        {
+            return;
+        }
+
+        _celebrateClock = 0;
+        _celebrateBounces = 0;
+        AnimationSettings.Configure(_wide, 300, 0.6);
+        _wide.Target = 1.3;
+        EnsureLoop();
+    }
+
     /// <summary>Something was dropped on the shelf: swallow it with a quick squash and a squint.</summary>
     public void Gulp()
     {
@@ -248,6 +265,7 @@ public partial class MascotView : UserControl
         _cursorYaw = _cursorPitch = 0;
         _cursorNear = false;
         _blinkClock = _breathClock = _scriptClock = -1;
+        _celebrateClock = -1;
         ApplyPose();
     }
 
@@ -406,6 +424,23 @@ public partial class MascotView : UserControl
             }
         }
 
+        if (_celebrateClock >= 0)
+        {
+            _celebrateClock += dt;
+            while (_celebrateBounces < 4 && _celebrateClock >= _celebrateBounces * 0.5)
+            {
+                Bounce();
+                _hop.Velocity += 1.0; // a little higher than the drag excitement
+                _celebrateBounces++;
+            }
+
+            if (_celebrateClock > 2.1)
+            {
+                _celebrateClock = -1;
+                _wide.Target = _excited ? 1.3 : 1;
+            }
+        }
+
         if (_excited)
         {
             _excitedClock += dt;
@@ -430,7 +465,7 @@ public partial class MascotView : UserControl
 
         ApplyPose(breath);
 
-        bool busy = _blinkClock >= 0 || _breathClock >= 0 || _scriptClock >= 0 || _excited;
+        bool busy = _blinkClock >= 0 || _breathClock >= 0 || _scriptClock >= 0 || _excited || _celebrateClock >= 0;
         bool settled = _yaw.SettleIfClose(0.02, 0.2) & _pitch.SettleIfClose(0.02, 0.2) & _squash.SettleIfClose(0.001, 0.02)
                        & _hop.SettleIfClose(0.001, 0.02) & _open.SettleIfClose(0.005, 0.05) & _wide.SettleIfClose(0.002, 0.02);
         if (!busy && settled)

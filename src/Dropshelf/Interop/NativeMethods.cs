@@ -257,6 +257,8 @@ internal static class NativeMethods
     public const int VK_LBUTTON = 0x01;
     public const ushort VK_V = 0x56;
     public const uint VK_B = 0x42;
+    public const uint VK_S = 0x53;
+    public const uint VK_N = 0x4E;
 
     [StructLayout(LayoutKind.Sequential)]
     public struct MOUSEINPUT
@@ -344,6 +346,10 @@ internal static class NativeMethods
         public int cyTopHeight;
         public int cyBottomHeight;
     }
+
+    /// <summary>Waits for the next DWM composition pass (so a window we just hid is really gone before a screen capture).</summary>
+    [DllImport("dwmapi.dll")]
+    public static extern int DwmFlush();
 
     [DllImport("dwmapi.dll")]
     public static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);

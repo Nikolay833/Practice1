@@ -13,7 +13,10 @@ using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using Dropshelf.Animation;
 using Dropshelf.Clipboard;
+using Dropshelf.Screenshot;
 using Dropshelf.Services;
+using Dropshelf.Settings;
+using Dropshelf.Tools;
 
 namespace Dropshelf.Shelf;
 
@@ -431,7 +434,21 @@ public partial class ItemListView : UserControl
 
     // ---- Context menu actions -----------------------------------------------------------------
 
-    private void Menu_Opened(object sender, RoutedEventArgs e) => SetBusy(menu: true);
+    private void Menu_Opened(object sender, RoutedEventArgs e)
+    {
+        SetBusy(menu: true);
+        if (sender is ContextMenu menu)
+        {
+            try
+            {
+                PrepareMenu(menu);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
+            {
+                Log.Error("Could not build the item menu", ex);
+            }
+        }
+    }
 
     private void Menu_Closed(object sender, RoutedEventArgs e) => SetBusy(menu: false);
 
@@ -460,6 +477,132 @@ public partial class ItemListView : UserControl
         data.SetFileDropList(files);
         data.SetData("Preferred DropEffect", new MemoryStream(BitConverter.GetBytes((int)DragDropEffects.Copy)));
         await ClipboardAccess.TrySetDataObjectAsync(data);
+    }
+
+    // ---- Tools (convert, resize, compress, zip) and OCR ----------------------------------------------
+
+    /// <summary>Rebuilds the "Tools" sub-menu for the current selection and shows "Copy text (OCR)" when pictures are selected.</summary>
+    private void PrepareMenu(ContextMenu menu)
+    {
+        var existing = SelectedItems().Where(i => i.Exists).ToList();
+        var images = existing.Where(i => i.Kind == ShelfItemKind.File && ImageOps.IsImage(i.Path)).Select(i => i.Path).ToList();
+        var zips = existing.Where(i => i.Kind == ShelfItemKind.File && ZipOps.IsZip(i.Path)).Select(i => i.Path).ToList();
+        var all = existing.Select(i => i.Path).ToList();
+
+        foreach (MenuItem item in menu.Items.OfType<MenuItem>())
+        {
+            switch (item.Tag as string)
+            {
+                case "ocr":
+                    item.Visibility = images.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+                    break;
+                case "tools":
+                    item.Items.Clear();
+                    if (images.Count > 0)
+                    {
+                        AddTool(item, "Convert to PNG", ToolKind.ConvertPng, images);
+                        AddTool(item, "Convert to JPG", ToolKind.ConvertJpg, images);
+                        item.Items.Add(new Separator());
+                        AddTool(item, "Resize 50%", ToolKind.Resize50, images);
+                        AddTool(item, "Resize 25%", ToolKind.Resize25, images);
+                        AddTool(item, "Resize to max width...", ToolKind.ResizeToWidth, images);
+                        item.Items.Add(new Separator());
+                        AddTool(item, "Compress JPG (quality 80)", ToolKind.CompressJpg80, images);
+                        AddTool(item, "Compress JPG (quality 60)", ToolKind.CompressJpg60, images);
+                        item.Items.Add(new Separator());
+                    }
+
+                    if (all.Count > 0)
+                    {
+                        AddTool(item, all.Count == 1 ? "Compress to ZIP" : $"Compress {all.Count} items to ZIP", ToolKind.Zip, all);
+                    }
+
+                    if (zips.Count > 0)
+                    {
+                        AddTool(item, "Extract here", ToolKind.Unzip, zips);
+                    }
+
+                    item.IsEnabled = item.Items.Count > 0;
+                    break;
+            }
+        }
+    }
+
+    private void AddTool(MenuItem parent, string header, ToolKind kind, List<string> paths)
+    {
+        var item = new MenuItem { Header = header };
+        item.Click += (_, _) => RunTool(kind, paths);
+        parent.Items.Add(item);
+    }
+
+    /// <summary>Runs a tool on <paramref name="paths"/> in the background and puts the results in this list with a fly-in.</summary>
+    private async void RunTool(ToolKind kind, List<string> paths)
+    {
+        try
+        {
+            if (ToolsService.Current is not { } tools || _store == null)
+            {
+                return;
+            }
+
+            int maxWidth = 0;
+            if (kind == ToolKind.ResizeToWidth)
+            {
+                var prompt = new NumberPromptWindow("Resize to max width", "Width in pixels (images that are already narrower are skipped)", 1280, 16, 20000);
+                if (prompt.ShowDialog() != true)
+                {
+                    return;
+                }
+
+                maxWidth = prompt.Value;
+            }
+
+            ShelfItem? first = List.SelectedItems.OfType<ShelfItem>().FirstOrDefault();
+            FrameworkElement? source = first == null ? null : List.ItemContainerGenerator.ContainerFromItem(first) as FrameworkElement;
+            ToolResult result = await tools.RunAsync(kind, paths, maxWidth);
+            if (result.Outputs.Count == 0)
+            {
+                return;
+            }
+
+            // The new tiles fly in from where the source tile was.
+            try
+            {
+                Point from = source != null && source.IsLoaded
+                    ? source.TranslatePoint(new Point(source.ActualWidth / 2, source.ActualHeight / 2), this)
+                    : new Point(ActualWidth / 2, ActualHeight / 2);
+                _dropPoint = from;
+                _dropTick = Environment.TickCount64;
+            }
+            catch (InvalidOperationException)
+            {
+                _dropPoint = null;
+            }
+
+            _store.AddPaths(result.Outputs);
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"Tool {kind} failed", ex);
+        }
+    }
+
+    private async void Ocr_Click(object sender, RoutedEventArgs e)
+    {
+        var images = SelectedItems().Where(i => i.Exists && i.Kind == ShelfItemKind.File && ImageOps.IsImage(i.Path)).Select(i => i.Path).ToList();
+        if (images.Count == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            await OcrActions.CopyTextAsync(images);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Copy text (OCR) failed", ex);
+        }
     }
 
     private void Remove_Click(object sender, RoutedEventArgs e) => _store?.Remove(SelectedItems());

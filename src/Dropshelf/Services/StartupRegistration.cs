@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Security;
 using Microsoft.Win32;
 
@@ -17,15 +18,17 @@ internal static class StartupRegistration
             using var key = Registry.CurrentUser.OpenSubKey(RunKey, writable: false);
             return key?.GetValue(ValueName) is string;
         }
-        catch (Exception ex) when (ex is SecurityException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is SecurityException or UnauthorizedAccessException or IOException)
         {
+            Log.Error("Could not read startup registration", ex);
             return false;
         }
     }
 
     /// <summary>
     /// Writes (or removes) the Run value: the quoted path of the installed exe plus <c>--autostart</c>. Re-running it keeps
-    /// the value in sync if the exe path changed. Does nothing when there is no sensible exe to register (debug builds).
+    /// the value in sync if the exe path changed. Does nothing when there is no sensible exe to register (debug builds, or a
+    /// copy that is not installed). Never throws, so uninstall always reaches shutdown.
     /// </summary>
     public static void Set(bool enabled)
     {
@@ -50,7 +53,7 @@ internal static class StartupRegistration
                 key.DeleteValue(ValueName, throwOnMissingValue: false);
             }
         }
-        catch (Exception ex) when (ex is SecurityException or UnauthorizedAccessException)
+        catch (Exception ex)
         {
             Log.Error("Could not update startup registration", ex);
         }

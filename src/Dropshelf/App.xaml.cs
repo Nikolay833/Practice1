@@ -92,8 +92,25 @@ public partial class App : Application
         }
 
         CrashGuard.Install(this);
-        StartQuitListener();
+        try
+        {
+            StartQuitListener();
+            StartServices(restarted);
+            CrashGuard.MarkStartupComplete();
+        }
+        catch (Exception ex)
+        {
+            // CrashGuard treats ordinary exceptions as non-fatal, which here would leave a process without a tray icon
+            // that still owns the mutex (so no new launch could start). Give the mutex back and quit.
+            Log.Error("Start-up failed", ex);
+            TryStep("single-instance mutex", ReleaseInstanceMutex);
+            Shutdown();
+        }
+    }
 
+    /// <summary>Creates the services and windows. Runs after the single-instance mutex is owned; any exception aborts start-up.</summary>
+    private void StartServices(bool restarted)
+    {
         AppPaths.EnsureDirectories();
         _settings = new SettingsService();
         AnimationSettings.Attach(_settings.Current);
@@ -142,7 +159,7 @@ public partial class App : Application
             openClipboard: () => ShowClipboard(fromHotkey: false),
             openSettings: ShowSettings,
             uninstall: Uninstall,
-            quit: () => Shutdown());
+            quit: QuitByUser);
 
         if (!_hotkeys.Register(HotkeyService.BasketId, NativeMethods.MOD_CONTROL | NativeMethods.MOD_SHIFT, NativeMethods.VK_B, ShowBasketAtCursor))
         {
@@ -163,7 +180,11 @@ public partial class App : Application
                 Installer.RestartedArgument, NativeMethods.RESTART_NO_CRASH | NativeMethods.RESTART_NO_HANG));
         }
 
-        if (restarted)
+        if (Installer.UpdateFailedNotice is { } notice)
+        {
+            _tray.ShowBalloon("Dropshelf", notice);
+        }
+        else if (restarted)
         {
             _tray.ShowBalloon("Dropshelf", "Dropshelf is running again.");
         }
@@ -248,22 +269,7 @@ public partial class App : Application
             _quitWait?.Unregister(null);
             _quitEvent?.Dispose();
         });
-        TryStep("single-instance mutex", () =>
-        {
-            if (_mutex != null)
-            {
-                try
-                {
-                    _mutex.ReleaseMutex();
-                }
-                catch (ApplicationException)
-                {
-                    // Not owned by this thread; nothing to release.
-                }
-
-                _mutex.Dispose();
-            }
-        });
+        TryStep("single-instance mutex", ReleaseInstanceMutex);
 
         if (_uninstalling)
         {
@@ -271,6 +277,24 @@ public partial class App : Application
         }
 
         base.OnExit(e);
+    }
+
+    private void ReleaseInstanceMutex()
+    {
+        if (_mutex != null)
+        {
+            try
+            {
+                _mutex.ReleaseMutex();
+            }
+            catch (ApplicationException)
+            {
+                // Not owned by this thread; nothing to release.
+            }
+
+            _mutex.Dispose();
+            _mutex = null;
+        }
     }
 
     private static void TryStep(string name, Action step)
@@ -440,7 +464,24 @@ public partial class App : Application
 
         _uninstalling = true;
         _deleteDataOnUninstall = dialog.DeleteData;
-        Installer.RemoveIntegration();
+        try
+        {
+            Installer.RemoveIntegration();
+            UnregisterRestart();
+        }
+        finally
+        {
+            Shutdown(); // whatever failed above, the uninstall must still quit so the cleanup can run
+        }
+    }
+
+    /// <summary>Tray "Quit": a deliberate quit must not be undone by Windows restarting registered apps after an update.</summary>
+    private void QuitByUser()
+    {
+        UnregisterRestart();
         Shutdown();
     }
+
+    private static void UnregisterRestart() =>
+        TryStep("application restart unregistration", () => NativeMethods.UnregisterApplicationRestart());
 }

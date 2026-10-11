@@ -120,9 +120,11 @@ public partial class SettingsWindow : Window
                 ? $"{Installer.InstalledExe}\n(this session runs from {current})"
                 : $"Not installed - running from {current}";
 
-        AutoStartStatus.Text = StartupRegistration.IsEnabled()
-            ? "Starts automatically when you sign in"
-            : "Does not start automatically when you sign in";
+        AutoStartStatus.Text = Installer.AutostartTarget() == null
+            ? "Autostart unavailable: app isn't installed"
+            : StartupRegistration.IsEnabled()
+                ? "Starts automatically when you sign in"
+                : "Does not start automatically when you sign in";
     }
 
     private void ShowAnimationMode()

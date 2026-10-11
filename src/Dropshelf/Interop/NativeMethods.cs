@@ -96,6 +96,12 @@ internal static class NativeMethods
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
     public static extern int RegisterApplicationRestart(string? commandLine, int flags);
 
+    [DllImport("kernel32.dll")]
+    public static extern int UnregisterApplicationRestart();
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern uint GetLongPathName(string lpszShortPath, System.Text.StringBuilder lpszLongPath, uint cchBuffer);
+
     // ---- Hotkeys / clipboard listener --------------------------------------------------------
     public const uint MOD_ALT = 0x0001;
     public const uint MOD_CONTROL = 0x0002;

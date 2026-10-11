@@ -29,6 +29,8 @@ public partial class ShelfWindow : Window
     private const double MagnetRangeDip = 170;   // drag magnet and glow start this far from the pill
     private const double MagnetStretchW = 10, MagnetStretchH = 8, MagnetShift = 6;
     private const int HoverPollMs = 60;
+    private const int HoverIdlePollMs = 250;     // collapsed, nothing being dragged, cursor far from the pill
+    private const double HoverNearDip = 120;     // closer than this to the pill keeps the fast poll
     private const int HoverDelayMs = 150;
     private const double DragMarginDip = 16;     // the pill becomes solid this close to the cursor while dragging
     private const int DragStartPx = 8;
@@ -290,6 +292,7 @@ public partial class ShelfWindow : Window
         {
             WindowHelper.SetClickThrough(_hwnd, true); // a fullscreen app is in front: never catch input
             _hoverSince = 0;
+            _hoverTimer.Stop(); // UpdateSlide restarts it when the pill comes back
             return;
         }
 
@@ -320,6 +323,15 @@ public partial class ShelfWindow : Window
         else
         {
             _hoverSince = 0;
+        }
+
+        // Poll fast while the cursor is near or something is being dragged, slowly otherwise.
+        int nearPx = (int)Math.Round(HoverNearDip * _monitor.Scale);
+        bool busy = leftDown || dragging || _hoverSince != 0 || WindowHelper.ContainsCursor(_hwnd, nearPx);
+        var interval = TimeSpan.FromMilliseconds(busy ? HoverPollMs : HoverIdlePollMs);
+        if (_hoverTimer.Interval != interval)
+        {
+            _hoverTimer.Interval = interval;
         }
     }
 
@@ -708,6 +720,7 @@ public partial class ShelfWindow : Window
         {
             _hiddenNative = true;
             NativeMethods.ShowWindow(_hwnd, NativeMethods.SW_HIDE); // off-screen is not enough with a monitor above
+            Mascot.SetSuspended(true);
         }
     }
 
@@ -782,6 +795,7 @@ public partial class ShelfWindow : Window
         {
             _hiddenNative = false;
             NativeMethods.ShowWindow(_hwnd, NativeMethods.SW_SHOWNOACTIVATE);
+            Mascot.SetSuspended(false);
         }
 
         _hide.Target = target;
@@ -789,6 +803,11 @@ public partial class ShelfWindow : Window
         {
             _hoverSince = 0;
             WindowHelper.SetClickThrough(_hwnd, true);
+            _hoverTimer.Stop();
+        }
+        else if (!_expanded)
+        {
+            _hoverTimer.Start();
         }
 
         if (AnimationSettings.IsOff)

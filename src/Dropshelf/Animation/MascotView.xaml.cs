@@ -62,6 +62,7 @@ public partial class MascotView : UserControl
     private double _scriptClock = -1;
     private int _lastX = int.MinValue, _lastY = int.MinValue;
     private int _quietPolls;
+    private bool _suspended;
     private bool _started;
 
     public MascotView()
@@ -196,9 +197,28 @@ public partial class MascotView : UserControl
 
     // ---- Lifecycle ------------------------------------------------------------------------------
 
+    /// <summary>Pauses the cursor poll and animation while the host window is hidden natively (WPF still reports it visible).</summary>
+    public void SetSuspended(bool suspended)
+    {
+        if (_suspended == suspended)
+        {
+            return;
+        }
+
+        _suspended = suspended;
+        if (suspended)
+        {
+            Stop();
+        }
+        else if (IsLoaded && IsVisible)
+        {
+            Start();
+        }
+    }
+
     private void Start()
     {
-        if (_started || AnimationSettings.IsOff)
+        if (_started || _suspended || AnimationSettings.IsOff)
         {
             return;
         }

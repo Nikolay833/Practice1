@@ -31,7 +31,7 @@
             <Path x:Name="RightShoulder" Grid.Column="2" VerticalAlignment="Top" Width="6" Height="6" Stretch="Fill"
                   Fill="{StaticResource BlackBrush}" Data="M1,0 L0,0 L0,1 A1,1 0 0 1 1,0 Z"/>
 
-            <!-- Body: solid black at the top (it is the notch); while open the lower part turns into dark glass. -->
+            <!-- Body: solid black at the top (it is the notch); while open it fades to almost clear at the bottom. -->
             <Border x:Name="Body" Grid.Column="1" CornerRadius="0,0,11,11" ClipToBounds="True">
                 <Border.Background>
                     <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
@@ -70,16 +70,6 @@
                                 Background="{DynamicResource AccentWashBrush}"/>
                     </Grid>
 
-                    <!-- Liquid-glass rim: a thin light edge along the sides and bottom that brightens toward the bottom. -->
-                    <Border x:Name="GlassRim" CornerRadius="0,0,11,11" BorderThickness="1,0,1,1.2" Opacity="0" IsHitTestVisible="False">
-                        <Border.BorderBrush>
-                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                <GradientStop Color="#00FFFFFF" Offset="0.35"/>
-                                <GradientStop Color="#40FFFFFF" Offset="0.85"/>
-                                <GradientStop Color="#8CFFFFFF" Offset="1"/>
-                            </LinearGradientBrush>
-                        </Border.BorderBrush>
-                    </Border>
                 </Grid>
             </Border>
         </Grid>

@@ -252,6 +252,7 @@ internal sealed class WeatherService : IDisposable
         "https://api.open-meteo.com/v1/forecast?latitude=" + lat.ToString("0.####", CultureInfo.InvariantCulture)
         + "&longitude=" + lon.ToString("0.####", CultureInfo.InvariantCulture)
         + "&current=temperature_2m,weather_code,is_day&daily=temperature_2m_max,temperature_2m_min,weather_code"
+        + "&hourly=temperature_2m,weather_code,precipitation_probability,is_day&forecast_hours=30"
         + "&timezone=auto&forecast_days=6";
 
     private void OnPowerModeChanged(object? sender, PowerModeChangedEventArgs e)

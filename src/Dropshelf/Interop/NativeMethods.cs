@@ -275,6 +275,7 @@ internal static class NativeMethods
     public const ushort VK_LWIN = 0x5B;
     public const ushort VK_RWIN = 0x5C;
     public const int VK_LBUTTON = 0x01;
+    public const int VK_RBUTTON = 0x02;
     public const ushort VK_V = 0x56;
     public const uint VK_B = 0x42;
     public const uint VK_S = 0x53;

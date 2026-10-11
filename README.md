@@ -15,9 +15,10 @@ For a plain-language tour of everything it does, see [FEATURES.md](FEATURES.md).
 - **The island** - a pure black notch flush with the top edge of the primary screen, with the concave "shoulders" and
   rounded bottom corners of a MacBook notch. While collapsed it is click-through, so it does not block clicks on tab
   strips or title bars underneath. Hover it (or click it, with *Open on hover* off) and it springs open like Droppy's
-  notch: black at the top, dark "Liquid Glass" with a light rim at the bottom, wide curved shoulders, and a floating glass
+  notch: black at the top fading to almost clear at the bottom, wide curved shoulders, and a floating glass
   capsule of icon tabs (**Now Playing**, **Timer**, **Notes**, **Today**) plus a round settings button under it. Opening
-  while a live activity shows opens that activity's tab. Text dropped onto the open Notes tab is appended to the note.
+  while a live activity shows opens that activity's tab. It only opens when the cursor *rests* on it (passing over or
+  clicking through to the tabs or address bar under it never opens it), and a click anywhere else closes it. Text dropped onto the open Notes tab is appended to the note.
 - **Live activities** - while collapsed, the island shows a leading view at its left end and a trailing view at its right
   end, like the Dynamic Island, and springs wider to fit them. Short-lived HUDs (volume, brightness, battery, Bluetooth,
   tool results, screenshots, notifications) take it over for about 1.8 seconds and then hand it back. See
@@ -34,11 +35,13 @@ For a plain-language tour of everything it does, see [FEATURES.md](FEATURES.md).
   - **Battery and Bluetooth** - charger plugged in or removed (green bolt), low battery at 20 % and 10 % (red pulse), fully
     charged; Bluetooth devices connecting or disconnecting with their name, an icon and their battery level when Windows
     reports it. Nothing is shown on a desktop without a battery.
-  - **Timer / Pomodoro** - presets, a custom `mm:ss`, Start / Pause / Cancel and Pomodoro mode. While it runs the island
+  - **Timer / Pomodoro** - laid out like the iOS StandBy timer: an orange minute ruler (drag, scroll or click; 1-120 min),
+    a "Start Timer" capsule and large orange digits; Pause / Cancel while running; a Pomodoro capsule. While it runs the island
     shows an orange ring and countdown (green on breaks), like Apple's timer Live Activity. Monotonic clock, sleep-aware,
     survives a restart; a soft chime when a phase ends.
-  - **Today** - a weather card (Open-Meteo, off by default because it sends your approximate location) and today's and
-    tomorrow's agenda from ICS links and, in the MSIX version, Windows calendars, with a red "now" line. Meeting alerts on
+  - **Today** - two StandBy-style widgets: weather (now, plus an hourly forecast with chance of rain; Open-Meteo, off by
+    default because it sends your approximate location) and a week calendar with today circled and the next event from
+    ICS links and, in the MSIX version, Windows calendars. Meeting alerts on
     the island within ten minutes of an event.
   - **Notifications** (MSIX version only, off by default) - Windows toast notifications on the island with a red count
     badge; clicking opens the app. Privacy mode, per-app mute and do-not-disturb in fullscreen.

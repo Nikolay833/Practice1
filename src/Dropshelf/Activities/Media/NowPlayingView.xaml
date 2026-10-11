@@ -40,19 +40,19 @@
             <Setter Property="Height" Value="40"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Focusable" Value="False"/>
-            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
             <Setter Property="FontFamily" Value="{StaticResource IconFont}"/>
-            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="FontSize" Value="14"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ToggleButton">
-                        <Border x:Name="Bd" Background="#26FFFFFF" CornerRadius="11">
+                        <Border x:Name="Bd" Background="Transparent" CornerRadius="20">
                             <ContentPresenter x:Name="Glyph" HorizontalAlignment="Center" VerticalAlignment="Center"
                                               TextElement.Foreground="{TemplateBinding Foreground}"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#38FFFFFF"/>
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource HoverBrush}"/>
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
                                 <Setter TargetName="Glyph" Property="TextElement.Foreground" Value="{DynamicResource AccentBrush}"/>
@@ -132,14 +132,8 @@
     </UserControl.Resources>
 
     <Grid>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="350"/>
-            <ColumnDefinition Width="Auto"/>
-            <ColumnDefinition Width="*"/>
-        </Grid.ColumnDefinitions>
-
-        <!-- ===== Player ===== -->
-        <Grid Grid.Column="0">
+        <!-- ===== Player (one column: minimal) ===== -->
+        <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
@@ -168,6 +162,7 @@
                                FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
                     <TextBlock x:Name="ArtistText" Style="{StaticResource TextSecondary}" FontSize="13"
                                TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/>
+                    <TextBlock x:Name="SourceText" Visibility="Collapsed"/>
                 </StackPanel>
                 <Grid x:Name="WaveHost" Grid.Column="2" Width="23" Height="20" VerticalAlignment="Center" Margin="0,0,2,0"/>
             </Grid>
@@ -211,35 +206,5 @@
             </Grid>
         </Grid>
 
-        <!-- Divider -->
-        <Border Grid.Column="1" Width="1" Margin="22,4" Background="{StaticResource StrokeBrush}"/>
-
-        <!-- ===== Right column: where it plays from, the album, the volume ===== -->
-        <StackPanel Grid.Column="2" VerticalAlignment="Top">
-            <TextBlock Text="Playing From" Style="{StaticResource TextSecondary}" FontSize="12" FontWeight="SemiBold"/>
-            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                <Border Width="32" Height="32" CornerRadius="8" Background="{StaticResource FillBrush}">
-                    <TextBlock x:Name="SourceInitial" Style="{StaticResource TextPrimary}" FontWeight="Bold" FontSize="14"
-                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                </Border>
-                <StackPanel Margin="10,0,0,0" VerticalAlignment="Center" MaxWidth="150">
-                    <TextBlock x:Name="SourceText" Style="{StaticResource TextPrimary}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                    <TextBlock x:Name="AlbumText" Style="{StaticResource TextSecondary}" TextTrimming="CharacterEllipsis"/>
-                </StackPanel>
-            </StackPanel>
-
-            <TextBlock Text="Volume" Style="{StaticResource TextSecondary}" FontSize="12" FontWeight="SemiBold" Margin="0,16,0,0"/>
-            <Grid x:Name="VolumeRow" Margin="0,6,0,0">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock Text="&#xE993;" Style="{StaticResource Glyph}" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"/>
-                <Slider x:Name="VolumeSlider" Grid.Column="1" Style="{StaticResource MediaSlider}" Minimum="0" Maximum="1"
-                        IsMoveToPointEnabled="True" Margin="8,0" VerticalAlignment="Center"/>
-                <TextBlock Grid.Column="2" Text="&#xE995;" Style="{StaticResource Glyph}" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"/>
-            </Grid>
-        </StackPanel>
     </Grid>
 </UserControl>

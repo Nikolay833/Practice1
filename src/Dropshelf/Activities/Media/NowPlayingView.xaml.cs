@@ -9,15 +9,13 @@ namespace Dropshelf.Activities.Media;
 
 /// <summary>
 /// The "Now Playing" tab: art, title, artist and a live waveform; a seekable progress bar with elapsed / remaining time;
-/// shuffle, previous, play-pause, next and repeat; and on the right where it plays from and a volume slider. The progress
-/// is refreshed four times a second, and only while the tab is visible.
+/// shuffle, previous, play-pause, next and repeat. Minimal: one column, no boxes. The progress is refreshed four times a
+/// second, and only while the tab is visible.
 /// </summary>
 public partial class NowPlayingView : UserControl
 {
     private readonly MediaSessionService _media;
-    private readonly AudioEndpointService? _audio;
     private readonly EqualizerBars _wave;
-    private bool _settingVolume;
     private readonly DispatcherTimer _timer;
     private bool _scrubbing;
 
@@ -25,25 +23,8 @@ public partial class NowPlayingView : UserControl
     {
         InitializeComponent();
         _media = media;
-        _audio = audio;
         _wave = new EqualizerBars(audio) { HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
         WaveHost.Children.Add(_wave);
-
-        if (audio is { IsAvailable: true })
-        {
-            VolumeSlider.Value = audio.Muted ? 0 : audio.Volume;
-            VolumeSlider.ValueChanged += (_, e) =>
-            {
-                if (!_settingVolume)
-                {
-                    audio.SetVolume((float)e.NewValue);
-                }
-            };
-        }
-        else
-        {
-            VolumeRow.IsEnabled = false;
-        }
 
         _timer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(250) };
         _timer.Tick += (_, _) => UpdatePosition();
@@ -78,11 +59,6 @@ public partial class NowPlayingView : UserControl
     {
         _media.Changed -= OnMediaChanged;
         _media.Changed += OnMediaChanged;
-        if (_audio != null)
-        {
-            _audio.VolumeChanged -= OnVolumeChanged;
-            _audio.VolumeChanged += OnVolumeChanged;
-        }
 
         Refresh();
         if (IsVisible)
@@ -94,19 +70,8 @@ public partial class NowPlayingView : UserControl
     private void Detach()
     {
         _media.Changed -= OnMediaChanged;
-        if (_audio != null)
-        {
-            _audio.VolumeChanged -= OnVolumeChanged;
-        }
 
         _timer.Stop();
-    }
-
-    private void OnVolumeChanged(float volume, bool muted)
-    {
-        _settingVolume = true;
-        VolumeSlider.Value = muted ? 0 : volume;
-        _settingVolume = false;
     }
 
     private void OnMediaChanged()
@@ -121,9 +86,8 @@ public partial class NowPlayingView : UserControl
     {
         TitleText.Text = string.IsNullOrEmpty(_media.Title) ? "Nothing playing" : _media.Title;
         ArtistText.Text = string.IsNullOrEmpty(_media.Artist) ? _media.Album : _media.Artist;
-        SourceText.Text = string.IsNullOrEmpty(_media.SourceApp) ? "Media" : _media.SourceApp;
-        SourceInitial.Text = SourceText.Text.Substring(0, 1).ToUpperInvariant();
-        AlbumText.Text = _media.Album;
+        SourceText.Text = _media.SourceApp;
+        ToolTip = string.IsNullOrEmpty(_media.SourceApp) ? null : "Playing from " + _media.SourceApp;
         ArtImage.Source = _media.Art;
         _wave.SetTint(_media.ArtTint);
         _wave.Playing = _media.IsPlaying;

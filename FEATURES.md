@@ -87,9 +87,9 @@ run on Windows.)
   the edge of the screen and rounded bottom corners, exactly like a MacBook notch.
 - **Live activity:** the notch widens; a picture or icon sits at its left end and live information at its right end,
   like the Dynamic Island.
-- **Open:** a 640 × 190 pixel panel that is black at the top (it grows out of the notch) and turns into dark glass with
-  a bright rim at the bottom, with wide curved shoulders where it meets the screen edge. Under it floats a glass capsule
-  of round icon tabs and a round settings button, like Droppy.
+- **Open:** a 640 × 190 pixel panel that is black at the top (it grows out of the notch) and fades to almost clear at
+  the bottom, with wide curved shoulders where it meets the screen edge. Under it floats a glass capsule of round icon
+  tabs and a round settings button, like Droppy.
 
 ---
 
@@ -215,13 +215,14 @@ and about 16 times a second when you are close.
 
 ### Opening and closing
 
-- **Hover:** rest the mouse on the island for about 0.1 seconds and it springs open (if *Open on hover* is on, which is
-  the default). It does not open while you are holding the left mouse button, so dragging a window across the top of the
-  screen does not pop it open.
+- **Hover:** *rest* the mouse on the island for about a third of a second and it springs open (if *Open on hover* is on,
+  which is the default). Passing over it, holding a mouse button, or clicking on it never opens it, so the browser tabs,
+  address bar or title bar underneath stay usable: after a click there it stays closed until the mouse has left it.
 - **Click:** with *Open on hover* off, click it to open.
-- It **closes by itself** about 0.35 seconds after the mouse leaves, but never while you are typing in it.
+- It **closes by itself** a quarter of a second after the mouse leaves, and **at once when you click anywhere else**,
+  but never while you are typing in it.
 - Opening uses a soft, slightly bouncy spring like the Dynamic Island: the notch stretches into a rounded panel, its
-  shoulders sweep wider, the lower half turns to glass, the contents zoom in and the tab capsule drops in under it.
+  shoulders sweep wider, the lower half fades to clear, the contents zoom in and the tab capsule drops in under it.
 
 ### Tabs under the open island
 
@@ -382,16 +383,12 @@ Dynamic Island. The waveform's five bars grow from their middle and take a **col
 art has no strong colour). They follow the **real sound level** coming out of your speakers; if that cannot be measured,
 they fall back to a gentle random animation. The island keeps showing the song for 10 seconds after you pause.
 
-**In the *Now Playing* tab** (laid out like Droppy's player):
-
-- **Left:** the album art with rounded corners, the song title in bold, the artist, and a live waveform; under them a
-  thick white **progress bar you can drag to jump** to any point, with the elapsed time on the left and the remaining
-  time ("-0:46") on the right; and a row of big white **⏪ ⏸ ⏩** controls between a rounded **shuffle** button and a
-  **repeat** button (they turn accent-coloured when on; repeat cycles off → all → one).
-- **Right:** **Playing From** (the app, with the album under it) and a **Volume** slider.
-
-(Droppy shows the "Playing Next" queue there; Windows does not let apps read another app's queue.) If several apps are
-playing, it follows the one Windows considers current, or one that is actually playing if that one is paused.
+**In the *Now Playing* tab** (minimal, one column): the album art with rounded corners, the song title in bold, the
+artist and a live waveform; a thick white **progress bar you can drag to jump** to any point, with the elapsed time on the
+left and the remaining time ("-0:46") on the right; and big white **⏪ ⏸ ⏩** controls between plain **shuffle** and
+**repeat** glyphs (accent-coloured when on; repeat cycles off → all → one). Pointing at the tab shows which app is
+playing. If several apps are playing, it follows the one Windows considers current, or one that is actually playing if
+that one is paused.
 
 Setting: *Now Playing* (on by default).
 
@@ -530,9 +527,13 @@ shortcut off in Settings → Screenshot (the tray menu still offers *Take screen
 
 Open the island → **Timer** tab.
 
-- **Presets:** 5, 10 and 25 minutes, or type your own time in `mm:ss`.
-- **Start / Pause / Resume** (green and orange capsule buttons, like Apple's Clock app) and **Cancel**.
-- **Pomodoro mode:** a study/work method that alternates focus and rest. By default **25 minutes work → 5 minutes
+Laid out like the iOS StandBy timer:
+
+- **The minute ruler:** orange ticks for 1–120 minutes with numbers every 5, fading out at both ends. **Drag it**, **scroll**
+  over it or **click a minute**; a small ▲ marks the chosen one, and the ticks past it are dimmed.
+- **Start Timer** (an orange capsule) and the time in **large orange digits** on the right. While it runs, the ruler
+  slides down with the remaining time, and the buttons become **Pause / Resume** and **Cancel**.
+- **Pomodoro** (a small capsule next to Start): a study/work method that alternates focus and rest. By default **25 minutes work → 5 minutes
   break**, repeated **4 times**, then a **15-minute long break**. All four numbers can be changed in Settings. The next
   phase starts automatically.
 
@@ -570,12 +571,16 @@ the editor).
 
 ## 18. Today: calendar and weather
 
-Open the island → **Today** tab. On the left a **weather card**, on the right your **agenda** for today and tomorrow,
-with a red "now" line like Apple's Calendar.
+Open the island → **Today** tab. Two minimal widgets in the style of iOS StandBy:
+
+- **Weather** (left): "Now" with a big icon and the temperature, a thin divider, then the place in large type,
+  "HOURLY FORECAST", and the next five hours (time, icon, chance of rain in cyan when it is 20 % or more, temperature).
+- **Week** (right): the month name, the weekdays, this week's dates with **today in a white circle** (days of another
+  month dimmed), and under it the event in progress (red) or the next one today or tomorrow as one line.
 
 ### Weather
 
-- Big current temperature, condition (sunny, rain, snow...) with a drawn icon, today's high and low, and a 5-day strip.
+- Current temperature with a drawn icon, and an hourly forecast for the next five hours.
 - **Off by default**, because it needs to send your rough location to the weather service. Press **Turn on** in the
   tab or enable it in Settings.
 - Location: from Windows' location service if you allow it, otherwise the **city** you type in Settings.

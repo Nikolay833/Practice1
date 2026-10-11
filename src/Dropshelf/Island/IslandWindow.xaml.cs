@@ -34,14 +34,15 @@ public partial class IslandWindow : Window
     private const double ExpandedWidth = 640, ExpandedHeight = 190, ExpandedRadius = 32;
     private const double ShoulderClosed = 6, ShoulderOpen = 18;   // concave corners where the notch meets the top edge
     private const double SwitcherSpace = 48;      // the tab capsule under the open island: 10 gap + 38 capsule
-    private const byte GlassAlpha = 0xB8;         // how opaque the bottom of the open island is (black at the top)
+    private const byte GlassAlpha = 0x14;         // the open island fades from black at the top to almost clear at the bottom
     private const double CompactGap = 40;         // empty middle between the leading and trailing views
     private const double CompactPad = 12;         // space between a compact view and the island edge
     private const double Overshoot = 1.06;        // window headroom for the opening spring's overshoot
     private const int HoverPollMs = 60;
     private const int HoverIdlePollMs = 250;      // collapsed, cursor far from the island
     private const double HoverNearDip = 120;      // closer than this keeps the fast poll
-    private const int HoverDelayMs = 120;
+    private const int HoverDelayMs = 350;         // the cursor must rest on the notch this long: passing over it never opens it
+    private const int HoverRestPx = 5;            // ...and move less than this between polls
 
     private readonly SettingsService _settings;
     private readonly Action _openSettings;
@@ -67,6 +68,9 @@ public partial class IslandWindow : Window
 
     private long _holdUntilTick;       // keeps a tray / hotkey expansion open for a moment
     private long _hoverSince;          // tick when the cursor started resting on the collapsed island, 0 = not hovering
+    private NativeMethods.POINT _hoverPoint;
+    private bool _hoverBlocked;        // a click landed on the notch (on whatever is under it): no hover-open until the cursor leaves
+    private readonly DispatcherTimer _outsideTimer;   // while open: a click anywhere else closes the island at once
     private string? _tab;
     private string _tabKey = string.Empty;
     private bool _fullscreen;
@@ -105,8 +109,11 @@ public partial class IslandWindow : Window
         _hoverTimer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(HoverPollMs) };
         _hoverTimer.Tick += OnHoverTick;
 
-        _collapseTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(350) };
+        _collapseTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
         _collapseTimer.Tick += OnCollapseTick;
+
+        _outsideTimer = new DispatcherTimer(DispatcherPriority.Input) { Interval = TimeSpan.FromMilliseconds(70) };
+        _outsideTimer.Tick += OnOutsideTick;
 
         // Hover-expand is done by OnHoverTick: the collapsed island is click-through and gets no mouse events.
         MouseEnter += (_, _) => _collapseTimer.Stop();
@@ -221,6 +228,7 @@ public partial class IslandWindow : Window
         ExpandedPanel.Visibility = Visibility.Visible; // now, not on the next frame: Ctrl+Shift+N focuses the editor right away
         ExpandedPanel.IsHitTestVisible = true;
         Switcher.IsHitTestVisible = true;
+        _outsideTimer.Start();
         AnimateTo(1);
     }
 
@@ -238,6 +246,8 @@ public partial class IslandWindow : Window
         _activities.SetExpandedOpen(false);
         ExpandedPanel.IsHitTestVisible = false;
         Switcher.IsHitTestVisible = false;
+        _outsideTimer.Stop();
+        _hoverBlocked = true; // closing must not reopen it under a cursor that is still on the notch
         TabDropHighlight.Visibility = Visibility.Collapsed;
         AnimateTo(0);
 
@@ -285,13 +295,26 @@ public partial class IslandWindow : Window
             _activities.KeepHudAlive();
         }
 
-        // Not while the left button is held: dragging a window or selecting text across the top must not pop it open.
-        if (hoverExpand && onIsland && !leftDown && !interactiveHud)
+        // Whatever is under the notch (browser tabs, an address bar, a title bar) must stay usable: the notch only opens when
+        // the cursor rests on it, never while a button is held, and not again after a click there until the cursor has left.
+        bool anyButton = leftDown || (NativeMethods.GetAsyncKeyState(NativeMethods.VK_RBUTTON) & 0x8000) != 0;
+        if (!onIsland)
+        {
+            _hoverBlocked = false;
+        }
+        else if (anyButton)
+        {
+            _hoverBlocked = true;
+        }
+
+        if (hoverExpand && onIsland && !anyButton && !_hoverBlocked && !interactiveHud)
         {
             long now = Environment.TickCount64;
-            if (_hoverSince == 0)
+            bool resting = Math.Abs(cursor.X - _hoverPoint.X) <= HoverRestPx && Math.Abs(cursor.Y - _hoverPoint.Y) <= HoverRestPx;
+            _hoverPoint = cursor;
+            if (_hoverSince == 0 || !resting)
             {
-                _hoverSince = now;
+                _hoverSince = now; // (re)start the rest period
             }
             else if (now - _hoverSince >= HoverDelayMs)
             {
@@ -310,6 +333,25 @@ public partial class IslandWindow : Window
         if (_hoverTimer.Interval != interval)
         {
             _hoverTimer.Interval = interval;
+        }
+    }
+
+    /// <summary>While open: a mouse button pressed outside the island (in another app) closes it at once.</summary>
+    private void OnOutsideTick(object? sender, EventArgs e)
+    {
+        if (!_expanded)
+        {
+            _outsideTimer.Stop();
+            return;
+        }
+
+        bool button = (NativeMethods.GetAsyncKeyState(NativeMethods.VK_LBUTTON) & 0x8000) != 0
+                      || (NativeMethods.GetAsyncKeyState(NativeMethods.VK_RBUTTON) & 0x8000) != 0;
+        if (button && Mouse.Captured == null && NativeMethods.GetCursorPos(out var cursor) && !IslandContains(cursor, 0)
+            && !WindowHelper.IsOwnWindow(NativeMethods.WindowFromPoint(cursor)))
+        {
+            _holdUntilTick = 0;
+            Collapse();
         }
     }
 
@@ -429,7 +471,6 @@ public partial class IslandWindow : Window
             _lastR = r;
             var corners = new CornerRadius(0, 0, r, r);
             Body.CornerRadius = corners;
-            GlassRim.CornerRadius = corners;
         }
 
         // Liquid glass: the open island stays black at the top (it is the notch) and turns into dark glass toward the bottom,
@@ -438,10 +479,8 @@ public partial class IslandWindow : Window
         if (GlassBottom.Color.A != bottom)
         {
             GlassBottom.Color = Color.FromArgb(bottom, 0, 0, 0);
-            GlassMid.Color = Color.FromArgb((byte)Math.Round(255 - (255 - GlassAlpha) * open01 * 0.25), 0, 0, 0);
+            GlassMid.Color = Color.FromArgb((byte)Math.Round(255 - 0.12 * 255 * open01), 0, 0, 0);
         }
-
-        GlassRim.Opacity = open01;
 
         // A layer that cannot be seen is hidden, not just transparent: its views (the waveform, the Now Playing scrubber)
         // stop their timers when they are not visible, so nothing repaints the window for content nobody can see.

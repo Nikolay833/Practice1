@@ -58,6 +58,10 @@ public sealed class DropItem : NotifyBase
         private set => SetField(ref _isThumbnail, value);
     }
 
+    /// <summary>The folder the item is in (shown in the basket's list view).</summary>
+    [JsonIgnore]
+    public string Folder => System.IO.Path.GetDirectoryName(Path) ?? string.Empty;
+
     [JsonIgnore]
     public bool Exists => Kind == DropItemKind.Folder ? Directory.Exists(Path) : File.Exists(Path);
 

@@ -2,51 +2,104 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:items="clr-namespace:Dropshelf.Items"
-        Title="Dropshelf Basket" Width="272" Height="272"
-        WindowStyle="None" AllowsTransparency="False" Background="Transparent"
+        Title="Dropshelf Basket" Width="188" Height="214"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         ResizeMode="NoResize" ShowInTaskbar="False" ShowActivated="False" Topmost="True"
         WindowStartupLocation="Manual" AllowDrop="True" UseLayoutRounding="True"
         FontFamily="{StaticResource UiFont}" Foreground="{StaticResource TextBrush}">
-    <!-- A frosted popover. The window keeps its size; opening and closing spring the content (scale + fade) instead of
-         resizing the window every frame. Background is the dark tint; it is cleared when real acrylic blur is active. -->
-    <Border x:Name="Chrome" Background="{StaticResource PanelGlassBrush}" BorderBrush="#26FFFFFF" BorderThickness="0.5"
-            CornerRadius="12">
+    <!-- A glass card with large rounded corners (Droppy's basket). Two layouts: Compact (a stacked preview and an
+         "N Files >" button) and Expanded (a header with back, title, size and grid / list buttons over all the items). The
+         window is resized once when the layout changes; opening and closing spring the content, not the window. -->
+    <Border x:Name="Chrome" Margin="1" CornerRadius="24" Background="#EB1C1C1E" BorderThickness="1"
+            BorderBrush="{StaticResource GlassRimBrush}">
         <Grid x:Name="Body" RenderTransformOrigin="0.5,0.5">
             <Grid.RenderTransform>
                 <ScaleTransform x:Name="ContentScale"/>
             </Grid.RenderTransform>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
 
-            <!-- Header (drag handle) -->
-            <Grid x:Name="Header" Grid.Row="0" Margin="16,12,10,0" Height="28" Background="Transparent"
-                  MouseLeftButtonDown="Header_MouseLeftButtonDown">
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="Basket" Style="{StaticResource TextTitle}"/>
-                    <TextBlock x:Name="CountText" Style="{StaticResource TextSecondary}" Margin="8,1,0,0"
-                               VerticalAlignment="Center"/>
+            <!-- Grab handle: drag the basket by it -->
+            <Border x:Name="Handle" Width="64" Height="18" VerticalAlignment="Top" HorizontalAlignment="Center" Background="Transparent"
+                    Cursor="SizeAll" MouseLeftButtonDown="Header_MouseLeftButtonDown">
+                <Border Width="36" Height="5" CornerRadius="2.5" Background="#59FFFFFF" VerticalAlignment="Center"/>
+            </Border>
+
+            <!-- ===== Compact ===== -->
+            <Grid x:Name="CompactView" Margin="12,12,12,14">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Grid Grid.Row="0" Background="Transparent" MouseLeftButtonDown="Header_MouseLeftButtonDown">
+                    <Button Content="&#xE711;" Style="{StaticResource CircleButton}" Width="28" Height="28" FontSize="10"
+                            HorizontalAlignment="Left" ToolTip="Close" Click="Close_Click"/>
+                    <Button x:Name="MenuButton" Content="&#xE70D;" Style="{StaticResource CircleButton}" Width="28" Height="28" FontSize="10"
+                            HorizontalAlignment="Right" ToolTip="More" Click="Menu_Click"/>
+                </Grid>
+
+                <!-- Up to three previews, fanned out like a stack of cards -->
+                <Grid x:Name="Stack" Grid.Row="1" Width="96" Height="96" VerticalAlignment="Center" HorizontalAlignment="Center"
+                      Background="Transparent" Cursor="Hand" MouseLeftButtonDown="Stack_MouseLeftButtonDown" MouseMove="Stack_MouseMove"/>
+
+                <StackPanel x:Name="EmptyState" Grid.Row="1" IsHitTestVisible="False" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock Text="&#xE896;" Style="{StaticResource Glyph}" FontSize="26" Foreground="{StaticResource TextDisabledBrush}"/>
+                    <TextBlock Text="Drop files here" Style="{StaticResource TextSecondary}" Margin="0,8,0,0" HorizontalAlignment="Center"/>
                 </StackPanel>
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                    <Button x:Name="ClearButton" Content="Clear" Style="{StaticResource TextButton}" VerticalAlignment="Center"
-                            Margin="0,0,4,0" Click="Clear_Click"/>
-                    <Button Content="&#xE711;" Style="{StaticResource CircleButton}" Width="24" Height="24" FontSize="10"
-                            ToolTip="Close" Click="Close_Click"/>
-                </StackPanel>
+
+                <Button x:Name="CountButton" Grid.Row="2" HorizontalAlignment="Center" Click="Expand_Click" ToolTip="Show all">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="Bd" Background="#2EFFFFFF" CornerRadius="14" Padding="14,5,10,5">
+                                <StackPanel Orientation="Horizontal">
+                                    <ContentPresenter VerticalAlignment="Center" TextElement.Foreground="White" TextElement.FontSize="12"
+                                                      TextElement.FontWeight="SemiBold"/>
+                                    <TextBlock Text="&#xE76C;" FontFamily="{StaticResource IconFont}" FontSize="9" Margin="5,1,0,0"
+                                               VerticalAlignment="Center" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                </StackPanel>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Bd" Property="Background" Value="#40FFFFFF"/>
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="Bd" Property="Opacity" Value="0.7"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
             </Grid>
 
-            <!-- Items -->
-            <Grid Grid.Row="1" Margin="10,8,10,10">
-                <StackPanel x:Name="EmptyState" IsHitTestVisible="False" HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <TextBlock Text="&#xE896;" Style="{StaticResource Glyph}" FontSize="28" Foreground="{StaticResource TextDisabledBrush}"/>
-                    <TextBlock Text="Drop files here" Style="{StaticResource TextSecondary}" FontSize="13" Margin="0,10,0,0"
-                               HorizontalAlignment="Center"/>
-                </StackPanel>
-                <items:ItemListView x:Name="ItemsView" IsWrap="True" TileWidth="66" RemoveOnAnyDrop="True"/>
-                <Border x:Name="DropHighlight" Visibility="Collapsed" IsHitTestVisible="False" CornerRadius="10"
-                        BorderThickness="2" BorderBrush="{DynamicResource AccentBrush}" Background="{DynamicResource AccentWashBrush}"/>
+            <!-- ===== Expanded ===== -->
+            <Grid x:Name="ExpandedView" Margin="16,16,16,12" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <Grid Grid.Row="0" Background="Transparent" MouseLeftButtonDown="Header_MouseLeftButtonDown">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <Button Content="&#xE76B;" Style="{StaticResource CircleButton}" Width="40" Height="40" FontSize="13"
+                            ToolTip="Back" Click="Collapse_Click"/>
+                    <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                        <TextBlock x:Name="TitleText" Style="{StaticResource TextTitle}" FontSize="17" FontWeight="Bold"/>
+                        <TextBlock x:Name="SizeText" Style="{StaticResource TextSecondary}" FontSize="12" FontWeight="SemiBold"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                        <ToggleButton x:Name="GridToggle" Content="&#xF0E2;" ToolTip="Icons" Click="GridMode_Click" Margin="0,0,8,0"
+                                      Style="{StaticResource ModeButton}"/>
+                        <ToggleButton x:Name="ListToggle" Content="&#xE8FD;" ToolTip="List" Click="ListMode_Click"
+                                      Style="{StaticResource ModeButton}"/>
+                    </StackPanel>
+                </Grid>
+                <items:ItemListView x:Name="ItemsView" Grid.Row="1" Margin="-4,14,-4,0" IsWrap="True" TileWidth="92" RemoveOnAnyDrop="True"/>
             </Grid>
+
+            <Border x:Name="DropHighlight" Visibility="Collapsed" IsHitTestVisible="False" CornerRadius="23"
+                    BorderThickness="2" BorderBrush="{DynamicResource AccentBrush}" Background="{DynamicResource AccentWashBrush}"/>
         </Grid>
     </Border>
 </Window>

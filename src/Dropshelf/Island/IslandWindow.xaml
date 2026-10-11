@@ -8,61 +8,91 @@
         WindowStartupLocation="Manual" Left="0" Top="0" AllowDrop="True"
         UseLayoutRounding="True" SnapsToDevicePixels="True"
         FontFamily="{StaticResource UiFont}" Foreground="{StaticResource TextBrush}">
-    <!-- The window is at least as large as the island and only resized when an animation needs more room (and once more
-         when it settles); the island itself is sized inside it every frame. Pixels outside the island are fully
-         transparent, so the layered window lets clicks through there. -->
-    <Grid x:Name="Island" HorizontalAlignment="Center" VerticalAlignment="Top" Width="196" Height="32">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="6"/>
-            <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="6"/>
-        </Grid.ColumnDefinitions>
+    <!-- The window is at least as large as the island (plus the tab capsule under it while open) and is only resized when
+         an animation needs more room, and once more when it settles; the island itself is sized inside it every frame.
+         Pixels outside the island are fully transparent, so the layered window lets clicks through there. -->
+    <Grid VerticalAlignment="Top">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
 
-        <!-- The concave "shoulders" where a MacBook notch meets the top edge of the screen. -->
-        <Path Grid.Column="0" VerticalAlignment="Top" Fill="{StaticResource BlackBrush}" Data="M0,0 L6,0 L6,6 A6,6 0 0 0 0,0 Z"/>
-        <Path Grid.Column="2" VerticalAlignment="Top" Fill="{StaticResource BlackBrush}" Data="M6,0 L0,0 L0,6 A6,6 0 0 1 6,0 Z"/>
+        <Grid x:Name="Island" Grid.Row="0" HorizontalAlignment="Center" VerticalAlignment="Top" Width="196" Height="32">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition x:Name="LeftShoulderColumn" Width="6"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition x:Name="RightShoulderColumn" Width="6"/>
+            </Grid.ColumnDefinitions>
 
-        <Border x:Name="Body" Grid.Column="1" Background="{StaticResource BlackBrush}" CornerRadius="0,0,11,11" ClipToBounds="True">
-            <Grid>
-                <!-- Compact activity content (now playing, timer, HUDs): leading view at the left edge, trailing view at the
-                     right edge, like the Dynamic Island. ApplyLayout sizes this layer to the collapsed island. -->
-                <Grid x:Name="CompactLayer" Width="184" Height="32" VerticalAlignment="Top" HorizontalAlignment="Center"
-                      IsHitTestVisible="False">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition x:Name="CenterGap" Width="40"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                </Grid>
+            <!-- The concave "shoulders" where the notch flows into the top edge of the screen. They are drawn at 1 x 1 and
+                 stretched, so the island can widen them as it opens (small on the closed notch, sweeping when open). -->
+            <Path x:Name="LeftShoulder" Grid.Column="0" VerticalAlignment="Top" Width="6" Height="6" Stretch="Fill"
+                  Fill="{StaticResource BlackBrush}" Data="M0,0 L1,0 L1,1 A1,1 0 0 0 0,0 Z"/>
+            <Path x:Name="RightShoulder" Grid.Column="2" VerticalAlignment="Top" Width="6" Height="6" Stretch="Fill"
+                  Fill="{StaticResource BlackBrush}" Data="M1,0 L0,0 L0,1 A1,1 0 0 1 1,0 Z"/>
 
-                <!-- Expanded panel (fixed size; the island clips it while animating). -->
-                <Grid x:Name="ExpandedPanel" Width="640" Height="188" VerticalAlignment="Top" HorizontalAlignment="Center"
-                      Opacity="0" Visibility="Hidden" IsHitTestVisible="False" RenderTransformOrigin="0.5,0">
-                    <Grid.RenderTransform>
-                        <ScaleTransform x:Name="ExpandedScale"/>
-                    </Grid.RenderTransform>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                    </Grid.RowDefinitions>
-
-                    <Grid Grid.Row="0" Margin="18,12,14,0" Height="28">
-                        <act:ActivityTabBar x:Name="Tabs" HorizontalAlignment="Left" VerticalAlignment="Center"/>
-                        <Button Content="&#xE713;" Style="{StaticResource CircleButton}" HorizontalAlignment="Right"
-                                ToolTip="Settings" Click="Settings_Click"/>
+            <!-- Body: solid black at the top (it is the notch); while open the lower part turns into dark glass. -->
+            <Border x:Name="Body" Grid.Column="1" CornerRadius="0,0,11,11" ClipToBounds="True">
+                <Border.Background>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                        <GradientStop Color="#FF000000" Offset="0"/>
+                        <GradientStop x:Name="GlassMid" Color="#FF000000" Offset="0.55"/>
+                        <GradientStop x:Name="GlassBottom" Color="#FF000000" Offset="1"/>
+                    </LinearGradientBrush>
+                </Border.Background>
+                <Grid>
+                    <!-- Compact activity content (now playing, timer, HUDs): leading view at the left edge, trailing view at
+                         the right edge, like the Dynamic Island. ApplyLayout sizes this layer to the collapsed island. -->
+                    <Grid x:Name="CompactLayer" Width="184" Height="32" VerticalAlignment="Top" HorizontalAlignment="Center"
+                          IsHitTestVisible="False">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition x:Name="CenterGap" Width="40"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
                     </Grid>
 
-                    <act:CrossfadeHost x:Name="Pages" Grid.Row="1" Margin="18,10,18,16"/>
-                    <TextBlock x:Name="EmptyText" Grid.Row="1" Visibility="Collapsed" Style="{StaticResource TextSecondary}"
-                               HorizontalAlignment="Center" VerticalAlignment="Center"
-                               Text="Turn on Now Playing, Timer, Notes or Today in Settings"/>
+                    <!-- Expanded panel (fixed size; the island clips it while animating). -->
+                    <Grid x:Name="ExpandedPanel" Width="640" Height="190" VerticalAlignment="Top" HorizontalAlignment="Center"
+                          Opacity="0" Visibility="Hidden" IsHitTestVisible="False" RenderTransformOrigin="0.5,0">
+                        <Grid.RenderTransform>
+                            <ScaleTransform x:Name="ExpandedScale"/>
+                        </Grid.RenderTransform>
 
-                    <!-- Drag-over highlight for a tab that takes drops (text onto Notes). -->
-                    <Border x:Name="TabDropHighlight" Grid.Row="1" Margin="18,10,18,16" Visibility="Collapsed" IsHitTestVisible="False"
-                            CornerRadius="12" BorderThickness="1.5" BorderBrush="{DynamicResource AccentBrush}"
-                            Background="{DynamicResource AccentWashBrush}"/>
+                        <act:CrossfadeHost x:Name="Pages" Margin="26,18,26,20"/>
+                        <TextBlock x:Name="EmptyText" Visibility="Collapsed" Style="{StaticResource TextSecondary}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   Text="Turn on Now Playing, Timer, Notes or Today in Settings"/>
+
+                        <!-- Drag-over highlight for a tab that takes drops (text onto Notes). -->
+                        <Border x:Name="TabDropHighlight" Margin="18,12,18,14" Visibility="Collapsed" IsHitTestVisible="False"
+                                CornerRadius="18" BorderThickness="1.5" BorderBrush="{DynamicResource AccentBrush}"
+                                Background="{DynamicResource AccentWashBrush}"/>
+                    </Grid>
+
+                    <!-- Liquid-glass rim: a thin light edge along the sides and bottom that brightens toward the bottom. -->
+                    <Border x:Name="GlassRim" CornerRadius="0,0,11,11" BorderThickness="1,0,1,1.2" Opacity="0" IsHitTestVisible="False">
+                        <Border.BorderBrush>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                <GradientStop Color="#00FFFFFF" Offset="0.35"/>
+                                <GradientStop Color="#40FFFFFF" Offset="0.85"/>
+                                <GradientStop Color="#8CFFFFFF" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Border.BorderBrush>
+                    </Border>
                 </Grid>
-            </Grid>
-        </Border>
+            </Border>
+        </Grid>
+
+        <!-- Floating tab switcher under the open island: a glass capsule of icon tabs, and a round settings button. -->
+        <StackPanel x:Name="Switcher" Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,10,0,0"
+                    Opacity="0" Visibility="Hidden" IsHitTestVisible="False" RenderTransformOrigin="0.5,0">
+            <StackPanel.RenderTransform>
+                <TranslateTransform x:Name="SwitcherShift"/>
+            </StackPanel.RenderTransform>
+            <act:ActivityTabBar x:Name="Tabs" VerticalAlignment="Center"/>
+            <Button Style="{StaticResource GlassCircleButton}" Content="&#xE713;" Margin="8,0,0,0" ToolTip="Settings"
+                    Click="Settings_Click"/>
+        </StackPanel>
     </Grid>
 </Window>

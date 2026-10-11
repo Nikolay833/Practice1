@@ -14,7 +14,6 @@
 
     <SolidColorBrush x:Key="BlackBrush" Color="{StaticResource BlackColor}"/>
     <SolidColorBrush x:Key="PanelBrush" Color="{StaticResource PanelColor}"/>
-    <SolidColorBrush x:Key="PanelGlassBrush" Color="#E61C1C1E"/>
     <SolidColorBrush x:Key="SurfaceBrush" Color="{StaticResource SurfaceColor}"/>
     <SolidColorBrush x:Key="GroupBrush" Color="{StaticResource GroupColor}"/>
     <!-- Fills are translucent white, so they read the same on the black island and on grey panels (systemFill family). -->
@@ -211,6 +210,72 @@
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.35"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Liquid-glass surfaces drawn by the app itself (the island is a layered window, so the system blur cannot reach it):
+         a dark translucent fill with a light hairline rim that is brighter at the top, like Apple's glass. -->
+    <SolidColorBrush x:Key="GlassFillBrush" Color="#B31C1C1E"/>
+    <LinearGradientBrush x:Key="GlassRimBrush" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#59FFFFFF" Offset="0"/>
+        <GradientStop Color="#14FFFFFF" Offset="0.5"/>
+        <GradientStop Color="#33FFFFFF" Offset="1"/>
+    </LinearGradientBrush>
+
+    <!-- Round glass button (the settings button next to the island's tab capsule). -->
+    <Style x:Key="GlassCircleButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+        <Setter Property="Width" Value="38"/>
+        <Setter Property="Height" Value="38"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="FontFamily" Value="{StaticResource IconFont}"/>
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bd" Background="{StaticResource GlassFillBrush}" BorderBrush="{StaticResource GlassRimBrush}"
+                            BorderThickness="1" CornerRadius="19">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                          TextElement.Foreground="{TemplateBinding Foreground}"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="#CC2C2C2E"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Bd" Property="Opacity" Value="0.7"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Round toggle (grid / list view switches): grey circle, lighter while on. -->
+    <Style x:Key="ModeButton" TargetType="ToggleButton">
+        <Setter Property="Width" Value="40"/>
+        <Setter Property="Height" Value="40"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+        <Setter Property="FontFamily" Value="{StaticResource IconFont}"/>
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToggleButton">
+                    <Border x:Name="Bd" Background="#1FFFFFFF" CornerRadius="20">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                          TextElement.Foreground="{TemplateBinding Foreground}"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="#33FFFFFF"/>
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="#47FFFFFF"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -518,8 +583,8 @@
         <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
         <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
         <Setter Property="FontSize" Value="13"/>
-        <Setter Property="Padding" Value="10,4"/>
-        <Setter Property="MinWidth" Value="180"/>
+        <Setter Property="Padding" Value="8,4,10,4"/>
+        <Setter Property="MinWidth" Value="200"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="MenuItem">
@@ -527,8 +592,20 @@
                         <Border x:Name="Bd" Background="Transparent" CornerRadius="5" Padding="{TemplateBinding Padding}"
                                 SnapsToDevicePixels="True">
                             <Grid>
-                                <ContentPresenter x:Name="Header" ContentSource="Header" RecognizesAccessKey="True" VerticalAlignment="Center"/>
-                                <TextBlock x:Name="Arrow" Text="&#xE76C;" FontFamily="{StaticResource IconFont}" FontSize="9"
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="24"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <!-- Icon: a Segoe Fluent Icons glyph given as the MenuItem's Icon string -->
+                                <ContentPresenter x:Name="IconHost" Grid.Column="0" ContentSource="Icon" VerticalAlignment="Center"
+                                                  HorizontalAlignment="Left" TextElement.FontFamily="{StaticResource IconFont}"
+                                                  TextElement.FontSize="13"/>
+                                <ContentPresenter x:Name="Header" Grid.Column="1" ContentSource="Header" RecognizesAccessKey="True"
+                                                  VerticalAlignment="Center"/>
+                                <TextBlock x:Name="Gesture" Grid.Column="2" Text="{TemplateBinding InputGestureText}" Margin="18,0,0,0"
+                                           VerticalAlignment="Center" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                <TextBlock x:Name="Arrow" Grid.Column="2" Text="&#xE76C;" FontFamily="{StaticResource IconFont}" FontSize="9"
                                            HorizontalAlignment="Right" VerticalAlignment="Center" Visibility="Collapsed"
                                            Foreground="{StaticResource TextSecondaryBrush}"/>
                             </Grid>
@@ -548,10 +625,13 @@
                     <ControlTemplate.Triggers>
                         <Trigger Property="HasItems" Value="True">
                             <Setter TargetName="Arrow" Property="Visibility" Value="Visible"/>
+                            <Setter TargetName="Gesture" Property="Visibility" Value="Collapsed"/>
                         </Trigger>
                         <Trigger Property="IsHighlighted" Value="True">
                             <Setter TargetName="Bd" Property="Background" Value="{DynamicResource AccentBrush}"/>
                             <Setter TargetName="Header" Property="TextElement.Foreground" Value="{DynamicResource AccentTextBrush}"/>
+                            <Setter TargetName="IconHost" Property="TextElement.Foreground" Value="{DynamicResource AccentTextBrush}"/>
+                            <Setter TargetName="Gesture" Property="Foreground" Value="{DynamicResource AccentTextBrush}"/>
                             <Setter TargetName="Arrow" Property="Foreground" Value="{DynamicResource AccentTextBrush}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">

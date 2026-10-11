@@ -77,6 +77,27 @@ public sealed partial class ClipboardEntry : NotifyBase
         _ => "",
     };
 
+    /// <summary>Card title: "Text", "Image" or "Files".</summary>
+    [JsonIgnore]
+    public string KindTitle => Kind switch
+    {
+        ClipboardEntryKind.Image => "Image",
+        ClipboardEntryKind.Files => Files.Count == 1 ? "File" : "Files",
+        _ => "Text",
+    };
+
+    /// <summary>Card footer: "57 characters", "1628 × 1588" or "3 files".</summary>
+    [JsonIgnore]
+    public string Details => Kind switch
+    {
+        ClipboardEntryKind.Image => ImageWidth > 0 ? $"{ImageWidth} \u00D7 {ImageHeight}" : "Image",
+        ClipboardEntryKind.Files => Files.Count == 1 ? "1 file" : $"{Files.Count} files",
+        _ => (Text?.Length ?? 0) == 1 ? "1 character" : $"{Text?.Length ?? 0:N0} characters",
+    };
+
+    [JsonIgnore]
+    public bool IsImage => Kind == ClipboardEntryKind.Image;
+
     [JsonIgnore]
     public string SearchText => Kind switch
     {
@@ -91,14 +112,15 @@ public sealed partial class ClipboardEntry : NotifyBase
         get
         {
             var age = DateTime.UtcNow - _timestampUtc;
-            if (age.TotalSeconds < 10) return "Just now";
-            if (age.TotalMinutes < 1) return $"{(int)age.TotalSeconds}s ago";
-            if (age.TotalHours < 1) return $"{(int)age.TotalMinutes} min ago";
-            if (age.TotalDays < 1) return $"{(int)age.TotalHours} h ago";
-            if (age.TotalDays < 7) return $"{(int)age.TotalDays} d ago";
+            if (age.TotalMinutes < 1) return "Just now";
+            if (age.TotalHours < 1) return Ago((int)age.TotalMinutes, "minute");
+            if (age.TotalDays < 1) return Ago((int)age.TotalHours, "hour");
+            if (age.TotalDays < 7) return Ago((int)age.TotalDays, "day");
             return _timestampUtc.ToLocalTime().ToString("MMM d");
         }
     }
+
+    private static string Ago(int n, string unit) => n == 1 ? $"1 {unit} ago" : $"{n} {unit}s ago";
 
     /// <summary>Re-raises the relative timestamp (called while the popup is open).</summary>
     public void RefreshTime() => OnPropertyChanged(nameof(TimeText));

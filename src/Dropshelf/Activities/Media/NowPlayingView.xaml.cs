@@ -3,25 +3,47 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
+using Dropshelf.Services;
 
 namespace Dropshelf.Activities.Media;
 
 /// <summary>
-/// The "Now Playing" tab: big art over a soft glow of itself, title, artist, source app, a seekable scrubber and the
-/// transport buttons. The scrubber position is refreshed four times a second, and only while the tab is visible.
+/// The "Now Playing" tab: art, title, artist and a live waveform; a seekable progress bar with elapsed / remaining time;
+/// shuffle, previous, play-pause, next and repeat; and on the right where it plays from and a volume slider. The progress
+/// is refreshed four times a second, and only while the tab is visible.
 /// </summary>
 public partial class NowPlayingView : UserControl
 {
-    private const string PlayGlyph = "", PauseGlyph = "";
-
     private readonly MediaSessionService _media;
+    private readonly AudioEndpointService? _audio;
+    private readonly EqualizerBars _wave;
+    private bool _settingVolume;
     private readonly DispatcherTimer _timer;
     private bool _scrubbing;
 
-    internal NowPlayingView(MediaSessionService media)
+    internal NowPlayingView(MediaSessionService media, AudioEndpointService? audio)
     {
         InitializeComponent();
         _media = media;
+        _audio = audio;
+        _wave = new EqualizerBars(audio) { HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
+        WaveHost.Children.Add(_wave);
+
+        if (audio is { IsAvailable: true })
+        {
+            VolumeSlider.Value = audio.Muted ? 0 : audio.Volume;
+            VolumeSlider.ValueChanged += (_, e) =>
+            {
+                if (!_settingVolume)
+                {
+                    audio.SetVolume((float)e.NewValue);
+                }
+            };
+        }
+        else
+        {
+            VolumeRow.IsEnabled = false;
+        }
 
         _timer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(250) };
         _timer.Tick += (_, _) => UpdatePosition();
@@ -56,6 +78,12 @@ public partial class NowPlayingView : UserControl
     {
         _media.Changed -= OnMediaChanged;
         _media.Changed += OnMediaChanged;
+        if (_audio != null)
+        {
+            _audio.VolumeChanged -= OnVolumeChanged;
+            _audio.VolumeChanged += OnVolumeChanged;
+        }
+
         Refresh();
         if (IsVisible)
         {
@@ -66,7 +94,19 @@ public partial class NowPlayingView : UserControl
     private void Detach()
     {
         _media.Changed -= OnMediaChanged;
+        if (_audio != null)
+        {
+            _audio.VolumeChanged -= OnVolumeChanged;
+        }
+
         _timer.Stop();
+    }
+
+    private void OnVolumeChanged(float volume, bool muted)
+    {
+        _settingVolume = true;
+        VolumeSlider.Value = muted ? 0 : volume;
+        _settingVolume = false;
     }
 
     private void OnMediaChanged()
@@ -81,10 +121,20 @@ public partial class NowPlayingView : UserControl
     {
         TitleText.Text = string.IsNullOrEmpty(_media.Title) ? "Nothing playing" : _media.Title;
         ArtistText.Text = string.IsNullOrEmpty(_media.Artist) ? _media.Album : _media.Artist;
-        SourceText.Text = _media.SourceApp;
+        SourceText.Text = string.IsNullOrEmpty(_media.SourceApp) ? "Media" : _media.SourceApp;
+        SourceInitial.Text = SourceText.Text.Substring(0, 1).ToUpperInvariant();
+        AlbumText.Text = _media.Album;
         ArtImage.Source = _media.Art;
+        _wave.SetTint(_media.ArtTint);
+        _wave.Playing = _media.IsPlaying;
 
-        PlayPauseButton.Content = _media.IsPlaying ? PauseGlyph : PlayGlyph;
+        PauseIcon.Visibility = _media.IsPlaying ? Visibility.Visible : Visibility.Collapsed;
+        PlayIcon.Visibility = _media.IsPlaying ? Visibility.Collapsed : Visibility.Visible;
+        ShuffleButton.IsEnabled = _media.CanShuffle;
+        ShuffleButton.IsChecked = _media.ShuffleActive;
+        RepeatButton.IsEnabled = _media.CanRepeat;
+        RepeatButton.IsChecked = _media.RepeatMode != Windows.Media.MediaPlaybackAutoRepeatMode.None;
+        RepeatButton.Content = _media.RepeatMode == Windows.Media.MediaPlaybackAutoRepeatMode.Track ? "\uE8ED" : "\uE8EE";
         PlayPauseButton.IsEnabled = _media.CanPlayPause;
         PreviousButton.IsEnabled = _media.CanPrevious;
         NextButton.IsEnabled = _media.CanNext;
@@ -136,4 +186,16 @@ public partial class NowPlayingView : UserControl
     private async void Previous_Click(object sender, RoutedEventArgs e) => await _media.PreviousAsync();
 
     private async void Next_Click(object sender, RoutedEventArgs e) => await _media.NextAsync();
+
+    private async void Shuffle_Click(object sender, RoutedEventArgs e)
+    {
+        ShuffleButton.IsChecked = _media.ShuffleActive; // the player decides; Changed brings the new state
+        await _media.ToggleShuffleAsync();
+    }
+
+    private async void Repeat_Click(object sender, RoutedEventArgs e)
+    {
+        RepeatButton.IsChecked = _media.RepeatMode != Windows.Media.MediaPlaybackAutoRepeatMode.None;
+        await _media.CycleRepeatAsync();
+    }
 }

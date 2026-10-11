@@ -194,82 +194,9 @@ internal static class WindowHelper
     }
 }
 
-/// <summary>Acrylic blur and DWM tweaks for borderless windows. Every call fails soft.</summary>
+/// <summary>DWM tweaks for borderless windows. Every call fails soft.</summary>
 internal static class GlassHelper
 {
-    /// <summary>
-    /// Turns a borderless, non-layered window into a frosted popover: transparent client background composed by DWM,
-    /// rounded corners on Windows 11 and acrylic blur with the given AABBGGRR tint. Returns whether the blur is on; when it
-    /// is not, the window's own (translucent) XAML background shows instead.
-    /// </summary>
-    public static bool MakeFrosted(IntPtr hwnd, uint tintAabbggrr)
-    {
-        if (HwndSource.FromHwnd(hwnd)?.CompositionTarget is { } target)
-        {
-            target.BackgroundColor = System.Windows.Media.Colors.Transparent;
-        }
-
-        ExtendFrameIntoClient(hwnd);
-        TryRoundCorners(hwnd);
-        return TryEnableAcrylic(hwnd, tintAabbggrr);
-    }
-
-    /// <summary>
-    /// Enables acrylic blur-behind with the given AABBGGRR tint. Returns false when the OS rejected it
-    /// (older Windows, remote session, transparency disabled...) so the caller can use an opaque fallback.
-    /// </summary>
-    public static bool TryEnableAcrylic(IntPtr hwnd, uint tintAabbggrr)
-    {
-        IntPtr data = IntPtr.Zero;
-        try
-        {
-            var accent = new NativeMethods.AccentPolicy
-            {
-                AccentState = NativeMethods.AccentState.ACCENT_ENABLE_ACRYLICBLURBEHIND,
-                AccentFlags = 2,
-                GradientColor = tintAabbggrr,
-            };
-
-            int size = Marshal.SizeOf<NativeMethods.AccentPolicy>();
-            data = Marshal.AllocHGlobal(size);
-            Marshal.StructureToPtr(accent, data, false);
-
-            var attr = new NativeMethods.WindowCompositionAttributeData
-            {
-                Attribute = NativeMethods.WCA_ACCENT_POLICY,
-                Data = data,
-                SizeOfData = size,
-            };
-
-            return NativeMethods.SetWindowCompositionAttribute(hwnd, ref attr) != 0;
-        }
-        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or ArgumentException)
-        {
-            return false;
-        }
-        finally
-        {
-            if (data != IntPtr.Zero)
-            {
-                Marshal.FreeHGlobal(data);
-            }
-        }
-    }
-
-    /// <summary>Lets per-pixel alpha of a non-layered window show the desktop (needed for acrylic and the translucent fallback).</summary>
-    public static void ExtendFrameIntoClient(IntPtr hwnd)
-    {
-        try
-        {
-            var m = new NativeMethods.MARGINS { cxLeftWidth = -1, cxRightWidth = -1, cyTopHeight = -1, cyBottomHeight = -1 };
-            NativeMethods.DwmExtendFrameIntoClientArea(hwnd, ref m);
-        }
-        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
-        {
-            // Ignore: window just stays opaque.
-        }
-    }
-
     /// <summary>Windows 11 rounded corners for a non-layered window. No-op elsewhere.</summary>
     public static void TryRoundCorners(IntPtr hwnd)
     {

@@ -14,12 +14,15 @@ using Dropshelf.Services;
 namespace Dropshelf.Clipboard;
 
 /// <summary>
-/// Centered, searchable clipboard history popup (Ctrl+Shift+V) in the style of Spotlight: a frosted panel with a large
-/// search field. Enter copies the entry back to the clipboard, hides the popup, restores the previously focused window and
-/// sends Ctrl+V to it. The list is virtualized, so only the visible rows exist however long the history is.
+/// The clipboard history (Ctrl+Shift+V), laid out like Droppy's: a black strip at the bottom of the screen with a search
+/// field and filter capsules over a horizontal row of cards (kind, age, preview, size; the selected card has a white
+/// outline). Typing searches, Left / Right choose, Enter copies the entry back to the clipboard, hides the strip, restores
+/// the previously focused window and sends Ctrl+V to it. The cards are virtualized, so only the visible ones exist.
 /// </summary>
 public partial class ClipboardWindow : Window
 {
+    private const double StripHeight = 262, MaxStripWidth = 1180, ScreenMargin = 24;
+
     private readonly ClipboardHistoryService _history;
     private readonly ListCollectionView _view;
     private readonly DispatcherTimer _refreshTimer;
@@ -28,33 +31,16 @@ public partial class ClipboardWindow : Window
     private bool _styled;
     private bool _busy; // true while pasting so deactivation does not interfere
 
-    // Open animation: one spring from 0.94 to 1 drives scale, fade and the 8 px slide-up.
+    // Open animation: one spring from 0.94 to 1 drives a slide up from the bottom edge, a slight scale and the fade.
     private const double OpenFrom = 0.94;
-    private readonly Spring _open = new(1, 520, 0.6);
+    private readonly Spring _open = new(1, 520, 0.7);
     private readonly FrameLoop _openLoop;
-
-    // Selection highlight: springs for the bar's top and height.
-    private readonly Spring _glideY = new(0, 520, 0.8);
-    private readonly Spring _glideH = new(0, 520, 0.8);
-    private readonly FrameLoop _glideLoop;
-    private bool _glideQueued;
-    private bool _glideSnapQueued;
-    private bool _glideVisible;
 
     public ClipboardWindow(ClipboardHistoryService history)
     {
         InitializeComponent();
         _history = history;
         _openLoop = new FrameLoop(OnOpenFrame);
-        _glideLoop = new FrameLoop(OnGlideFrame);
-        EntryList.SelectionChanged += (_, _) => QueueGlide(snap: false);
-        EntryList.AddHandler(ScrollViewer.ScrollChangedEvent, new ScrollChangedEventHandler((_, e) =>
-        {
-            if (e.VerticalChange != 0)
-            {
-                QueueGlide(snap: true); // the bar must stay glued to its row while the list scrolls
-            }
-        }));
 
         // Pinned first, then newest first. Live sorting keeps the order right when a pin is toggled.
         _view = new ListCollectionView(history.Entries);
@@ -67,14 +53,14 @@ public partial class ClipboardWindow : Window
             _view.LiveSortingProperties.Add(nameof(ClipboardEntry.TimestampUtc));
         }
 
-        _view.Filter = MatchesQuery;
+        _view.Filter = Matches;
         EntryList.ItemsSource = _view;
 
         _refreshTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(20) };
         _refreshTimer.Tick += (_, _) => RefreshTimes();
     }
 
-    /// <summary>Shows the popup; shows again hides it. <paramref name="fromHotkey"/> enables the paste simulation.</summary>
+    /// <summary>Shows the strip; shows again hides it. <paramref name="fromHotkey"/> enables the paste simulation.</summary>
     public void Toggle(bool fromHotkey)
     {
         if (IsVisible)
@@ -88,6 +74,7 @@ public partial class ClipboardWindow : Window
         _pasteAfterCopy = fromHotkey && _previousWindow != IntPtr.Zero;
 
         SearchBox.Text = string.Empty;
+        FilterAll.IsChecked = true;
         _view.Refresh();
         RefreshTimes();
         UpdateEmptyText();
@@ -97,47 +84,54 @@ public partial class ClipboardWindow : Window
         if (!_styled)
         {
             WindowHelper.MakeToolWindow(hwnd, noActivate: false); // keep it out of Alt+Tab
-            if (GlassHelper.MakeFrosted(hwnd, 0xCC1E1C1C))
-            {
-                Panel.Background = Brushes.Transparent; // the acrylic tint replaces the XAML fill
-            }
-
             _styled = true;
         }
 
         var monitor = _previousWindow != IntPtr.Zero
             ? MonitorInfo.FromHandle(NativeMethods.MonitorFromWindow(_previousWindow, NativeMethods.MONITOR_DEFAULTTONEAREST))
             : MonitorInfo.UnderCursor();
-        WindowHelper.CenterOnMonitor(this, monitor, Width, Height);
+        PlaceAtBottom(monitor);
 
         StartOpenAnimation();
         Show();
-        WindowHelper.CenterOnMonitor(this, monitor, Width, Height);
+        PlaceAtBottom(monitor);
         WindowHelper.ForceForeground(hwnd);
         Activate();
         SearchBox.Focus();
         Keyboard.Focus(SearchBox);
         _refreshTimer.Start();
 
-        // Once the rows exist: stagger them in and put the highlight on the first one.
+        // Once the cards exist: let the first ones slide in one after another and bring the selection into view.
         Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
         {
-            AnimateRows();
-            QueueGlide(snap: true);
+            AnimateCards();
+            if (EntryList.SelectedItem != null)
+            {
+                EntryList.ScrollIntoView(EntryList.SelectedItem);
+            }
         }));
+    }
+
+    /// <summary>Centred along the bottom of the monitor's work area, as wide as fits (up to <see cref="MaxStripWidth"/>).</summary>
+    private void PlaceAtBottom(MonitorInfo monitor)
+    {
+        double widthDip = Math.Min(MaxStripWidth, monitor.WorkWidth / monitor.Scale - 2 * ScreenMargin);
+        int w = (int)Math.Round(widthDip * monitor.Scale);
+        int h = (int)Math.Round(StripHeight * monitor.Scale);
+        int x = monitor.WorkLeft + (monitor.WorkWidth - w) / 2;
+        int y = monitor.WorkBottom - h - (int)Math.Round(ScreenMargin * 0.5 * monitor.Scale);
+        WindowHelper.Place(this, x, y, widthDip, StripHeight, monitor.Scale);
     }
 
     private void HidePopup()
     {
         _refreshTimer.Stop();
         _openLoop.Stop();
-        _glideLoop.Stop();
         Hide();
     }
 
     // ---- Animations -----------------------------------------------------------------------------
 
-    /// <summary>Spring scale 0.94 to 1 with a fade and an 8 px slide up (the panel only; the window does not move).</summary>
     private void StartOpenAnimation()
     {
         if (AnimationSettings.IsOff)
@@ -147,7 +141,7 @@ public partial class ClipboardWindow : Window
             return;
         }
 
-        AnimationSettings.Configure(_open, 520, 0.6);
+        AnimationSettings.Configure(_open, 520, 0.7);
         _open.Target = 1;
         _open.Displace(OpenFrom);
         ApplyOpen();
@@ -171,110 +165,29 @@ public partial class ClipboardWindow : Window
     {
         double v = _open.Value;
         double u = Math.Clamp((v - OpenFrom) / (1 - OpenFrom), 0, 1); // 0..1 progress, without the overshoot
-        PanelScale.ScaleX = v;
-        PanelScale.ScaleY = v;
-        PanelShift.Y = 8 * (1 - u);
+        double scale = 0.98 + 0.02 * u;
+        PanelScale.ScaleX = scale;
+        PanelScale.ScaleY = scale;
+        PanelShift.Y = 36 * (1 - u);
         Panel.Opacity = Math.Clamp(u * 1.8, 0, 1);
     }
 
-    /// <summary>List rows fade and slide in one after the other (a few ms apart).</summary>
-    private void AnimateRows()
+    /// <summary>The first few cards (the only ones that exist: the row is virtualized) slide in one after another.</summary>
+    private void AnimateCards()
     {
         if (AnimationSettings.IsOff)
         {
             return;
         }
 
-        // Only the first screenful exists (the list is virtualized), and only that is worth animating.
-        int count = Math.Min(_view.Count, 10);
+        int count = Math.Min(_view.Count, 8);
         for (int i = 0; i < count; i++)
         {
-            if (EntryList.ItemContainerGenerator.ContainerFromIndex(i) is FrameworkElement row)
+            if (EntryList.ItemContainerGenerator.ContainerFromIndex(i) is FrameworkElement card)
             {
-                TileAnimator.SlideFadeIn(row, i * 18);
+                TileAnimator.SlideFadeIn(card, i * 22);
             }
         }
-    }
-
-    /// <summary>Moves the highlight bar to the selected row after layout has run (coalesces repeated requests).</summary>
-    private void QueueGlide(bool snap)
-    {
-        _glideSnapQueued |= snap;
-        if (_glideQueued)
-        {
-            return;
-        }
-
-        _glideQueued = true;
-        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
-        {
-            _glideQueued = false;
-            bool snapNow = _glideSnapQueued;
-            _glideSnapQueued = false;
-            UpdateGlide(snapNow);
-        }));
-    }
-
-    private void UpdateGlide(bool snap)
-    {
-        if (!IsVisible || EntryList.SelectedItem == null
-            || EntryList.ItemContainerGenerator.ContainerFromItem(EntryList.SelectedItem) is not FrameworkElement row
-            || row.ActualHeight < 1)
-        {
-            GlideBar.Visibility = Visibility.Collapsed;
-            _glideVisible = false;
-            _glideLoop.Stop();
-            return;
-        }
-
-        double top;
-        try
-        {
-            top = row.TranslatePoint(new Point(0, 0), ListHost).Y;
-        }
-        catch (InvalidOperationException)
-        {
-            return; // row not connected yet; the next layout pass will ask again
-        }
-
-        GlideBar.Visibility = Visibility.Visible;
-        if (snap || !_glideVisible || AnimationSettings.IsOff)
-        {
-            _glideY.Snap(top);
-            _glideH.Snap(row.ActualHeight);
-            _glideLoop.Stop();
-            ApplyGlide();
-        }
-        else
-        {
-            AnimationSettings.Configure(_glideY, 520, 0.8);
-            AnimationSettings.Configure(_glideH, 520, 0.8);
-            _glideY.Target = top;
-            _glideH.Target = row.ActualHeight;
-            _glideLoop.Start();
-        }
-
-        _glideVisible = true;
-    }
-
-    private bool OnGlideFrame(double dt)
-    {
-        _glideY.Step(dt);
-        _glideH.Step(dt);
-        ApplyGlide();
-        if (_glideY.SettleIfClose(0.05, 0.5) & _glideH.SettleIfClose(0.05, 0.5))
-        {
-            ApplyGlide();
-            return false;
-        }
-
-        return true;
-    }
-
-    private void ApplyGlide()
-    {
-        GlideShift.Y = _glideY.Value;
-        GlideBar.Height = Math.Max(0, _glideH.Value);
     }
 
     private void RefreshTimes()
@@ -285,19 +198,50 @@ public partial class ClipboardWindow : Window
         }
     }
 
-    private bool MatchesQuery(object item)
+    // ---- Search and filters ---------------------------------------------------------------------
+
+    private bool Matches(object item)
     {
+        if (item is not ClipboardEntry entry)
+        {
+            return false;
+        }
+
+        bool kind = FilterPinned?.IsChecked == true ? entry.IsPinned
+            : FilterText?.IsChecked == true ? entry.Kind == ClipboardEntryKind.Text
+            : FilterImages?.IsChecked == true ? entry.Kind == ClipboardEntryKind.Image
+            : FilterFiles?.IsChecked != true || entry.Kind == ClipboardEntryKind.Files;
         string query = SearchBox?.Text ?? string.Empty;
-        return string.IsNullOrWhiteSpace(query) ||
-               (item is ClipboardEntry entry && entry.SearchText.Contains(query.Trim(), StringComparison.OrdinalIgnoreCase));
+        return kind && (string.IsNullOrWhiteSpace(query) || entry.SearchText.Contains(query.Trim(), StringComparison.OrdinalIgnoreCase));
     }
 
     private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
     {
         SearchHint.Visibility = SearchBox.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (_view != null)
+        {
+            ApplyFilter();
+        }
+    }
+
+    private void Filter_Checked(object sender, RoutedEventArgs e)
+    {
+        if (_view != null)
+        {
+            ApplyFilter();
+            Keyboard.Focus(SearchBox); // typing keeps searching after a click on a filter
+        }
+    }
+
+    private void ApplyFilter()
+    {
         _view.Refresh();
         UpdateEmptyText();
         EntryList.SelectedIndex = _view.Count > 0 ? 0 : -1;
+        if (EntryList.SelectedItem != null)
+        {
+            EntryList.ScrollIntoView(EntryList.SelectedItem);
+        }
     }
 
     private void UpdateEmptyText()
@@ -315,10 +259,18 @@ public partial class ClipboardWindow : Window
     {
         switch (e.Key)
         {
-            case Key.Down: MoveSelection(1); e.Handled = true; break;
-            case Key.Up: MoveSelection(-1); e.Handled = true; break;
-            case Key.PageDown: MoveSelection(6); e.Handled = true; break;
-            case Key.PageUp: MoveSelection(-6); e.Handled = true; break;
+            case Key.Right:
+            case Key.Down:
+                MoveSelection(1);
+                e.Handled = true;
+                break;
+            case Key.Left:
+            case Key.Up:
+                MoveSelection(-1);
+                e.Handled = true;
+                break;
+            case Key.PageDown: MoveSelection(5); e.Handled = true; break;
+            case Key.PageUp: MoveSelection(-5); e.Handled = true; break;
             case Key.Enter:
                 _ = PasteSelectedAsync();
                 e.Handled = true;
@@ -380,38 +332,57 @@ public partial class ClipboardWindow : Window
         entry.IsPinned = !entry.IsPinned;
         _history.NotifyPinChanged();
         EntryList.ScrollIntoView(entry);
-        QueueGlide(snap: false); // pinned rows move; the highlight follows the entry
     }
 
     // ---- Mouse ----------------------------------------------------------------------------------
 
-    private void Pin_Click(object sender, RoutedEventArgs e)
+    /// <summary>The wheel scrolls the row of cards sideways.</summary>
+    private void EntryList_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
-        if (sender is FrameworkElement { DataContext: ClipboardEntry entry })
+        if (FindScrollViewer(EntryList) is { } scroll)
         {
-            TogglePin(entry);
+            scroll.ScrollToHorizontalOffset(scroll.HorizontalOffset - e.Delta);
+            e.Handled = true;
         }
-
-        e.Handled = true;
     }
 
-    private void EntryList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    private static ScrollViewer? FindScrollViewer(DependencyObject root)
     {
-        // Ignore double clicks that land on the pin button.
-        for (var node = e.OriginalSource as DependencyObject; node != null && node != EntryList; node = node is Visual ? VisualTreeHelper.GetParent(node) : LogicalTreeHelper.GetParent(node))
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
         {
-            if (node is System.Windows.Controls.Primitives.ButtonBase)
+            DependencyObject child = VisualTreeHelper.GetChild(root, i);
+            if (child is ScrollViewer scroll)
             {
-                return;
+                return scroll;
+            }
+
+            if (FindScrollViewer(child) is { } nested)
+            {
+                return nested;
             }
         }
 
-        _ = PasteSelectedAsync();
+        return null;
     }
+
+    private void EntryList_MouseDoubleClick(object sender, MouseButtonEventArgs e) => _ = PasteSelectedAsync();
+
+    private void PasteMenu_Click(object sender, RoutedEventArgs e) => _ = PasteSelectedAsync();
+
+    private void PinMenu_Click(object sender, RoutedEventArgs e)
+    {
+        if (EntryList.SelectedItem is ClipboardEntry entry)
+        {
+            TogglePin(entry);
+        }
+    }
+
+    private void DeleteMenu_Click(object sender, RoutedEventArgs e) => DeleteSelected();
 
     private void Window_Deactivated(object sender, EventArgs e)
     {
-        if (!_busy && IsVisible)
+        // A context menu takes the focus for a moment; that is not "clicking elsewhere".
+        if (!_busy && IsVisible && EntryList.ContextMenu is not { IsOpen: true })
         {
             HidePopup();
         }

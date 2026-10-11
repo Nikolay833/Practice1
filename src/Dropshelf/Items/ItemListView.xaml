@@ -4,14 +4,20 @@
              xmlns:local="clr-namespace:Dropshelf.Items"
              x:Name="Root">
     <UserControl.Resources>
+        <!-- Laid out like Droppy's item menu: an icon on every row; image and archive tools appear only when they apply. -->
         <ContextMenu x:Key="ItemMenu" Opened="Menu_Opened" Closed="Menu_Closed">
-            <MenuItem Header="Open" Click="Open_Click"/>
-            <MenuItem Header="Show in Explorer" Click="ShowInExplorer_Click"/>
-            <MenuItem Header="Copy" Click="Copy_Click"/>
-            <MenuItem Header="Copy text (OCR)" Tag="ocr" Click="Ocr_Click"/>
-            <MenuItem Header="Tools" Tag="tools"/>
+            <MenuItem Header="Copy" Icon="&#xE8C8;" Click="Copy_Click"/>
+            <MenuItem Header="Open" Icon="&#xE8A7;" Click="Open_Click"/>
+            <MenuItem Header="Show in Explorer" Icon="&#xE838;" Click="ShowInExplorer_Click"/>
             <Separator/>
-            <MenuItem Header="Remove" Click="Remove_Click"/>
+            <MenuItem Header="Convert to..." Icon="&#xE895;" Tag="convert"/>
+            <MenuItem Header="Resize" Icon="&#xE740;" Tag="resize"/>
+            <MenuItem Header="Extract Text" Icon="&#xE8D2;" Tag="ocr" Click="Ocr_Click"/>
+            <MenuItem Header="Compress" Icon="&#xE73F;" Tag="compress"/>
+            <MenuItem Header="Create ZIP" Icon="&#xE7B8;" Tag="zip" Click="Zip_Click"/>
+            <MenuItem Header="Extract Here" Icon="&#xE896;" Tag="unzip" Click="Unzip_Click"/>
+            <Separator Tag="tools-end"/>
+            <MenuItem Header="Remove" Icon="&#xE74D;" Click="Remove_Click"/>
         </ContextMenu>
 
         <Style x:Key="TileContainer" TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
@@ -21,46 +27,84 @@
             <Setter Property="ToolTip" Value="{Binding Path}"/>
         </Style>
 
-        <!-- Finder-style icon: the file's icon (or a picture thumbnail with rounded corners) over its name. The
-             selection is drawn by the container (a soft rounded highlight), so the tile itself has no chrome. -->
+        <!-- Finder-style icon (Droppy's basket): a large icon or picture thumbnail over its name, no tile chrome. A small grey
+             remove badge appears at the top-right corner while the pointer is over the item. -->
         <DataTemplate x:Key="TileTemplate" DataType="{x:Type local:DropItem}">
-            <StackPanel Width="{Binding TileWidth, RelativeSource={RelativeSource AncestorType={x:Type local:ItemListView}}}"
-                        Background="Transparent" Loaded="Tile_Loaded">
-                <Grid Width="48" Height="44" HorizontalAlignment="Center">
-                    <!-- Shell icon -->
-                    <Image Source="{Binding Icon}" Width="40" Height="40" Stretch="Uniform"
-                           RenderOptions.BitmapScalingMode="HighQuality">
-                        <Image.Style>
-                            <Style TargetType="Image">
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsThumbnail}" Value="True">
-                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Image.Style>
-                    </Image>
-                    <!-- Picture thumbnail, clipped to a rounded rectangle -->
-                    <Image Source="{Binding Icon}" Width="48" Height="40" Stretch="UniformToFill"
-                           RenderOptions.BitmapScalingMode="HighQuality">
-                        <Image.Clip>
-                            <RectangleGeometry Rect="0,0,48,40" RadiusX="6" RadiusY="6"/>
-                        </Image.Clip>
-                        <Image.Style>
-                            <Style TargetType="Image">
-                                <Setter Property="Visibility" Value="Collapsed"/>
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsThumbnail}" Value="True">
-                                        <Setter Property="Visibility" Value="Visible"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Image.Style>
-                    </Image>
-                </Grid>
-                <TextBlock Text="{Binding DisplayName}" Style="{StaticResource TextPrimary}" FontSize="11"
-                           TextTrimming="CharacterEllipsis" TextAlignment="Center" Margin="2,4,2,0"/>
-            </StackPanel>
+            <Grid x:Name="TileRoot" Width="{Binding TileWidth, RelativeSource={RelativeSource AncestorType={x:Type local:ItemListView}}}"
+                  Background="Transparent" Loaded="Tile_Loaded">
+                <StackPanel>
+                    <Grid Width="60" Height="56" HorizontalAlignment="Center">
+                        <!-- Shell icon -->
+                        <Image Source="{Binding Icon}" Width="52" Height="52" Stretch="Uniform"
+                               RenderOptions.BitmapScalingMode="HighQuality">
+                            <Image.Style>
+                                <Style TargetType="Image">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsThumbnail}" Value="True">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Image.Style>
+                        </Image>
+                        <!-- Picture thumbnail, clipped to a rounded rectangle -->
+                        <Image Source="{Binding Icon}" Width="60" Height="52" Stretch="UniformToFill"
+                               RenderOptions.BitmapScalingMode="HighQuality">
+                            <Image.Clip>
+                                <RectangleGeometry Rect="0,0,60,52" RadiusX="7" RadiusY="7"/>
+                            </Image.Clip>
+                            <Image.Style>
+                                <Style TargetType="Image">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsThumbnail}" Value="True">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Image.Style>
+                        </Image>
+                    </Grid>
+                    <TextBlock Text="{Binding DisplayName}" Style="{StaticResource TextPrimary}" FontSize="12" FontWeight="Medium"
+                               TextTrimming="CharacterEllipsis" TextAlignment="Center" Margin="2,6,2,0"/>
+                </StackPanel>
+                <Button x:Name="RemoveBadge" Content="&#xE711;" Width="20" Height="20" HorizontalAlignment="Right" VerticalAlignment="Top"
+                        Margin="0,-6,4,0" FontFamily="{StaticResource IconFont}" FontSize="8" Visibility="Hidden" Focusable="False"
+                        ToolTip="Remove" Click="RemoveBadge_Click">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="Bd" Background="#FF636366" CornerRadius="10">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" TextElement.Foreground="White"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Bd" Property="Background" Value="#FF8E8E93"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+            </Grid>
+            <DataTemplate.Triggers>
+                <Trigger SourceName="TileRoot" Property="IsMouseOver" Value="True">
+                    <Setter TargetName="RemoveBadge" Property="Visibility" Value="Visible"/>
+                </Trigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <!-- List row: small icon, name, and the folder it is in. -->
+        <DataTemplate x:Key="RowTemplate" DataType="{x:Type local:DropItem}">
+            <Grid Background="Transparent" Loaded="Tile_Loaded">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Image Source="{Binding Icon}" Width="28" Height="28" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"/>
+                <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding DisplayName}" Style="{StaticResource TextPrimary}" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Text="{Binding Folder}" Style="{StaticResource TextSecondary}" FontSize="11" TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
+            </Grid>
         </DataTemplate>
     </UserControl.Resources>
 

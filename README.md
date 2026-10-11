@@ -14,17 +14,20 @@ For a plain-language tour of everything it does, see [FEATURES.md](FEATURES.md).
 
 - **The island** - a pure black notch flush with the top edge of the primary screen, with the concave "shoulders" and
   rounded bottom corners of a MacBook notch. While collapsed it is click-through, so it does not block clicks on tab
-  strips or title bars underneath. Hover it (or click it, with *Open on hover* off) and it springs open into a panel with
-  an Apple segmented control of tabs: **Now Playing**, **Timer**, **Notes** and **Today**. Opening while a live activity
-  shows opens that activity's tab. Text dropped onto the open Notes tab is appended to the note.
+  strips or title bars underneath. Hover it (or click it, with *Open on hover* off) and it springs open like Droppy's
+  notch: black at the top, dark "Liquid Glass" with a light rim at the bottom, wide curved shoulders, and a floating glass
+  capsule of icon tabs (**Now Playing**, **Timer**, **Notes**, **Today**) plus a round settings button under it. Opening
+  while a live activity shows opens that activity's tab. Text dropped onto the open Notes tab is appended to the note.
 - **Live activities** - while collapsed, the island shows a leading view at its left end and a trailing view at its right
   end, like the Dynamic Island, and springs wider to fit them. Short-lived HUDs (volume, brightness, battery, Bluetooth,
   tool results, screenshots, notifications) take it over for about 1.8 seconds and then hand it back. See
   [Island activities](#island-activities).
   - **Now playing** - album art and a five-bar waveform tinted with a colour from the artwork (white without one) while
     media plays (also for ten seconds after a pause). The waveform follows the real output level (Core Audio peak meter)
-    and falls back to a pseudo-random animation. The *Now Playing* tab has the art, title, artist, source app, a thin
-    seekable scrubber and previous / play-pause / next. Works with any app that reports to Windows' media controls.
+    and falls back to a pseudo-random animation. The *Now Playing* tab follows Droppy's player: art, bold title, artist and
+    a live waveform; a thick seekable progress bar with elapsed and remaining time; big previous / play-pause / next
+    between shuffle and repeat buttons; and a right column with *Playing From* and a volume slider. Works with any app
+    that reports to Windows' media controls.
   - **Volume and brightness** - a speaker glyph, a white fill bar and the percentage. Scrolling the mouse wheel over the
     collapsed island changes the volume. The native Windows volume popup can be hidden while the HUD shows (best effort,
     see [Notes](#notes-on-the-windows-hooks)).
@@ -39,25 +42,29 @@ For a plain-language tour of everything it does, see [FEATURES.md](FEATURES.md).
     the island within ten minutes of an event.
   - **Notifications** (MSIX version only, off by default) - Windows toast notifications on the island with a red count
     badge; clicking opens the app. Privacy mode, per-app mute and do-not-disturb in fullscreen.
-- **Floating basket** - shake the mouse left and right while dragging something, or press `Ctrl+Shift+B`. A frosted
-  popover appears at the cursor and accepts files, folders, text and links (files are kept by reference; text and links
-  are saved as `.txt` / `.url` files). Drag items back out (this removes them from the basket, and it hides itself when
-  empty), double-click to open, right-click for Open, Show in Explorer, Copy, Copy text (OCR), **Tools** and Remove.
-- **Convert & compress** - basket context menu > **Tools**: *Convert to PNG / JPG*, *Resize 50 % / 25 % / to a max width*,
-  *Compress JPG (quality 80 / 60)*, *Compress to ZIP* and *Extract here* (protected against path tricks and zip bombs).
+- **Floating basket** - shake the mouse left and right while dragging something, or press `Ctrl+Shift+B`. A glass card
+  like Droppy's appears at the cursor and accepts files, folders, text and links (files are kept by reference; text and
+  links are saved as `.txt` / `.url` files). Compact, it shows a fanned stack of previews (drag it to drag everything out)
+  and an "N Files >" button; expanded, a back button, the title and total size, icon / list views and every item with a
+  hover remove badge. Drag items back out (this removes them from the basket, and it hides itself when empty),
+  double-click to open, right-click for Droppy's icon menu: Copy, Open, Show in Explorer, Convert to..., Resize, Extract
+  Text, Compress, Create ZIP, Extract Here, Remove.
+- **Convert & compress** - basket context menu: *Convert to... PNG / JPEG*, *Resize 50 % / 25 % / Max Width*,
+  *Compress JPEG (80 / 60)*, *Create ZIP* and *Extract Here* (protected against path tricks and zip bombs).
   Results are new, uniquely named files next to the source (never overwriting anything) and appear in the basket.
 - **Screenshot + OCR** - `Ctrl+Shift+S` dims every monitor; drag a region, `Enter` / release to capture, `F` for the whole
   monitor, `Esc` to cancel. The PNG is saved to `Pictures\Screenshots`, copied to the clipboard (the clipboard history
   ignores it) and the island shows a thumbnail with a **Copy text** button that runs Windows OCR.
-- **Clipboard history** - a Spotlight-style popup (`Ctrl+Shift+V`): type to search, `Enter` to paste into the window you
-  came from. Remembers text, images and file lists (default 50 entries, pinned entries are kept). Content flagged as
+- **Clipboard history** - like Droppy's: `Ctrl+Shift+V` slides a black strip of cards up from the bottom of the screen
+  (kind, age, preview, size; white outline on the selected card) with a search field and filter capsules (Clipboard,
+  Pinned, Text, Images, Files). Type to search, `Left` / `Right` to choose, `Enter` to paste into the window you came from. Remembers text, images and file lists (default 50 entries, pinned entries are kept). Content flagged as
   private by password managers is never recorded; the history is encrypted with Windows DPAPI. The list is virtualized.
 - **Quick notes** - the *Notes* tab, auto-saved and encrypted with DPAPI; `Ctrl+Shift+N` opens it with the caret in the
   editor.
 - **Apple design** - Apple's dark-mode system colours and label greys, SF Pro when installed (Segoe UI Variable
-  otherwise), iOS/macOS switches, sliders, segmented controls, plain accent buttons and macOS menus. Settings looks like
-  macOS System Settings (traffic-light window buttons, grouped sections), dialogs are macOS-style alerts, the basket and
-  clipboard popups are frosted. Accent colours are Apple's: Blue (default), Purple, Pink, Red, Orange, Yellow, Green,
+  otherwise), iOS/macOS switches, sliders, segmented controls, plain accent buttons and macOS menus with an icon on every
+  row. Settings looks like macOS System Settings (traffic-light window buttons, grouped sections) and dialogs are
+  macOS-style alerts. Accent colours are Apple's: Blue (default), Purple, Pink, Red, Orange, Yellow, Green,
   Teal, Indigo, Graphite, plus *Windows accent*.
 - **Hide in fullscreen** - the island slides up out of view while a game, video or presentation is fullscreen on its
   monitor, everything on it stops, and HUDs stay quiet (optionally except the volume HUD).
@@ -85,9 +92,10 @@ The app is built so that nothing is drawn or computed while nothing changes:
   and the per-tile hover shadow and tilt are gone.
 - **Quiet mouse hook.** The low-level hook forwards mouse moves to the UI thread only while the left button is held and at
   most every 8 ms; ordinary movement never wakes the app.
-- **No layered popups.** Settings, the clipboard history, the basket and the alerts are ordinary windows: DWM draws the
-  shadow, the Windows 11 rounded corners and the acrylic blur, instead of WPF rendering a `DropShadowEffect` into a
-  layered window on every scroll frame. The clipboard list is virtualized.
+- **No effects in popups.** Settings and the alerts are ordinary windows (DWM draws their shadow and Windows 11 rounded
+  corners) instead of layered windows rendering a `DropShadowEffect` on every scroll frame. The basket and the clipboard
+  strip are layered (for Droppy's large corner radii) but have no effects and are only resized when their layout changes.
+  The clipboard cards are virtualized.
 
 ## Animations
 
@@ -97,11 +105,11 @@ are only produced while something moves.
 - **Island** - opens with a soft, slightly bouncy spring (like the Dynamic Island) animating width, height and corner
   radius together while the panel content zooms in from 92 % and fades up; closes faster with no overshoot. Live
   activities grow it with a small spring and crossfade their content.
-- **Segmented tabs** - the thumb glides between tabs.
-- **Basket** - the content springs in from the cursor side (scale 0.86 to 1 with a slight overshoot) and collapses back;
-  dropped items fly in from the drop point.
-- **Clipboard popup** - opens with a spring scale (0.94 to 1), fade and 8 px slide-up; the first rows fade in one after
-  another and the selection highlight glides between rows.
+- **Tab capsule** - the highlight circle glides between the icon tabs; the capsule drops in under the island as it opens.
+- **Basket** - the content springs in (scale 0.86 to 1 with a slight overshoot) and collapses back, and pops when it
+  switches between compact and expanded; dropped items fly in from the drop point.
+- **Clipboard strip** - slides up from the bottom edge with a spring and fades in; the first cards fade in one after
+  another.
 
 Settings > Appearance > Animations has three levels:
 
@@ -328,10 +336,10 @@ src/Dropshelf/
   Basket/     floating basket window
   Tools/      convert / resize / compress images, zip / extract, output naming, background runner
   Screenshot/ region-capture overlay (one window per monitor), capture + save, Windows OCR
-  Clipboard/  history service, Spotlight-style popup window
+  Clipboard/  history service, the card-strip window
   Services/   hotkeys, mouse hook, shake detection, settings, installer, startup registration, crash guard, tray,
               Core Audio endpoint (volume + meter), fullscreen watcher
-  Interop/    P/Invoke, Core Audio COM declarations, app activation, window and frosted-glass helpers
+  Interop/    P/Invoke, Core Audio COM declarations, app activation, window helpers
   Settings/   settings window, alerts
   Themes/     the Apple theme (colours, fonts, control templates), accent service
 packaging/    MSIX: manifest template, tile images, build and sign scripts (makeappx / signtool)

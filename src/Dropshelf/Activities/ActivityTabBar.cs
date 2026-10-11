@@ -9,43 +9,45 @@ using Dropshelf.Animation;
 namespace Dropshelf.Activities;
 
 /// <summary>
-/// The tabs at the top of the expanded island, drawn as an Apple segmented control: a rounded grey track with a lighter
-/// "thumb" that glides (spring) behind the selected segment. With a single tab it is just that tab's title.
+/// The tab switcher that floats under the open island: a glass capsule of round icon buttons, with a lighter circle that
+/// glides (spring) behind the selected one. Each tab shows its title as a tooltip.
 /// </summary>
 internal sealed class ActivityTabBar : Border
 {
-    private const double SegmentHeight = 24, SegmentPadding = 12, Inset = 2;
+    private const double ButtonSize = 30, Gap = 2, Inset = 4;
 
     private sealed class Tab
     {
         public required string Id;
         public required Border Root;
-        public required TextBlock Text;
+        public required TextBlock Glyph;
     }
 
-    private static readonly Brush TrackFill = Frozen(Color.FromArgb(0x3D, 0x76, 0x76, 0x80));  // tertiarySystemFill
-    private static readonly Brush ThumbFill = Frozen(Color.FromRgb(0x63, 0x63, 0x66));         // systemGray2
+    private static readonly Brush ThumbFill = Frozen(Color.FromArgb(0x38, 0xFF, 0xFF, 0xFF));
 
     private readonly Border _thumb;
     private readonly TranslateTransform _thumbShift = new();
     private readonly StackPanel _strip;
     private readonly List<Tab> _tabs = new();
     private readonly Spring _x = new(0, 520, 0.85);
-    private readonly Spring _w = new(0, 520, 0.85);
     private readonly FrameLoop _loop;
     private string _selected = string.Empty;
 
     public ActivityTabBar()
     {
         _loop = new FrameLoop(OnFrame);
-        Height = SegmentHeight + 2 * Inset;
+        Height = ButtonSize + 2 * Inset;
         CornerRadius = new CornerRadius(Height / 2);
         Padding = new Thickness(Inset);
+        BorderThickness = new Thickness(1);
+        SetResourceReference(BackgroundProperty, "GlassFillBrush");
+        SetResourceReference(BorderBrushProperty, "GlassRimBrush");
 
         _thumb = new Border
         {
-            Height = SegmentHeight,
-            CornerRadius = new CornerRadius(SegmentHeight / 2),
+            Width = ButtonSize,
+            Height = ButtonSize,
+            CornerRadius = new CornerRadius(ButtonSize / 2),
             Background = ThumbFill,
             HorizontalAlignment = HorizontalAlignment.Left,
             IsHitTestVisible = false,
@@ -61,28 +63,33 @@ internal sealed class ActivityTabBar : Border
 
     public string Selected => _selected;
 
-    public void SetTabs(IReadOnlyList<(string Id, string Title)> tabs)
+    /// <summary>Rebuilds the buttons: one per tab, showing <c>Glyph</c> (Segoe Fluent Icons) with <c>Title</c> as tooltip.</summary>
+    public void SetTabs(IReadOnlyList<(string Id, string Title, string Glyph)> tabs)
     {
         _strip.Children.Clear();
         _tabs.Clear();
-        foreach ((string id, string title) in tabs)
+        foreach ((string id, string title, string glyph) in tabs)
         {
             var text = new TextBlock
             {
-                Text = title,
-                FontSize = 12,
-                FontWeight = FontWeights.SemiBold,
+                Text = glyph,
+                FontSize = 14,
                 VerticalAlignment = VerticalAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Center,
             };
+            text.SetResourceReference(TextBlock.FontFamilyProperty, "IconFont");
             var root = new Border
             {
-                Height = SegmentHeight,
+                Width = ButtonSize,
+                Height = ButtonSize,
+                CornerRadius = new CornerRadius(ButtonSize / 2),
                 Background = Brushes.Transparent,
                 Cursor = Cursors.Hand,
                 Child = text,
+                ToolTip = title,
+                Margin = new Thickness(0, 0, Gap, 0),
             };
-            var tab = new Tab { Id = id, Root = root, Text = text };
+            var tab = new Tab { Id = id, Root = root, Glyph = text };
             root.MouseLeftButtonUp += (_, e) =>
             {
                 TabClicked?.Invoke(id);
@@ -90,17 +97,25 @@ internal sealed class ActivityTabBar : Border
             };
             root.MouseEnter += (_, _) => Restyle(tab, hover: true);
             root.MouseLeave += (_, _) => Restyle(tab, hover: false);
-            root.SizeChanged += (_, _) => Retarget(animate: false);
             _tabs.Add(tab);
             _strip.Children.Add(root);
         }
 
-        if (_tabs.Count > 0 && _tabs.TrueForAll(t => t.Id != _selected))
+        if (_tabs.Count > 0)
         {
-            _selected = _tabs[0].Id;
+            _tabs[^1].Root.Margin = new Thickness(0);
+            if (_tabs.TrueForAll(t => t.Id != _selected))
+            {
+                _selected = _tabs[0].Id;
+            }
         }
 
-        ApplyTabLook();
+        Visibility = _tabs.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
+        foreach (Tab tab in _tabs)
+        {
+            Restyle(tab, hover: false);
+        }
+
         Retarget(animate: false);
     }
 
@@ -112,79 +127,50 @@ internal sealed class ActivityTabBar : Border
         }
 
         _selected = id;
-        ApplyTabLook();
-        Retarget(animate: !instant);
-    }
-
-    private void ApplyTabLook()
-    {
-        bool single = _tabs.Count <= 1;
-        Background = single ? Brushes.Transparent : TrackFill;
         foreach (Tab tab in _tabs)
         {
-            tab.Root.Padding = new Thickness(single ? 2 : SegmentPadding, 0, single ? 2 : SegmentPadding, 0);
-            tab.Text.FontSize = single ? 14 : 12;
             Restyle(tab, hover: false);
         }
+
+        Retarget(animate: !instant);
     }
 
     private void Restyle(Tab tab, bool hover)
     {
-        bool selected = tab.Id == _selected || _tabs.Count <= 1;
-        tab.Text.SetResourceReference(TextBlock.ForegroundProperty, selected || hover ? "TextBrush" : "TextSecondaryBrush");
+        bool selected = tab.Id == _selected;
+        tab.Glyph.SetResourceReference(TextBlock.ForegroundProperty, selected || hover ? "TextBrush" : "TextSecondaryBrush");
     }
 
     private void Retarget(bool animate)
     {
-        if (_tabs.Count <= 1)
+        int index = _tabs.FindIndex(t => t.Id == _selected);
+        if (index < 0)
         {
             _thumb.Visibility = Visibility.Collapsed;
             return;
         }
 
-        double x = 0;
-        foreach (Tab tab in _tabs)
+        double x = index * (ButtonSize + Gap);
+        bool first = _thumb.Visibility != Visibility.Visible;
+        _thumb.Visibility = Visibility.Visible;
+        _x.Target = x;
+        if (!animate || first || AnimationSettings.IsOff || !IsVisible)
         {
-            double width = tab.Root.ActualWidth;
-            if (tab.Id == _selected)
-            {
-                bool first = _thumb.Visibility != Visibility.Visible;
-                _thumb.Visibility = Visibility.Visible;
-                _x.Target = x;
-                _w.Target = width;
-                if (!animate || first || AnimationSettings.IsOff || !IsVisible)
-                {
-                    _loop.Stop();
-                    _x.Snap(x);
-                    _w.Snap(width);
-                    Apply();
-                }
-                else
-                {
-                    AnimationSettings.Configure(_x, 520, 0.85);
-                    AnimationSettings.Configure(_w, 520, 0.85);
-                    _loop.Start();
-                }
-
-                return;
-            }
-
-            x += width;
+            _loop.Stop();
+            _x.Snap(x);
+            _thumbShift.X = x;
+            return;
         }
+
+        AnimationSettings.Configure(_x, 520, 0.85);
+        _loop.Start();
     }
 
     private bool OnFrame(double dt)
     {
         _x.Step(dt);
-        _w.Step(dt);
-        Apply();
-        return !(_x.SettleIfClose(0.05, 0.5) & _w.SettleIfClose(0.05, 0.5));
-    }
-
-    private void Apply()
-    {
         _thumbShift.X = _x.Value;
-        _thumb.Width = Math.Max(0, _w.Value);
+        return !_x.SettleIfClose(0.05, 0.5);
     }
 
     private static Brush Frozen(Color color)

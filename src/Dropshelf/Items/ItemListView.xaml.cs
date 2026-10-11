@@ -30,6 +30,10 @@ public partial class ItemListView : UserControl
         nameof(IsWrap), typeof(bool), typeof(ItemListView),
         new PropertyMetadata(false, (d, _) => ((ItemListView)d).ApplyLayout()));
 
+    public static readonly DependencyProperty IsListModeProperty = DependencyProperty.Register(
+        nameof(IsListMode), typeof(bool), typeof(ItemListView),
+        new PropertyMetadata(false, (d, _) => ((ItemListView)d).ApplyLayout()));
+
     public static readonly DependencyProperty TileWidthProperty = DependencyProperty.Register(
         nameof(TileWidth), typeof(double), typeof(ItemListView), new PropertyMetadata(84.0));
 
@@ -53,6 +57,9 @@ public partial class ItemListView : UserControl
     public bool IsWrap { get => (bool)GetValue(IsWrapProperty); set => SetValue(IsWrapProperty, value); }
 
     public double TileWidth { get => (double)GetValue(TileWidthProperty); set => SetValue(TileWidthProperty, value); }
+
+    /// <summary>One row per item (icon, name, folder) instead of icons.</summary>
+    public bool IsListMode { get => (bool)GetValue(IsListModeProperty); set => SetValue(IsListModeProperty, value); }
 
     /// <summary>When true, any successful drop (copy or move) removes the dragged items (basket behaviour).</summary>
     public bool RemoveOnAnyDrop { get; set; }
@@ -186,15 +193,17 @@ public partial class ItemListView : UserControl
             return;
         }
 
-        var factory = new FrameworkElementFactory(IsWrap ? typeof(WrapPanel) : typeof(StackPanel));
-        if (!IsWrap)
+        bool vertical = IsWrap || IsListMode;
+        var factory = new FrameworkElementFactory(IsListMode ? typeof(StackPanel) : IsWrap ? typeof(WrapPanel) : typeof(StackPanel));
+        if (!vertical)
         {
             factory.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
         }
 
         List.ItemsPanel = new ItemsPanelTemplate(factory);
-        ScrollViewer.SetHorizontalScrollBarVisibility(List, IsWrap ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Auto);
-        ScrollViewer.SetVerticalScrollBarVisibility(List, IsWrap ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled);
+        List.ItemTemplate = (DataTemplate)FindResource(IsListMode ? "RowTemplate" : "TileTemplate");
+        ScrollViewer.SetHorizontalScrollBarVisibility(List, vertical ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Auto);
+        ScrollViewer.SetVerticalScrollBarVisibility(List, vertical ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled);
     }
 
     private void SetBusy(bool? menu = null, bool? dragging = null)
@@ -293,12 +302,21 @@ public partial class ItemListView : UserControl
 
     private void StartDrag(DropItem pressed)
     {
+        var items = List.SelectedItems.Contains(pressed) ? SelectedItems() : new List<DropItem> { pressed };
+        DragItems(items, List);
+    }
+
+    /// <summary>
+    /// Drags <paramref name="items"/> out of the store (the basket's stacked preview drags all of them). Files and folders
+    /// are offered as copies only; afterwards the items leave the store as described in <see cref="RemoveOnAnyDrop"/>.
+    /// </summary>
+    public void DragItems(IReadOnlyList<DropItem> items, DependencyObject source)
+    {
         if (_store == null)
         {
             return;
         }
 
-        var items = List.SelectedItems.Contains(pressed) ? SelectedItems() : new List<DropItem> { pressed };
         var existing = items.Where(i => i.Exists).ToList();
         if (existing.Count == 0)
         {
@@ -319,7 +337,7 @@ public partial class ItemListView : UserControl
         SetBusy(dragging: true);
         try
         {
-            result = DragDrop.DoDragDrop(List, data, allowed);
+            result = DragDrop.DoDragDrop(source, data, allowed);
         }
         catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException)
         {
@@ -436,52 +454,63 @@ public partial class ItemListView : UserControl
 
     // ---- Tools (convert, resize, compress, zip) and OCR ----------------------------------------------
 
-    /// <summary>Rebuilds the "Tools" sub-menu for the current selection and shows "Copy text (OCR)" when pictures are selected.</summary>
+    /// <summary>Fills the image sub-menus for the current selection and shows only the tools that apply to it.</summary>
     private void PrepareMenu(ContextMenu menu)
     {
         var existing = SelectedItems().Where(i => i.Exists).ToList();
         var images = existing.Where(i => i.Kind == DropItemKind.File && ImageOps.IsImage(i.Path)).Select(i => i.Path).ToList();
         var zips = existing.Where(i => i.Kind == DropItemKind.File && ZipOps.IsZip(i.Path)).Select(i => i.Path).ToList();
-        var all = existing.Select(i => i.Path).ToList();
+        _menuAll = existing.Select(i => i.Path).ToList();
+        _menuZips = zips;
 
-        foreach (MenuItem item in menu.Items.OfType<MenuItem>())
+        foreach (object entry in menu.Items)
         {
-            switch (item.Tag as string)
+            if (entry is not FrameworkElement element)
             {
-                case "ocr":
-                    item.Visibility = images.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-                    break;
-                case "tools":
+                continue;
+            }
+
+            switch (element.Tag as string)
+            {
+                case "convert" when element is MenuItem item:
                     item.Items.Clear();
-                    if (images.Count > 0)
-                    {
-                        AddTool(item, "Convert to PNG", ToolKind.ConvertPng, images);
-                        AddTool(item, "Convert to JPG", ToolKind.ConvertJpg, images);
-                        item.Items.Add(new Separator());
-                        AddTool(item, "Resize 50%", ToolKind.Resize50, images);
-                        AddTool(item, "Resize 25%", ToolKind.Resize25, images);
-                        AddTool(item, "Resize to max width...", ToolKind.ResizeToWidth, images);
-                        item.Items.Add(new Separator());
-                        AddTool(item, "Compress JPG (quality 80)", ToolKind.CompressJpg80, images);
-                        AddTool(item, "Compress JPG (quality 60)", ToolKind.CompressJpg60, images);
-                        item.Items.Add(new Separator());
-                    }
-
-                    if (all.Count > 0)
-                    {
-                        AddTool(item, all.Count == 1 ? "Compress to ZIP" : $"Compress {all.Count} items to ZIP", ToolKind.Zip, all);
-                    }
-
-                    if (zips.Count > 0)
-                    {
-                        AddTool(item, "Extract here", ToolKind.Unzip, zips);
-                    }
-
-                    item.IsEnabled = item.Items.Count > 0;
+                    AddTool(item, "PNG", ToolKind.ConvertPng, images);
+                    AddTool(item, "JPEG", ToolKind.ConvertJpg, images);
+                    element.Visibility = images.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+                    break;
+                case "resize" when element is MenuItem item:
+                    item.Items.Clear();
+                    AddTool(item, "50%", ToolKind.Resize50, images);
+                    AddTool(item, "25%", ToolKind.Resize25, images);
+                    AddTool(item, "Max Width...", ToolKind.ResizeToWidth, images);
+                    element.Visibility = images.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+                    break;
+                case "compress" when element is MenuItem item:
+                    item.Items.Clear();
+                    AddTool(item, "JPEG, High Quality (80)", ToolKind.CompressJpg80, images);
+                    AddTool(item, "JPEG, Smaller (60)", ToolKind.CompressJpg60, images);
+                    element.Visibility = images.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+                    break;
+                case "ocr":
+                    element.Visibility = images.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+                    break;
+                case "zip" when element is MenuItem item:
+                    item.Header = _menuAll.Count > 1 ? $"Create ZIP of {_menuAll.Count} Items" : "Create ZIP";
+                    element.Visibility = _menuAll.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+                    break;
+                case "unzip":
+                    element.Visibility = zips.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
                     break;
             }
         }
     }
+
+    private List<string> _menuAll = new();
+    private List<string> _menuZips = new();
+
+    private void Zip_Click(object sender, RoutedEventArgs e) => RunTool(ToolKind.Zip, _menuAll);
+
+    private void Unzip_Click(object sender, RoutedEventArgs e) => RunTool(ToolKind.Unzip, _menuZips);
 
     private void AddTool(MenuItem parent, string header, ToolKind kind, List<string> paths)
     {
@@ -561,6 +590,17 @@ public partial class ItemListView : UserControl
     }
 
     private void Remove_Click(object sender, RoutedEventArgs e) => _store?.Remove(SelectedItems());
+
+    /// <summary>The grey badge on a hovered tile removes just that item.</summary>
+    private void RemoveBadge_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: DropItem item })
+        {
+            _store?.Remove([item]);
+        }
+
+        e.Handled = true;
+    }
 
     private void OpenItems(IEnumerable<DropItem> items)
     {

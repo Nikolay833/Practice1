@@ -31,8 +31,10 @@ namespace Dropshelf.Island;
 public partial class IslandWindow : Window
 {
     private const double CollapsedWidth = 184, CollapsedHeight = 32, CollapsedRadius = 11;
-    private const double ExpandedWidth = 640, ExpandedHeight = 188, ExpandedRadius = 30;
-    private const double Shoulder = 6;            // concave corners on both sides of the top edge
+    private const double ExpandedWidth = 640, ExpandedHeight = 190, ExpandedRadius = 32;
+    private const double ShoulderClosed = 6, ShoulderOpen = 18;   // concave corners where the notch meets the top edge
+    private const double SwitcherSpace = 48;      // the tab capsule under the open island: 10 gap + 38 capsule
+    private const byte GlassAlpha = 0xB8;         // how opaque the bottom of the open island is (black at the top)
     private const double CompactGap = 40;         // empty middle between the leading and trailing views
     private const double CompactPad = 12;         // space between a compact view and the island edge
     private const double Overshoot = 1.06;        // window headroom for the opening spring's overshoot
@@ -61,7 +63,7 @@ public partial class IslandWindow : Window
 
     // Last values pushed to Win32 / WPF, so unchanged frames cost nothing.
     private int _winX = int.MinValue, _winY = int.MinValue, _winW, _winH;
-    private double _lastW = -1, _lastH = -1, _lastR = -1;
+    private double _lastW = -1, _lastH = -1, _lastR = -1, _lastS = -1;
 
     private long _holdUntilTick;       // keeps a tray / hotkey expansion open for a moment
     private long _hoverSince;          // tick when the cursor started resting on the collapsed island, 0 = not hovering
@@ -218,6 +220,7 @@ public partial class IslandWindow : Window
 
         ExpandedPanel.Visibility = Visibility.Visible; // now, not on the next frame: Ctrl+Shift+N focuses the editor right away
         ExpandedPanel.IsHitTestVisible = true;
+        Switcher.IsHitTestVisible = true;
         AnimateTo(1);
     }
 
@@ -234,6 +237,7 @@ public partial class IslandWindow : Window
         RestoreNoActivate();
         _activities.SetExpandedOpen(false);
         ExpandedPanel.IsHitTestVisible = false;
+        Switcher.IsHitTestVisible = false;
         TabDropHighlight.Visibility = Visibility.Collapsed;
         AnimateTo(0);
 
@@ -405,19 +409,39 @@ public partial class IslandWindow : Window
         double h = Math.Max(1, Lerp(ch, ExpandedHeight, p));
         double r = Math.Clamp(Lerp(CollapsedRadius, ExpandedRadius, p), 0, h / 2);
 
-        if (Math.Abs(w - _lastW) > 0.01 || Math.Abs(h - _lastH) > 0.01)
+        double open01 = Math.Clamp(p, 0, 1);
+        double shoulder = Lerp(ShoulderClosed, ShoulderOpen, open01);
+        if (Math.Abs(w - _lastW) > 0.01 || Math.Abs(h - _lastH) > 0.01 || Math.Abs(shoulder - _lastS) > 0.01)
         {
             _lastW = w;
             _lastH = h;
-            Island.Width = w + 2 * Shoulder;
+            _lastS = shoulder;
+            Island.Width = w + 2 * shoulder;
             Island.Height = h;
+            LeftShoulderColumn.Width = new GridLength(shoulder);
+            RightShoulderColumn.Width = new GridLength(shoulder);
+            LeftShoulder.Width = LeftShoulder.Height = shoulder;
+            RightShoulder.Width = RightShoulder.Height = shoulder;
         }
 
         if (Math.Abs(r - _lastR) > 0.01)
         {
             _lastR = r;
-            Body.CornerRadius = new CornerRadius(0, 0, r, r);
+            var corners = new CornerRadius(0, 0, r, r);
+            Body.CornerRadius = corners;
+            GlassRim.CornerRadius = corners;
         }
+
+        // Liquid glass: the open island stays black at the top (it is the notch) and turns into dark glass toward the bottom,
+        // with a light rim. Closed it is solid black.
+        byte bottom = (byte)Math.Round(255 - (255 - GlassAlpha) * open01);
+        if (GlassBottom.Color.A != bottom)
+        {
+            GlassBottom.Color = Color.FromArgb(bottom, 0, 0, 0);
+            GlassMid.Color = Color.FromArgb((byte)Math.Round(255 - (255 - GlassAlpha) * open01 * 0.25), 0, 0, 0);
+        }
+
+        GlassRim.Opacity = open01;
 
         // A layer that cannot be seen is hidden, not just transparent: its views (the waveform, the Now Playing scrubber)
         // stop their timers when they are not visible, so nothing repaints the window for content nobody can see.
@@ -431,14 +455,17 @@ public partial class IslandWindow : Window
         double panel = Math.Clamp((p - 0.35) / 0.5, 0, 1);
         ExpandedPanel.Opacity = panel;
         ExpandedPanel.Visibility = _expanded || panel > 0.001 ? Visibility.Visible : Visibility.Hidden;
+        Switcher.Opacity = panel;
+        Switcher.Visibility = ExpandedPanel.Visibility;
+        SwitcherShift.Y = -10 * (1 - panel);
         double zoom = Lerp(0.92, 1, Math.Clamp(p, 0, 1));
         ExpandedScale.ScaleX = zoom;
         ExpandedScale.ScaleY = zoom;
 
         // Window: exactly the island when settled; while animating, big enough for where the springs are heading.
         double scale = _monitor.Scale;
-        int needW = (int)Math.Ceiling((w + 2 * Shoulder) * scale);
-        int needH = (int)Math.Ceiling(h * scale);
+        int needW = (int)Math.Ceiling((w + 2 * shoulder) * scale);
+        int needH = (int)Math.Ceiling((h + (_expanded || panel > 0.001 ? SwitcherSpace : 0)) * scale);
         int winW = _winW, winH = _winH;
         if (settled)
         {
@@ -450,13 +477,13 @@ public partial class IslandWindow : Window
             double t = Math.Max(_progress.Target, Math.Clamp(_progress.Value, 0, 1));
             double headW = Math.Max(Lerp(_collapsedW.Target, ExpandedWidth, t), w) * (t > 0.5 ? Overshoot : 1.04);
             double headH = Math.Max(Lerp(_collapsedH.Target, ExpandedHeight, t), h) * (t > 0.5 ? Overshoot : 1.04);
-            winW = Math.Max(needW, (int)Math.Ceiling((headW + 2 * Shoulder) * scale));
-            winH = Math.Max(needH, (int)Math.Ceiling(headH * scale));
+            winW = Math.Max(needW, (int)Math.Ceiling((headW + 2 * ShoulderOpen) * scale));
+            winH = Math.Max(needH, (int)Math.Ceiling((headH + (t > 0.5 ? SwitcherSpace : 0)) * scale));
         }
 
         int x = _monitor.Left + (_monitor.Width - winW) / 2;
         double hide = Math.Clamp(_hide.Value, 0, 1);
-        int y = _monitor.Top - (int)Math.Round(needH * hide); // flush with the top edge; slides away for fullscreen apps
+        int y = _monitor.Top - (int)Math.Round(h * scale * hide); // flush with the top edge; slides away for fullscreen apps
         if (x != _winX || y != _winY || winW != _winW || winH != _winH)
         {
             bool sized = winW != _winW || winH != _winH;
@@ -491,10 +518,12 @@ public partial class IslandWindow : Window
         return new NativeMethods.RECT { Left = left, Top = top, Right = left + w, Bottom = top + h };
     }
 
+    /// <summary>Is the point over the island (or, while it is open, over the tab capsule under it)?</summary>
     private bool IslandContains(NativeMethods.POINT p, int margin)
     {
         NativeMethods.RECT r = IslandRect();
-        return p.X >= r.Left - margin && p.X < r.Right + margin && p.Y >= r.Top - margin && p.Y < r.Bottom + margin;
+        int bottom = r.Bottom + (_expanded ? (int)Math.Round(SwitcherSpace * _monitor.Scale) : 0);
+        return p.X >= r.Left - margin && p.X < r.Right + margin && p.Y >= r.Top - margin && p.Y < bottom + margin;
     }
 
     /// <summary>The animation setting changed: jump to the final state when animations are off.</summary>
@@ -655,10 +684,20 @@ public partial class IslandWindow : Window
 
     // ---- Tabs ---------------------------------------------------------------------------------------
 
+    /// <summary>Icon of each tab in the switcher capsule (Segoe Fluent Icons).</summary>
+    private static string TabGlyph(string id) => id switch
+    {
+        "media" => "\uEC4F",   // music note
+        "timer" => "\uE916",   // stopwatch
+        "notes" => "\uE70B",   // note
+        "today" => "\uE787",   // calendar
+        _ => "\uE10F",         // home
+    };
+
     /// <summary>One tab per activity that currently has an expanded view.</summary>
     private void RebuildTabs()
     {
-        var tabs = _activities.TabActivities.Select(a => (a.Id, a.TabTitle!)).ToList();
+        var tabs = _activities.TabActivities.Select(a => (a.Id, a.TabTitle!, TabGlyph(a.Id))).ToList();
         string key = string.Join('|', tabs.Select(t => t.Id));
         if (key != _tabKey)
         {

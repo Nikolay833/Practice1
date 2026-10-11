@@ -44,7 +44,7 @@
 ## 1. What is this?
 
 **Dropshelf is a free helper app for Windows 10 and 11.** It puts a small black notch at the top-centre of your screen,
-designed to look and move like Apple's MacBook notch and the iPhone's **Dynamic Island**. While closed it shows live
+designed to look and move like Apple's MacBook notch, the iPhone's **Dynamic Island** and the Mac notch app **Droppy**. While closed it shows live
 information: the song that is playing, a running timer, your volume, your battery, your next meeting. Hover over it and
 it springs open into a small control centre with Now Playing controls, a timer, notes and your day's agenda.
 
@@ -72,13 +72,14 @@ run on Windows.)
  │                                                                                  │
  │   hover over it and it springs open:                                              │
  │                                                                                  │
- │        ◢████████████████████████████████████████████████████████◣               │
- │         █ ( Now Playing | Timer | Notes | Today )            ⚙ █  ← tabs          │
- │         █  ┌────┐ Song title                          Spotify  █                 │
- │         █  │ ♪  │ Artist                                       █                 │
- │         █  └────┘ 0:42 ━━━━━━━━━━━━────────────────── 2:18     █                 │
- │         █               ⏮        ⏯        ⏭                    █                 │
- │          ◥██████████████████████████████████████████████████████◤                │
+ │      ◢◣█████████████████████████████████████████████████████████◢◣  black ...      │
+ │        █ ┌────┐ Come to Life        ▂▅▃   │ Playing From           █                │
+ │        █ │ ♪  │ Artist                    │ Spotify                █                │
+ │        █ └────┘                           │                        █                │
+ │        █ 2:16 ━━━━━━━━━━━━━━━──────── -0:46 │ Volume                 █                │
+ │        ▒ [⇄]      ◀◀    ❚❚    ▶▶      [↻] │ 🔈 ━━━━━━━──── 🔊     ▒  ... to glass  │
+ │         ◥▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒◤                  │
+ │                             ( ♪  ⏱  ✎  ▦ )  ( ⚙ )      ← floating tab capsule     │
  └──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -86,7 +87,9 @@ run on Windows.)
   the edge of the screen and rounded bottom corners, exactly like a MacBook notch.
 - **Live activity:** the notch widens; a picture or icon sits at its left end and live information at its right end,
   like the Dynamic Island.
-- **Open:** a 640 × 188 pixel black panel with a segmented control of tabs.
+- **Open:** a 640 × 190 pixel panel that is black at the top (it grows out of the notch) and turns into dark glass with
+  a bright rim at the bottom, with wide curved shoulders where it meets the screen edge. Under it floats a glass capsule
+  of round icon tabs and a round settings button, like Droppy.
 
 ---
 
@@ -217,14 +220,15 @@ and about 16 times a second when you are close.
   screen does not pop it open.
 - **Click:** with *Open on hover* off, click it to open.
 - It **closes by itself** about 0.35 seconds after the mouse leaves, but never while you are typing in it.
-- Opening uses a soft, slightly bouncy spring like the Dynamic Island: the notch stretches into a rounded panel and the
-  contents zoom in and fade up as it opens.
+- Opening uses a soft, slightly bouncy spring like the Dynamic Island: the notch stretches into a rounded panel, its
+  shoulders sweep wider, the lower half turns to glass, the contents zoom in and the tab capsule drops in under it.
 
-### Tabs inside the open island
+### Tabs under the open island
 
-At the top of the open island there is an Apple-style **segmented control** with one tab per feature that is turned on:
-**Now Playing** (while something plays), **Timer**, **Notes** and **Today**. A lighter "thumb" glides behind the selected
-tab. On the right there is a round **settings** button.
+Under the open island floats a **glass capsule of round icon tabs** (like Droppy's switcher), one per feature that is
+turned on: **Now Playing** ♪ (while something plays), **Timer** ⏱, **Notes** ✎ and **Today** ▦. A lighter circle glides
+behind the selected tab; pointing at a tab shows its name. Next to the capsule is a round glass **settings** button. The
+panel itself has no header, so its content uses the whole island.
 
 When you open the island while a live activity is showing (a song, a running timer), it opens on that activity's tab,
 just like long-pressing the Dynamic Island. Otherwise it opens on the tab you used last.
@@ -250,17 +254,19 @@ Earlier versions lagged. This version was reworked around one rule: **never draw
 - **The mouse hook is quiet.** The global mouse listener (needed for "shake to open basket" and "scroll for volume") used
   to wake the app for every single mouse movement, up to 1000 times a second with a gaming mouse. It now only passes on
   movements while the left button is held (that is, while dragging), and at most 125 times a second.
-- **No more drop-shadow effects on big windows.** Settings, the clipboard history, the basket and the dialogs used to be
-  see-through windows with a blurred shadow drawn by the app, which made scrolling slow. They are now ordinary windows:
-  Windows itself draws the shadow, the rounded corners (Windows 11) and the frosted-glass blur.
-- **The clipboard list is virtualized.** Only the rows you can see exist, however long your history is (up to 500).
+- **No more drop-shadow effects.** Settings, the clipboard history, the basket and the dialogs used to draw a blurred
+  shadow themselves, which made scrolling slow. Settings and the dialogs are now ordinary windows (Windows draws their
+  shadow and rounded corners); the basket and the clipboard strip have no effects at all, and they change size only
+  when their layout changes, never while animating.
+- **The clipboard cards are virtualized.** Only the cards you can see exist, however long your history is (up to 500).
 - **No hover effects on basket items** (they used a blurred shadow and a 3D tilt per item).
 
 ---
 
 ## 7. The basket
 
-The basket is a floating drop zone that comes to *you* while you are dragging something.
+The basket is a floating drop zone that comes to *you* while you are dragging something. It is laid out like Droppy's
+basket.
 
 **How to open it:**
 
@@ -269,9 +275,8 @@ The basket is a floating drop zone that comes to *you* while you are dragging so
 - Or press **Ctrl+Shift+B** at any time.
 - Or use the tray menu → *Open basket*.
 
-**What it is:** a 272 × 272 pixel frosted-glass popover (real blur on Windows 10 and 11, rounded corners on Windows 11,
-see-through dark when transparency effects are off). It springs open at your mouse pointer, stays on top, and accepts
-drops of files, folders, text and web links. Items appear as Finder-style icons with their names.
+**What it is:** a dark glass card with large rounded corners and a grab handle on top, springing open at your mouse
+pointer. It stays on top and accepts drops of files, folders, text and web links.
 
 | You drop | What the basket keeps |
 |---|---|
@@ -279,18 +284,28 @@ drops of files, folders, text and web links. Items appear as Finder-style icons 
 | Selected text (from a browser, Word...) | The text, saved as a small `.txt` file so you can drag it out as a file later. |
 | A web link (from a browser's address bar) | A `.url` shortcut. Only `http://` and `https://` links are accepted, for safety. Anything else is kept as text. |
 
-**Using it:**
+**Two layouts:**
+
+- **Compact** (what you see first): a **✕** button, a **⌄** menu button (*Show All*, *Copy All*, *Clear Basket*), the newest
+  items as a **fanned stack of previews**, and a capsule button like **"3 Images ›"**, **"1 Video ›"** or **"5 Files ›"**.
+  **Drag the stack** to drag *everything* out at once. Double-click the stack or press the capsule to see all items.
+- **Expanded:** a round **‹ back** button, the title ("5 Files") with the **total size** under it ("258.1 MB"), and round
+  **icon / list** buttons. Items are big icons or picture thumbnails with their names (no boxes around them); pointing at
+  one shows a small grey **✕** to remove it. List view shows a small icon, the name and the folder.
+
+**Using the items:**
 
 - **Drag** an item out to a folder, the desktop, an email, a chat, anywhere that accepts files. Each item you drag out
   leaves the basket, and the basket closes by itself when it is empty.
 - **Several at once:** Ctrl+click to pick individual items, Shift+click for a range, then drag any of the selected ones.
 - **Files and folders are always copied out**, never moved, so your original file stays exactly where it was.
 - **Double-click** an item to open it.
-- **Right-click** an item for *Open*, *Show in Explorer*, *Copy*, *Copy text (OCR)* for pictures, *Tools* (see
-  [section 14](#14-file-tools-convert-resize-compress-zip)) and *Remove*.
-- **Clear** empties the basket; **×** closes it. Drag the header to move it.
+- **Right-click** an item for Droppy's menu (each row with an icon): *Copy*, *Open*, *Show in Explorer*, then for pictures
+  *Convert to…*, *Resize*, *Extract Text* and *Compress*, then *Create ZIP*, *Extract Here* for zips, and *Remove* (see
+  [section 14](#14-file-tools-convert-resize-compress-zip)).
 
-The basket never steals keyboard focus from the app you are working in. Its contents are not kept after a restart.
+Drag the grab handle (or the header) to move the basket. It never steals keyboard focus from the app you are working in.
+Its contents are not kept after a restart.
 
 ---
 
@@ -299,8 +314,12 @@ The basket never steals keyboard focus from the app you are working in. Its cont
 Normally Windows only remembers the last thing you copied. Dropshelf remembers the **last 50** (you can choose 10 to
 500).
 
-**Open it:** press **Ctrl+Shift+V** anywhere. A frosted, Spotlight-style window springs open in the middle of the
-screen with a large search field, already selected.
+**Open it:** press **Ctrl+Shift+V** anywhere. Like Droppy's clipboard, a black strip with rounded corners slides up from
+the **bottom of the screen**. It shows your history as a row of **cards**: each card has a header with the kind (*Text*,
+*Image*, *File*) and its age ("1 hour ago") with a small icon (a blue pin when pinned), the text or picture, and a footer
+such as "57 characters" or "1628 × 1588". The selected card has a **white outline**. Above the cards are a **search
+field** (already selected, so you can just type) and filter capsules with coloured dots: **Clipboard** (everything),
+**Pinned**, **Text**, **Images**, **Files**.
 
 **What is recorded:**
 
@@ -314,13 +333,13 @@ screen with a large search field, already selected.
 | Key | Action |
 |---|---|
 | type | Filters the list instantly. |
-| ↑ / ↓ | Moves the selection (an accent-coloured highlight glides between rows, like Spotlight). |
+| ← / → (or ↑ / ↓) | Moves the selection from card to card. The mouse wheel scrolls the row. |
 | Enter | Puts that entry back on the clipboard, closes the window, returns you to the app you were in and pastes it there. |
 | Ctrl+P | Pins or unpins the entry. Pinned entries are never pushed out by new ones. |
 | Delete | Removes the entry (only when the search box is empty, so you can still delete letters you typed). |
 | Esc | Closes the window. Clicking elsewhere closes it too. |
 
-Each row shows a preview (a text snippet, an image thumbnail or file names) and how long ago it was copied.
+Right-click a card for *Paste*, *Pin / Unpin* and *Delete*. Double-click pastes it.
 
 **Safety details:**
 
@@ -363,10 +382,16 @@ Dynamic Island. The waveform's five bars grow from their middle and take a **col
 art has no strong colour). They follow the **real sound level** coming out of your speakers; if that cannot be measured,
 they fall back to a gentle random animation. The island keeps showing the song for 10 seconds after you pause.
 
-**In the *Now Playing* tab:** the album art, song title, artist and the name of the app playing it, a thin white
-**progress bar you can drag to jump** to any point (the knob appears when you point at it), and plain white
-**previous / play-pause / next** controls. If several apps are playing, it follows the one Windows considers current,
-or one that is actually playing if that one is paused.
+**In the *Now Playing* tab** (laid out like Droppy's player):
+
+- **Left:** the album art with rounded corners, the song title in bold, the artist, and a live waveform; under them a
+  thick white **progress bar you can drag to jump** to any point, with the elapsed time on the left and the remaining
+  time ("-0:46") on the right; and a row of big white **⏪ ⏸ ⏩** controls between a rounded **shuffle** button and a
+  **repeat** button (they turn accent-coloured when on; repeat cycles off → all → one).
+- **Right:** **Playing From** (the app, with the album under it) and a **Volume** slider.
+
+(Droppy shows the "Playing Next" queue there; Windows does not let apps read another app's queue.) If several apps are
+playing, it follows the one Windows considers current, or one that is actually playing if that one is paused.
 
 Setting: *Now Playing* (on by default).
 
@@ -430,17 +455,18 @@ In the portable version the setting shows "Requires the MSIX version".
 
 ## 14. File tools: convert, resize, compress, zip
 
-Right-click any item in the basket → **Tools**. You can select several items first; the tool runs on all of them.
+Right-click any item in the basket. You can select several items first; the tool runs on all of them. Picture tools
+(*Convert to…*, *Resize*, *Extract Text*, *Compress*) only appear when pictures are selected, *Extract Here* only for zips.
 
 **For pictures** (PNG, JPG, BMP, GIF, TIFF, and WebP / HEIC / AVIF if Windows has the codec installed):
 
 | Tool | Result |
 |---|---|
-| Convert to PNG | Lossless PNG copy. |
-| Convert to JPG | JPG copy (transparent areas become white). |
-| Resize 50 % / 25 % | Half or quarter size. |
-| Resize to a max width… | Asks for a width in pixels; height follows automatically. |
-| Compress JPG (quality 80 / 60) | Smaller file, slightly lower quality. |
+| Convert to… → PNG | Lossless PNG copy. |
+| Convert to… → JPEG | JPG copy (transparent areas become white). |
+| Resize → 50 % / 25 % | Half or quarter size. |
+| Resize → Max Width… | Asks for a width in pixels; height follows automatically. |
+| Compress → JPEG, High Quality (80) / Smaller (60) | Smaller file, slightly lower quality. |
 
 Photos taken sideways on a phone are rotated correctly (EXIF orientation). Windows has no WebP *writer*, so WebP
 pictures can be opened and converted to PNG/JPG, but not saved as WebP. Pictures over 100 megapixels are refused to
@@ -450,8 +476,8 @@ protect your memory.
 
 | Tool | Result |
 |---|---|
-| Compress to ZIP | One `.zip` named after the item, or `Archive.zip` for several. |
-| Extract here | For `.zip` files: unpacks into a **new folder** named after the zip. |
+| Create ZIP | One `.zip` named after the item, or `Archive.zip` for several. |
+| Extract Here | For `.zip` files: unpacks into a **new folder** named after the zip. |
 
 **Rules that apply to every tool:**
 
@@ -490,7 +516,7 @@ What happens to it:
 - **Copied to the clipboard**, ready to paste (but not added to clipboard history).
 - The island shows a small thumbnail with a **Copy text** button.
 
-**Copy text (OCR):** press *Copy text* on that pop-up, or right-click any picture in the basket → *Copy text (OCR)*.
+**Copy text (OCR):** press *Copy text* on that pop-up, or right-click any picture in the basket → *Extract Text*.
 Windows' built-in text recognition reads the picture and copies the text, line by line, to the clipboard. It needs a
 Windows language pack for the language in the picture (Settings → Time & language → Language); without one you get a
 message explaining that.
@@ -585,9 +611,13 @@ pop-up when it starts. Setting: *Meeting alerts* (on by default).
 
 ## 19. Looks: the Apple design, colours, animations
 
-Everything is designed to look like Apple's own dark appearance:
+Everything is designed to look like Apple's own dark appearance and like Droppy, the Mac notch app this project is
+modelled on:
 
-- **The island:** pure black, the MacBook notch shape, Dynamic Island layout and spring motion.
+- **The island:** the MacBook notch shape, Dynamic Island layout and spring motion; open, it is black at the top and
+  dark "Liquid Glass" with a light rim at the bottom, with a floating glass capsule of icon tabs under it.
+- **Droppy layouts:** the Now Playing player, the two-state basket, the clipboard card strip and the icon menus follow
+  Droppy's designs.
 - **Colours:** Apple's system colours (dark mode): blue `#0A84FF`, green `#30D158`, orange `#FF9F0A`, red `#FF453A`...
   Text uses Apple's label and secondary-label greys.
 - **Font:** SF Pro when installed, otherwise Segoe UI Variable.
@@ -595,8 +625,9 @@ Everything is designed to look like Apple's own dark appearance:
   buttons, rounded filled text fields with an accent focus ring, and macOS-style menus (accent highlight, white text).
 - **Settings** looks like macOS System Settings: red/yellow/green window buttons, a centred title, and grouped rounded
   sections.
-- **Clipboard history** looks like Spotlight; **the basket** is a frosted popover; **dialogs** are macOS-style alerts with
-  the app icon, a bold title and two equal buttons.
+- **Dialogs** are macOS-style alerts with the app icon, a bold title and two equal buttons.
+- The glass on the island and basket is drawn by Dropshelf (translucent dark with a light rim), because Windows' blur
+  cannot be used on windows with free-form shapes; it does not blur what is behind it.
 - Icons use Windows' Segoe Fluent Icons (Apple's SF Symbols may not be used outside Apple platforms).
 
 ### Accent colour
@@ -615,11 +646,10 @@ rate; long-running ones are capped at 30 frames a second, and nothing is drawn w
 
 - **Island:** opens with a soft spring that animates width, height and corner roundness together while the contents zoom
   in; closes a bit faster with no bounce. Live activities grow it with a small spring.
-- **Tabs:** the segmented control's thumb glides between tabs.
-- **Basket:** its contents spring in from the side where your mouse is and collapse back when it closes; dropped items
-  fly in from where you dropped them.
-- **Clipboard window:** springs in (from 94 % size), fades and slides up 8 pixels; the first rows appear one after another;
-  the selection highlight glides.
+- **Tabs:** the highlight circle glides between the icon tabs; the capsule drops in under the island as it opens.
+- **Basket:** its contents spring in and collapse back when it closes, and pop when switching between compact and
+  expanded; dropped items fly in from where you dropped them.
+- **Clipboard strip:** slides up from the bottom edge and fades in; the first cards appear one after another.
 - **Switches:** the knob slides with a small bounce.
 
 Three levels in Settings → Appearance → Animations:
@@ -887,7 +917,7 @@ src/Dropshelf/
   Screenshot/     capture overlay (one per monitor), saving, OCR
   Clipboard/      clipboard history service and window
   Services/       hotkeys, mouse hook, shake detection, settings, installer, autostart, crash guard, tray, audio, fullscreen
-  Interop/        Windows API declarations, window and frosted-glass helpers
+  Interop/        Windows API declarations, window helpers
   Settings/       settings window, alerts
   Themes/         the Apple theme (colours, fonts, controls), accent colours
 packaging/        MSIX manifest, tile images, build and sign scripts

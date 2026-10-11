@@ -18,6 +18,7 @@ internal sealed class NowPlayingActivity : PillActivityBase, IDisposable
 
     private readonly MediaSessionService _media;
     private readonly SettingsService _settings;
+    private readonly AudioEndpointService? _audio;
     private readonly DispatcherTimer _lingerTimer;
     private readonly Image _art;
     private readonly Grid _artHost;
@@ -32,6 +33,7 @@ internal sealed class NowPlayingActivity : PillActivityBase, IDisposable
     {
         _media = media;
         _settings = settings;
+        _audio = audio;
 
         _art = new Image { Stretch = Stretch.UniformToFill };
         RenderOptions.SetBitmapScalingMode(_art, BitmapScalingMode.HighQuality);
@@ -69,7 +71,7 @@ internal sealed class NowPlayingActivity : PillActivityBase, IDisposable
 
     public override CompactContent? CreateCompact() => CompactContent.Of(_artHost, _barsHost);
 
-    public override FrameworkElement? CreateExpanded() => new NowPlayingView(_media);
+    public override FrameworkElement? CreateExpanded() => new NowPlayingView(_media, _audio);
 
     /// <summary>The "Show now playing" setting changed.</summary>
     public void ApplySettings() => Evaluate();

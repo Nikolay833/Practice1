@@ -49,6 +49,10 @@ internal sealed class MediaSessionService : IDisposable
     public bool CanNext { get; private set; }
     public bool CanPrevious { get; private set; }
     public bool CanSeek { get; private set; }
+    public bool CanShuffle { get; private set; }
+    public bool CanRepeat { get; private set; }
+    public bool ShuffleActive { get; private set; }
+    public Windows.Media.MediaPlaybackAutoRepeatMode RepeatMode { get; private set; }
     public TimeSpan Duration { get; private set; }
 
     public bool IsPlaying => Status == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
@@ -100,6 +104,15 @@ internal sealed class MediaSessionService : IDisposable
     public Task<bool> TogglePlayPauseAsync() => Run(s => s.TryTogglePlayPauseAsync());
     public Task<bool> NextAsync() => Run(s => s.TrySkipNextAsync());
     public Task<bool> PreviousAsync() => Run(s => s.TrySkipPreviousAsync());
+    public Task<bool> ToggleShuffleAsync() => Run(s => s.TryChangeShuffleActiveAsync(!ShuffleActive));
+
+    /// <summary>Off, then repeat all, then repeat one, then off again (the order of the Music app's button).</summary>
+    public Task<bool> CycleRepeatAsync() => Run(s => s.TryChangeAutoRepeatModeAsync(RepeatMode switch
+    {
+        Windows.Media.MediaPlaybackAutoRepeatMode.None => Windows.Media.MediaPlaybackAutoRepeatMode.List,
+        Windows.Media.MediaPlaybackAutoRepeatMode.List => Windows.Media.MediaPlaybackAutoRepeatMode.Track,
+        _ => Windows.Media.MediaPlaybackAutoRepeatMode.None,
+    }));
 
     public async Task<bool> SeekAsync(TimeSpan position)
     {
@@ -313,6 +326,10 @@ internal sealed class MediaSessionService : IDisposable
             CanNext = c.IsNextEnabled;
             CanPrevious = c.IsPreviousEnabled;
             CanSeek = c.IsPlaybackPositionEnabled;
+            CanShuffle = c.IsShuffleEnabled;
+            CanRepeat = c.IsRepeatEnabled;
+            ShuffleActive = info.IsShuffleActive ?? false;
+            RepeatMode = info.AutoRepeatMode ?? Windows.Media.MediaPlaybackAutoRepeatMode.None;
             SourceApp = FriendlyAppName(session.SourceAppUserModelId);
         }
         catch (Exception ex)

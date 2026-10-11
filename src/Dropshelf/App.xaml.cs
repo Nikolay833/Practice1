@@ -1,14 +1,18 @@
 using System;
+using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Windows;
+using System.Windows.Threading;
 using Dropshelf.Activities;
 using Dropshelf.Activities.Calendar;
 using Dropshelf.Activities.Devices;
 using Dropshelf.Activities.Hud;
 using Dropshelf.Activities.Media;
 using Dropshelf.Activities.Notes;
+using Dropshelf.Activities.Notifications;
 using Dropshelf.Activities.Power;
 using Dropshelf.Activities.Timer;
 using Dropshelf.Activities.Weather;
@@ -73,6 +77,10 @@ public partial class App : Application
     private WeatherPillActivity? _weatherPill;
     private ScreenshotService? _screenshot;
     private bool _screenshotHotkeyRegistered;
+    private NotificationService? _notifications;
+    private NotificationActivity? _notificationPill;
+    private ArmNotice? _armNotice;
+    private DispatcherTimer? _armNoticeTimer;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -89,12 +97,13 @@ public partial class App : Application
         bool restarted = e.Args.Contains(Installer.RestartedArgument, StringComparer.OrdinalIgnoreCase);
 
         // Single instance: a second launch just exits. A relaunch after a crash, update or Windows restart may start
-        // before the old process has let go of the mutex, so those wait a few seconds for it.
+        // before the old process has let go of the mutex, so those wait a few seconds for it. The MSIX build is relaunched
+        // through the shell, which may not carry the argument, so it always waits a little.
         _mutex = new Mutex(false, Installer.InstanceMutexName);
         bool owned;
         try
         {
-            owned = _mutex.WaitOne(restarted ? 5000 : 0);
+            owned = _mutex.WaitOne(restarted ? 5000 : PackageIdentity.IsPackaged ? 3000 : 0);
         }
         catch (AbandonedMutexException)
         {
@@ -176,7 +185,7 @@ public partial class App : Application
             openBasket: ShowBasketAtCursor,
             openClipboard: () => ShowClipboard(fromHotkey: false),
             openSettings: ShowSettings,
-            uninstall: Uninstall,
+            uninstall: PackageIdentity.IsPackaged ? OpenAppsSettings : Uninstall,
             quit: QuitByUser,
             screenshot: () => _screenshot?.Begin(),
             quickNote: () => _shelfWindow.ShowNotes());
@@ -196,13 +205,19 @@ public partial class App : Application
 
         // Keep the registry entry pointing at the installed exe (this also writes it on the first run after install),
         // make sure the Start Menu shortcut exists, and ask Windows to bring the app back after update reboots.
+        // The MSIX build has a startup task instead: ask for it to be enabled, and read its state for Settings.
+        StartupRegistration.PackagedStateChanged += OnStartupTaskStateChanged;
         if (_settings.Current.LaunchAtStartup)
         {
             StartupRegistration.Set(true);
         }
+        else if (PackageIdentity.IsPackaged)
+        {
+            _ = StartupRegistration.RefreshPackagedAsync();
+        }
 
         TryStep("Start Menu shortcut", Installer.EnsureStartMenuShortcut);
-        if (!System.Diagnostics.Debugger.IsAttached)
+        if (!System.Diagnostics.Debugger.IsAttached && !PackageIdentity.IsPackaged)
         {
             TryStep("application restart registration", () => NativeMethods.RegisterApplicationRestart(
                 Installer.RestartedArgument, NativeMethods.RESTART_NO_CRASH | NativeMethods.RESTART_NO_HANG));
@@ -221,6 +236,30 @@ public partial class App : Application
         ApplyMouseHookSetting();
         ApplyClipboardSetting();
         ApplyScreenshotSetting();
+        ScheduleOneTimeNotices();
+    }
+
+    /// <summary>
+    /// Things that are said once, a moment after start-up: the MSIX build offers to remove a portable copy's autostart entry,
+    /// the x64 build on an Arm PC points at the Arm version.
+    /// </summary>
+    private void ScheduleOneTimeNotices()
+    {
+        if (PackageIdentity.IsPackaged)
+        {
+            Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() =>
+                TryStep("portable cleanup offer", () => PortableCleanup.OfferOnce(_settings!))));
+        }
+        else if (ArmNotice.IsX64OnArm)
+        {
+            _armNoticeTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(6) };
+            _armNoticeTimer.Tick += (_, _) =>
+            {
+                _armNoticeTimer.Stop();
+                TryStep("Arm notice", () => _armNotice?.ShowOnce());
+            };
+            _armNoticeTimer.Start();
+        }
     }
 
     /// <summary>
@@ -275,6 +314,14 @@ public partial class App : Application
         _progress = new ProgressActivity();
         _activityHost.Register(_progress);
         _tools = new ToolsService(_progress, _toast);
+        _armNotice = new ArmNotice(_settings!, _progress, _toast);
+
+        TryStep("notifications", () =>
+        {
+            _notifications = new NotificationService(_settings!);
+            _notificationPill = new NotificationActivity(_settings!, _notifications, _activityHost, () => _fullscreen?.IsFullscreen == true);
+            _activityHost.Register(_notificationPill);
+        });
 
         TryStep("timer", () =>
         {
@@ -314,6 +361,8 @@ public partial class App : Application
         // Tear down in reverse order; every step tolerates a half-started app (second instance) and a failing
         // step never stops the later ones (tray icon, settings flush and mutex release must always run).
         TryStep("fullscreen watcher", () => _fullscreen?.Dispose());
+        TryStep("notification pill", () => _notificationPill?.Dispose());
+        TryStep("notifications", () => _notifications?.Dispose());
         TryStep("meeting alerts", () => _meeting?.Dispose());
         TryStep("calendar", () => _calendar?.Dispose());
         TryStep("weather pill", () => _weatherPill?.Dispose());
@@ -456,6 +505,10 @@ public partial class App : Application
             case nameof(AppSettings.MeetingAlerts):
                 _meeting?.ApplySettings();
                 break;
+            case nameof(AppSettings.NotificationsEnabled):
+                _notifications?.ApplySettings();
+                _notificationPill?.ApplySettings();
+                break;
         }
     }
 
@@ -544,7 +597,17 @@ public partial class App : Application
         if (_settingsWindow == null)
         {
             // Reflect the real registry state in case it was changed outside the app (not in dev runs, where nothing is registered).
-            if (Installer.AutostartTarget() != null)
+            // For the MSIX build the startup task is the truth; Task Manager can change it, so read it again too.
+            if (PackageIdentity.IsPackaged)
+            {
+                if (StartupRegistration.PackagedState != null)
+                {
+                    _settings!.Current.LaunchAtStartup = StartupRegistration.IsEnabled();
+                }
+
+                _ = StartupRegistration.RefreshPackagedAsync();
+            }
+            else if (Installer.AutostartTarget() != null)
             {
                 _settings!.Current.LaunchAtStartup = StartupRegistration.IsEnabled();
             }
@@ -555,6 +618,18 @@ public partial class App : Application
         }
 
         _settingsWindow.Activate();
+    }
+
+    /// <summary>
+    /// The startup task changed (Task Manager, or a request that Windows refused because the user had turned it off): while Settings is open,
+    /// the checkbox follows reality instead of claiming something that is not true.
+    /// </summary>
+    private void OnStartupTaskStateChanged()
+    {
+        if (_settingsWindow != null && _settings != null)
+        {
+            _settings.Current.LaunchAtStartup = StartupRegistration.IsEnabled();
+        }
     }
 
     // ---- Always-on plumbing -----------------------------------------------------------------------
@@ -580,6 +655,19 @@ public partial class App : Application
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or WaitHandleCannotBeOpenedException or ArgumentException)
         {
             Log.Error("Could not create the quit event", ex);
+        }
+    }
+
+    /// <summary>Tray item of the MSIX build: Windows uninstalls it, from Settings > Apps > Installed apps.</summary>
+    private static void OpenAppsSettings()
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo("ms-settings:appsfeatures") { UseShellExecute = true });
+        }
+        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
+        {
+            Log.Error("Could not open Settings > Apps", ex);
         }
     }
 

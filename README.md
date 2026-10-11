@@ -47,6 +47,15 @@ derived from Droppy or its authors, and it uses no Droppy code or assets.
     20 % and 10 % (red pulse) and a fully-charged notice; Bluetooth devices connecting or disconnecting with their name,
     an icon (headphones, keyboard, mouse...) and their battery level when Windows reports it. Nothing is shown on a
     desktop without a battery.
+- **Notifications in the pill** (MSIX version only) - Windows toast notifications show on the pill like a Dynamic Island: the app's
+  logo left of the mascot, *App - Title* over a one-line body right of it, for about four seconds. Several at once are shown one
+  after the other with a *+2* badge; clicking the pill opens the app that sent it (best effort) and dismisses the rest. Windows
+  asks once for access to your notifications (Dropshelf only reads them while the setting is on; it is **off by default**), and
+  Windows' own banner still appears, because that cannot be switched off from an app. Settings > Notifications has the on/off
+  switch, *Hide notification content (privacy)* (only the app name and "New notification"), a list of apps seen so far to mute,
+  and *Do not disturb in fullscreen* (on by default; it uses the *Hide in fullscreen apps* detection, so it needs that setting).
+  The portable exe shows "Requires the MSIX version" there. If Windows will not deliver the change event to the app, Dropshelf
+  falls back to checking every two seconds.
 - **Convert & compress** - right-click a shelf or basket item (several can be selected) > **Tools**. Images (PNG, JPG, BMP,
   GIF, TIFF, and WebP / HEIC / AVIF when Windows has the codec): *Convert to PNG / JPG*, *Resize 50 % / 25 % / to a max width*,
   *Compress JPG (quality 80 / 60)*. Any files or folders: *Compress to ZIP* (named after the item, or `Archive.zip`), and
@@ -73,8 +82,8 @@ derived from Droppy or its authors, and it uses no Droppy code or assets.
   your previous window when you press `Esc`, click elsewhere or it collapses.
 - **Calendar & weather** - the *Today* tab: a weather card (temperature, condition, high / low, five-day strip) and today's and
   tomorrow's agenda with a "now" marker. Events come from calendar links (**ICS** URLs, parsed by Dropshelf itself: time zones,
-  all-day events and common recurrence rules; the URLs are stored encrypted) and, in the installed (MSIX) build, from the Windows
-  calendars. Within ten minutes of an event the pill shows *Meeting in 5 min - Title* with a countdown and a HUD when it
+  all-day events and common recurrence rules; the URLs are stored encrypted) and, in the [MSIX version](#download), from the Windows
+  calendars (read-only; Windows asks for calendar access, and Settings links to *Privacy & security > Calendar* if it was refused). Within ten minutes of an event the pill shows *Meeting in 5 min - Title* with a countdown and a HUD when it
   starts. Weather comes from [Open-Meteo](https://open-meteo.com) (no key): the device location if Windows allows it, otherwise
   the city from Settings; refreshed every 30 minutes and after sleep, cached, shown as *offline* when it cannot be reached.
   Weather is **off by default** because turning it on sends your approximate location (or the city) to open-meteo.com; Settings >
@@ -85,12 +94,14 @@ derived from Droppy or its authors, and it uses no Droppy code or assets.
 - **Hide in fullscreen** - the pill slides up out of view while a game, video or presentation is fullscreen on the pill's
   monitor, and HUDs stay quiet (optionally except the volume HUD).
 - **Always running** - installs itself on first run, starts with Windows, relaunches after a crash and comes back after
-  update reboots (see [Always running](#always-running)).
+  update reboots (see [Always running](#always-running)). The MSIX version is installed and updated by Windows and starts
+  through a startup task instead.
 - **Tray icon** - Show shelf, Open basket, Clipboard history, Screenshot to shelf, Quick note, Settings, Uninstall, Quit. Only one instance runs at a time.
+  (In the MSIX version the Uninstall item points to Settings > Apps, which is where Windows removes it.)
 - **Settings** - grouped into General (launch at startup, hide in fullscreen apps, install location), Shelf (remember items,
   expand on hover, shake to open basket), Media & HUD (now playing, volume / brightness / battery / Bluetooth HUDs, replace the
   Windows volume popup, scroll for volume, volume HUD in fullscreen), Appearance (accent, pill style, mascot), Animations,
-  Clipboard (on/off and size), Screenshot, Timer (Pomodoro lengths, chime) and Calendar & Weather. Changes apply immediately.
+  Clipboard (on/off and size), Notifications, Screenshot, Timer (Pomodoro lengths, chime) and Calendar & Weather. Changes apply immediately.
 - **Animations** - everything is spring-driven and runs at the display's frame rate; frames are only produced while
   something is moving (see [Animations](#animations)).
 
@@ -182,6 +193,13 @@ Dropshelf is meant to be started once and then forgotten.
 - **Uninstall** - tray icon > *Uninstall...*. It removes the autostart entry and the Start Menu shortcut, quits, and then
   deletes the installed exe. Your data is kept unless you tick *Also delete my shelf & clipboard data*.
 
+- **MSIX version** - Windows installs, updates and removes it, so none of the above self-install steps run. It starts with
+  Windows through a **startup task** (listed in Task Manager > Startup apps, where you can turn it off; Settings then says so,
+  because an app cannot turn it back on after that), is relaunched after a crash through its AppUserModelID, and the tray
+  *Uninstall* item opens Settings > Apps. The first time it runs on a PC that also has the portable version set to start with
+  Windows, it offers once to remove that autostart entry (only one copy ever runs, but this keeps sign-in tidy; if Windows keeps
+  the removal private to the package, delete the entry in Task Manager > Startup apps).
+
 Command-line switches: `--no-install` (run from where it is, never self-install), `--autostart` (added by the Run key),
 `--restarted` (added after a crash relaunch or a Windows restart; waits a few seconds for the old process to exit).
 
@@ -220,8 +238,59 @@ Or download the exe yourself from the release and run it. It is a single self-co
 needed. On first run it installs itself and starts with Windows (see [Always running](#always-running)); to update
 later, or to switch between x64 and arm64, just run the other exe.
 
+### MSIX version (notifications and Windows calendar)
+
+The portable exes are the default and the easiest. The **MSIX version** is a second download that gives the app *package
+identity*, which Windows requires for two features:
+
+- **notifications in the pill** (reading Windows toast notifications), and
+- **Windows calendar** events in the Today tab and the meeting alert.
+
+Everything else is identical. It is one file, `Dropshelf.msixbundle`, that holds both the x64 and Arm64 packages; Windows picks the
+right one. It is signed with a self-signed certificate, so Windows has to trust that certificate once. From PowerShell:
+
+```powershell
+irm https://github.com/Nikolay833/Practice1/releases/latest/download/Install-Dropshelf-MSIX.ps1 | iex
+```
+
+`Install-Dropshelf-MSIX.ps1` downloads the bundle and `Dropshelf.cer` from the latest release, adds the certificate to *Local
+Machine > Trusted People* (it asks for administrator permission once, with a Windows prompt) and then installs the bundle for
+your own account. Needs Windows 10 version 2004 or later. To do it by hand: trust `Dropshelf.cer` (double-click > *Install
+Certificate* > *Local Machine* > *Trusted People*), then double-click `Dropshelf.msixbundle`. Remove it in Settings > Apps.
+
+Switching between the portable and the MSIX version is fine; only one of them runs at a time. Their settings and data are
+both kept under `%LOCALAPPDATA%\Dropshelf`, but Windows may keep a packaged app's writes there private to the package, so do not
+count on the two sharing settings.
+
+#### MSIX signing certificate
+
+A signed package needs a certificate whose subject is exactly `CN=Dropshelf`. If the repository has no certificate secret, every
+CI run creates a new self-signed one, so the certificate (and with it the trust step above) changes with every release. To keep one
+certificate for all releases, create it once on a Windows PC and store it as repository secrets:
+
+```powershell
+$cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=Dropshelf" -CertStoreLocation Cert:\CurrentUser\My `
+  -NotAfter (Get-Date).AddYears(10) -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3","2.5.29.19={text}")
+$password = Read-Host "Choose a password for the .pfx"
+Export-PfxCertificate -Cert $cert -FilePath dropshelf.pfx -Password (ConvertTo-SecureString $password -AsPlainText -Force)
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("dropshelf.pfx")) | Set-Clipboard   # paste as secret MSIX_PFX_BASE64
+```
+
+Then add two secrets under **Settings > Secrets and variables > Actions**: `MSIX_PFX_BASE64` (the clipboard text) and
+`MSIX_PFX_PASSWORD` (the password). Keep `dropshelf.pfx` somewhere safe and do not commit it (`*.pfx` is ignored). The workflow
+then signs with it and publishes the matching `Dropshelf.cer`, so people who trusted it once can update without repeating that step.
+
+### Arm PCs
+
+If you run the x64 exe on an Arm PC it works (Windows emulates it), but the Arm version runs faster and uses less battery.
+Dropshelf notices this: once, a notice on the pill, and permanently a line in Settings > General, both with a **Get Arm version**
+button. The button downloads `Dropshelf-arm64.exe` from the latest release (progress shows on the pill) and runs it, which replaces
+the installed copy. Nothing is downloaded until you click, and *Don't show again* hides the notice. The MSIX version is never affected:
+its bundle already installs the Arm package on Arm PCs.
+
 Releases are published on pushes to `main`, on `v*` tags, and from **Actions → Build → Run workflow**. Every other
-push still builds both exes as the **Dropshelf-win-x64** and **Dropshelf-win-arm64** artifacts of its Actions run.
+push still builds both exes as the **Dropshelf-win-x64** and **Dropshelf-win-arm64** artifacts of its Actions run, plus the signed
+bundle and its certificate as the **Dropshelf-msix** artifact. If the MSIX job fails, the release is still published without it.
 
 ## Build locally
 
@@ -239,7 +308,15 @@ dotnet publish src/Dropshelf/Dropshelf.csproj -c Release -r win-x64 --self-conta
 
 The project sets `EnableWindowsTargeting`, so it also compiles on Linux/macOS, but it only runs on Windows 10/11.
 
-The app icon is generated by `tools/make_icon.py` (needs Pillow).
+The app icon is generated by `tools/make_icon.py` and the MSIX tile images in `packaging/Assets` by `tools/make_msix_assets.py`
+(both need Pillow).
+
+The MSIX bundle is built without Visual Studio, on Windows with the Windows 10/11 SDK installed (CI's `windows-latest` has it):
+
+```powershell
+./packaging/build-msix.ps1 -Version 1.0.1.0 -OutDir msix-out        # publishes x64 + arm64, packs both, bundles them
+./packaging/sign-msix.ps1 -Bundle msix-out/Dropshelf.msixbundle -OutDir msix-out   # signs, writes msix-out/Dropshelf.cer
+```
 
 ## Data
 
@@ -247,7 +324,8 @@ Everything lives in `%LOCALAPPDATA%\Dropshelf`: `settings.json`, `shelf.json`, `
 `calendar.json` (the ICS links, encrypted), `weather.json` (last forecast and location, encrypted), `timer.json` (a running timer),
 the `Items` folder
 (text/link items), the `Clipboard` folder (copied images), `restarts.json` (crash-loop guard) and `dropshelf.log`.
-The installed program is in `%LOCALAPPDATA%\Programs\Dropshelf`.
+The installed program is in `%LOCALAPPDATA%\Programs\Dropshelf` (portable version; the MSIX version lives in `C:\Program Files\WindowsApps`).
+Notification app names and the mute list are part of `settings.json`; notification text is never stored.
 
 ## Project layout
 
@@ -261,7 +339,8 @@ src/Dropshelf/
     Devices/  Bluetooth HUD
     Timer/    timer + Pomodoro (engine, pill, tab, chime)
     Notes/    quick notes (store, tab)
-    Calendar/ ICS parser, calendar service, meeting pill, Today tab
+    Calendar/ ICS parser, calendar service (ICS + Windows appointment store), meeting pill, Today tab
+    Notifications/ Windows toast listener (event or polling), notification pill with queue and click
     Weather/  Open-Meteo service, WMO codes, vector weather icons, idle-pill temperature
   Tools/      convert / resize / compress images, zip / extract, output naming, background runner
   Screenshot/ region-capture overlay (one window per monitor), capture + save, Windows OCR
@@ -270,7 +349,9 @@ src/Dropshelf/
   Clipboard/  history service, popup window
   Services/   hotkeys, mouse hook, shake detection, settings, installer, startup registration, crash guard, tray,
               Core Audio endpoint (volume + meter), fullscreen watcher
-  Interop/    P/Invoke, Core Audio COM declarations and window helpers
+  Interop/    P/Invoke, Core Audio COM declarations, app activation and window helpers
   Settings/   settings window, uninstall dialog
   Themes/     shared WPF styles, accent + pill style service
+packaging/    MSIX: manifest template, tile images, build and sign scripts (makeappx / signtool)
+tools/        icon + MSIX asset generators, installer scripts (portable and MSIX)
 ```

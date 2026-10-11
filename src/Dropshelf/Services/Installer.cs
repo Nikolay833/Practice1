@@ -81,10 +81,15 @@ internal static class Installer
 
     /// <summary>
     /// The exe the "launch at startup" registry value should point at, or null when nothing should be registered (dev runs,
-    /// or a copy that is not installed: a temp or Downloads path would vanish).
+    /// a copy that is not installed: a temp or Downloads path would vanish, or the MSIX build).
     /// </summary>
     public static string? AutostartTarget()
     {
+        if (PackageIdentity.IsPackaged)
+        {
+            return null; // the MSIX build starts through its manifest's startup task, not a Run value
+        }
+
         if (IsRunningInstalled || File.Exists(InstalledExe))
         {
             return InstalledExe; // running some other copy, but the installed one is what should start at sign-in
@@ -96,12 +101,13 @@ internal static class Installer
 
     /// <summary>
     /// First-run step: when started from somewhere other than the install folder, installs (or updates) there and relaunches.
+    /// Never for the MSIX build, which Windows installs and updates itself.
     /// Returns true if the installed copy was started, in which case the caller must exit. False means keep running here.
     /// </summary>
     public static bool TryInstallAndRelaunch(string[] args)
     {
         if (args.Contains(NoInstallArgument, StringComparer.OrdinalIgnoreCase)
-            || Debugger.IsAttached || !IsSingleFileExe || IsRunningInstalled)
+            || PackageIdentity.IsPackaged || Debugger.IsAttached || !IsSingleFileExe || IsRunningInstalled)
         {
             return false;
         }

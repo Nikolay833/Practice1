@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
 using System.Text.Json.Serialization;
 using System.Windows.Threading;
 using Dropshelf.Animation;
@@ -64,6 +66,14 @@ public sealed class AppSettings : NotifyBase
     private bool _calendarEnabled = true;
     private bool _calendarUseWindows = true;
     private bool _meetingAlerts = true;
+    private bool _notificationsEnabled;
+    private bool _hideNotificationContent;
+    private bool _notificationsDndFullscreen = true;
+    private List<string> _notificationMutedApps = new();
+    private Dictionary<string, string> _notificationKnownApps = new();
+    private bool _armNoticeShown;
+    private bool _armNoticeHidden;
+    private bool _portableCleanupOffered;
 
     public bool LaunchAtStartup { get => _launchAtStartup; set => SetField(ref _launchAtStartup, value); }
     public bool RememberShelf { get => _rememberShelf; set => SetField(ref _rememberShelf, value); }
@@ -149,6 +159,72 @@ public sealed class AppSettings : NotifyBase
     /// <summary>"Meeting in 5 min" on the pill for events starting within 10 minutes.</summary>
     public bool MeetingAlerts { get => _meetingAlerts; set => SetField(ref _meetingAlerts, value); }
 
+    // ---- Notifications in the pill (MSIX build only) ----
+    /// <summary>Show Windows toast notifications on the pill. Off by default: turning it on makes Windows ask for access to all notifications.</summary>
+    public bool NotificationsEnabled { get => _notificationsEnabled; set => SetField(ref _notificationsEnabled, value); }
+
+    /// <summary>Show only the app name and "New notification" instead of the title and text.</summary>
+    public bool HideNotificationContent { get => _hideNotificationContent; set => SetField(ref _hideNotificationContent, value); }
+
+    /// <summary>No notifications on the pill while a fullscreen app is in front (needs "Hide in fullscreen apps", which does the detection).</summary>
+    public bool NotificationsDndFullscreen { get => _notificationsDndFullscreen; set => SetField(ref _notificationsDndFullscreen, value); }
+
+    /// <summary>AppUserModelIDs of the apps the user muted. Replaced as a whole on change (use <see cref="SetNotificationMuted"/>).</summary>
+    public List<string> NotificationMutedApps { get => _notificationMutedApps; set => SetField(ref _notificationMutedApps, value ?? new List<string>()); }
+
+    /// <summary>Apps that have sent a notification so far: AppUserModelID to display name, for the mute list in Settings.</summary>
+    public Dictionary<string, string> NotificationKnownApps
+    {
+        get => _notificationKnownApps;
+        set => SetField(ref _notificationKnownApps, value ?? new Dictionary<string, string>());
+    }
+
+    public bool IsNotificationMuted(string appId) => _notificationMutedApps.Contains(appId, StringComparer.OrdinalIgnoreCase);
+
+    public void SetNotificationMuted(string appId, bool muted)
+    {
+        if (IsNotificationMuted(appId) == muted)
+        {
+            return;
+        }
+
+        var list = _notificationMutedApps.Where(a => !string.Equals(a, appId, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (muted)
+        {
+            list.Add(appId);
+        }
+
+        NotificationMutedApps = list;
+    }
+
+    /// <summary>Remembers an app that sent a notification. Returns true when it was new or renamed.</summary>
+    public bool RememberNotificationApp(string appId, string name)
+    {
+        if (_notificationKnownApps.TryGetValue(appId, out string? known) && known == name)
+        {
+            return false;
+        }
+
+        if (!_notificationKnownApps.ContainsKey(appId) && _notificationKnownApps.Count >= MaxKnownNotificationApps)
+        {
+            return false; // a sane cap; the oldest entries stay
+        }
+
+        NotificationKnownApps = new Dictionary<string, string>(_notificationKnownApps) { [appId] = name };
+        return true;
+    }
+
+    // ---- One-time notices ----
+    /// <summary>The "you're on an Arm PC" pill notice has been shown once.</summary>
+    public bool ArmNoticeShown { get => _armNoticeShown; set => SetField(ref _armNoticeShown, value); }
+
+    /// <summary>"Don't show again": hides the Arm notice in Settings too.</summary>
+    public bool ArmNoticeHidden { get => _armNoticeHidden; set => SetField(ref _armNoticeHidden, value); }
+
+    /// <summary>The MSIX build already offered to remove the portable copy's autostart entry.</summary>
+    public bool PortableCleanupOffered { get => _portableCleanupOffered; set => SetField(ref _portableCleanupOffered, value); }
+
+    [JsonIgnore] public static int MaxKnownNotificationApps => 100;
     [JsonIgnore] public static int MinHistorySize => 10;
     [JsonIgnore] public static int MaxHistorySize => 500;
 }

@@ -8,6 +8,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using Dropshelf.Activities.Calendar;
+using Dropshelf.Activities.Notifications;
 using Dropshelf.Animation;
 using Dropshelf.Services;
 using Dropshelf.Themes;
@@ -35,9 +36,20 @@ public partial class SettingsWindow : Window
         UnitFahrenheit.IsChecked = _settings.WeatherFahrenheit;
         IcsUrlsBox.Text = string.Join(Environment.NewLine, CalendarService.Current?.IcsUrls ?? Array.Empty<string>());
         UpdateWindowsCalendarStatus();
+        UpdateArmCard();
+        UpdateNotificationStatus();
+        BuildMutedApps();
+        NotificationsCard.IsEnabled = PackageIdentity.IsPackaged; // the listener needs package identity
         _initializing = false;
 
         _settings.PropertyChanged += OnSettingChanged;
+        StartupRegistration.PackagedStateChanged += OnStartupTaskChanged;
+        if (NotificationService.Current is { } notifications)
+        {
+            notifications.AccessChanged += UpdateNotificationStatus;
+            notifications.AppsChanged += BuildMutedApps;
+        }
+
         if (ThemeService.Current is { } theme)
         {
             theme.Changed += RefreshWindowsSwatch;
@@ -46,6 +58,13 @@ public partial class SettingsWindow : Window
         Closed += (_, _) =>
         {
             _settings.PropertyChanged -= OnSettingChanged;
+            StartupRegistration.PackagedStateChanged -= OnStartupTaskChanged;
+            if (NotificationService.Current is { } n)
+            {
+                n.AccessChanged -= UpdateNotificationStatus;
+                n.AppsChanged -= BuildMutedApps;
+            }
+
             if (ThemeService.Current is { } t)
             {
                 t.Changed -= RefreshWindowsSwatch;
@@ -120,11 +139,35 @@ public partial class SettingsWindow : Window
         {
             UpdateInstallInfo();
         }
+
+        if (e.PropertyName == nameof(AppSettings.ArmNoticeHidden))
+        {
+            UpdateArmCard();
+        }
     }
+
+    private void OnStartupTaskChanged() => UpdateInstallInfo();
 
     /// <summary>Install location and whether Windows will start the app at sign-in.</summary>
     private void UpdateInstallInfo()
     {
+        if (PackageIdentity.IsPackaged)
+        {
+            InstallPath.Text = "Installed as an MSIX package. Uninstall it from Settings → Apps → Installed apps.";
+            AutoStartStatus.Text = StartupRegistration.PackagedState switch
+            {
+                Windows.ApplicationModel.StartupTaskState.Enabled or Windows.ApplicationModel.StartupTaskState.EnabledByPolicy
+                    => "Starts automatically when you sign in",
+                Windows.ApplicationModel.StartupTaskState.DisabledByUser
+                    => "Turned off in Task Manager → Startup apps. Turn it on there to start with Windows.",
+                Windows.ApplicationModel.StartupTaskState.DisabledByPolicy
+                    => "Turned off by your organization",
+                Windows.ApplicationModel.StartupTaskState.Disabled => "Does not start automatically when you sign in",
+                _ => "Checking the startup setting...",
+            };
+            return;
+        }
+
         string? current = Environment.ProcessPath;
         InstallPath.Text = Installer.IsRunningInstalled
             ? Installer.InstalledExe
@@ -153,12 +196,101 @@ public partial class SettingsWindow : Window
 
     private void UpdateWindowsCalendarStatus()
     {
-        WindowsCalendarStatus.Text = CalendarService.Current?.Windows switch
+        WindowsCalendarState? state = CalendarService.Current?.Windows;
+        WindowsCalendarStatus.Text = !PackageIdentity.IsPackaged
+            ? "Requires the MSIX version"
+            : state switch
+            {
+                WindowsCalendarState.Available => "Connected: events from your Windows calendars are included",
+                WindowsCalendarState.AccessDenied => "Windows blocked calendar access for Dropshelf. Allow it in Settings → Privacy & security → Calendar.",
+                WindowsCalendarState.Unavailable => "No Windows calendar could be read on this PC",
+                _ => "Reads the calendars of the Windows Calendar / Mail apps",
+            };
+        CalendarPrivacyLink.Visibility = state == WindowsCalendarState.AccessDenied ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void CalendarPrivacy_Click(object sender, RoutedEventArgs e) => OpenSettingsPage("ms-settings:privacy-calendar");
+
+    // ---- Notifications --------------------------------------------------------------------------
+
+    private void UpdateNotificationStatus()
+    {
+        NotificationAccess access = NotificationService.Current?.Access
+                                    ?? (PackageIdentity.IsPackaged ? NotificationAccess.Off : NotificationAccess.RequiresPackage);
+        NotificationsStatus.Text = access switch
         {
-            WindowsCalendarState.Available => "Connected: events from your Windows calendars are included",
-            WindowsCalendarState.Unavailable => "Available in the installed (MSIX) version",
-            _ => "Reads the calendars of the Windows Calendar / Mail apps (installed MSIX version only)",
+            NotificationAccess.RequiresPackage => "Requires the MSIX version",
+            NotificationAccess.Requesting => "Waiting for your answer in the Windows prompt...",
+            NotificationAccess.Allowed => "Notifications from your apps show on the pill for a few seconds",
+            NotificationAccess.Denied => "Windows blocked access. Allow Dropshelf in Settings → Privacy & security → Notifications.",
+            NotificationAccess.Unavailable => "Notifications can't be read on this PC",
+            _ => "Windows asks once for permission to read your notifications",
         };
+        NotificationsPrivacyLink.Visibility = access == NotificationAccess.Denied ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void NotificationsPrivacy_Click(object sender, RoutedEventArgs e) => OpenSettingsPage("ms-settings:privacy-notifications");
+
+    /// <summary>One checkbox per app that has sent a notification so far; ticked = muted.</summary>
+    private void BuildMutedApps()
+    {
+        MutedApps.Children.Clear();
+        var apps = _settings.NotificationKnownApps.OrderBy(a => a.Value, StringComparer.CurrentCultureIgnoreCase).ToList();
+        MutedAppsHint.Text = apps.Count == 0
+            ? "Apps appear here after their first notification. Tick an app to keep it off the pill."
+            : "Tick an app to keep its notifications off the pill (Windows still shows them).";
+        foreach ((string id, string name) in apps)
+        {
+            var box = new CheckBox
+            {
+                Content = new TextBlock { Text = name, Style = (Style)FindResource("TextPrimary") },
+                IsChecked = _settings.IsNotificationMuted(id),
+                Margin = new Thickness(0, 8, 0, 0),
+                ToolTip = id,
+            };
+            box.Checked += (_, _) => _settings.SetNotificationMuted(id, true);
+            box.Unchecked += (_, _) => _settings.SetNotificationMuted(id, false);
+            MutedApps.Children.Add(box);
+        }
+    }
+
+    // ---- Arm notice -----------------------------------------------------------------------------
+
+    private void UpdateArmCard() =>
+        ArmCard.Visibility = ArmNotice.Current is { OfferInSettings: true } ? Visibility.Visible : Visibility.Collapsed;
+
+    private async void ArmGet_Click(object sender, RoutedEventArgs e)
+    {
+        if (ArmNotice.Current is not { } notice)
+        {
+            return;
+        }
+
+        ArmGetButton.IsEnabled = false;
+        ArmGetButton.Content = "Downloading...";
+        try
+        {
+            await notice.DownloadAndRunAsync();
+        }
+        finally
+        {
+            ArmGetButton.Content = "Get Arm version";
+            ArmGetButton.IsEnabled = true;
+        }
+    }
+
+    private void ArmHide_Click(object sender, RoutedEventArgs e) => ArmNotice.Current?.Hide();
+
+    private static void OpenSettingsPage(string uri)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(uri) { UseShellExecute = true });
+        }
+        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
+        {
+            Log.Error($"Could not open {uri}", ex);
+        }
     }
 
     private void IcsUrls_LostFocus(object sender, RoutedEventArgs e)

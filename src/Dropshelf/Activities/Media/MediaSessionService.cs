@@ -386,7 +386,7 @@ internal sealed class MediaSessionService : IDisposable
         }
     }
 
-    private static async Task<byte[]?> ReadBytesAsync(IRandomAccessStreamReference reference)
+    internal static async Task<byte[]?> ReadBytesAsync(IRandomAccessStreamReference reference)
     {
         try
         {
@@ -409,7 +409,7 @@ internal sealed class MediaSessionService : IDisposable
         }
     }
 
-    private static ImageSource? Decode(byte[] bytes, int pixelWidth)
+    internal static ImageSource? Decode(byte[] bytes, int pixelWidth)
     {
         try
         {

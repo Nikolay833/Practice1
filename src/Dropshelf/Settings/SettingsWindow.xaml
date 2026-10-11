@@ -118,6 +118,18 @@
                 <StackPanel Margin="20,0,20,20">
 
                     <TextBlock Text="GENERAL" Style="{StaticResource SectionLabel}" Margin="4,0,0,6"/>
+                    <Border x:Name="ArmCard" Style="{StaticResource Card}" Visibility="Collapsed">
+                        <StackPanel>
+                            <TextBlock Text="You're on an Arm PC" Style="{StaticResource TextPrimary}"/>
+                            <TextBlock Text="The Arm version runs faster and uses less battery." Style="{StaticResource TextSecondary}"
+                                       Margin="0,2,0,0" TextWrapping="Wrap"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                <Button x:Name="ArmGetButton" Content="Get Arm version" Style="{StaticResource AccentButton}"
+                                        Padding="14,5" Click="ArmGet_Click"/>
+                                <Button Content="Don't show again" Style="{StaticResource TextButton}" Margin="8,0,0,0" Click="ArmHide_Click"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
                     <Border Style="{StaticResource Card}">
                         <StackPanel>
                             <CheckBox IsChecked="{Binding LaunchAtStartup, Mode=TwoWay}">
@@ -233,6 +245,38 @@
                                     <TextBlock Text="Headphones, keyboards and mice connecting or disconnecting" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
                                 </StackPanel>
                             </CheckBox>
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock Text="NOTIFICATIONS" Style="{StaticResource SectionLabel}"/>
+                    <Border x:Name="NotificationsCard" Style="{StaticResource Card}">
+                        <StackPanel>
+                            <CheckBox IsChecked="{Binding NotificationsEnabled, Mode=TwoWay}">
+                                <StackPanel>
+                                    <TextBlock Text="Show notifications on the pill" Style="{StaticResource TextPrimary}"/>
+                                    <TextBlock x:Name="NotificationsStatus" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </CheckBox>
+                            <Button x:Name="NotificationsPrivacyLink" Content="Open notification privacy settings" Style="{StaticResource TextButton}"
+                                    HorizontalAlignment="Left" Margin="26,6,0,0" Visibility="Collapsed" Click="NotificationsPrivacy_Click"/>
+                            <Border Style="{StaticResource Divider}"/>
+                            <CheckBox IsChecked="{Binding HideNotificationContent, Mode=TwoWay}" IsEnabled="{Binding NotificationsEnabled}">
+                                <StackPanel>
+                                    <TextBlock Text="Hide notification content (privacy)" Style="{StaticResource TextPrimary}"/>
+                                    <TextBlock Text="Show only the app name and &quot;New notification&quot;, never the title or text" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </CheckBox>
+                            <Border Style="{StaticResource Divider}"/>
+                            <CheckBox IsChecked="{Binding NotificationsDndFullscreen, Mode=TwoWay}" IsEnabled="{Binding HideInFullscreen}">
+                                <StackPanel>
+                                    <TextBlock Text="Do not disturb in fullscreen" Style="{StaticResource TextPrimary}"/>
+                                    <TextBlock Text="No notifications on the pill while a fullscreen app is in front (needs &quot;Hide in fullscreen apps&quot;)" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </CheckBox>
+                            <Border Style="{StaticResource Divider}"/>
+                            <TextBlock Text="Muted apps" Style="{StaticResource TextPrimary}"/>
+                            <TextBlock x:Name="MutedAppsHint" Style="{StaticResource TextSecondary}" FontSize="11" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                            <StackPanel x:Name="MutedApps"/>
                         </StackPanel>
                     </Border>
 
@@ -384,6 +428,8 @@
                                     <TextBlock x:Name="WindowsCalendarStatus" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
                                 </StackPanel>
                             </CheckBox>
+                            <Button x:Name="CalendarPrivacyLink" Content="Open calendar privacy settings" Style="{StaticResource TextButton}"
+                                    HorizontalAlignment="Left" Margin="26,6,0,0" Visibility="Collapsed" Click="CalendarPrivacy_Click"/>
                             <Border Style="{StaticResource Divider}"/>
                             <TextBlock Text="Calendar links (ICS), one per line" Style="{StaticResource TextPrimary}"/>
                             <TextBlock Text="Stored encrypted. Fetched every 15 minutes. webcal:// links work too." Style="{StaticResource TextSecondary}" FontSize="11" Margin="0,2,0,0"/>

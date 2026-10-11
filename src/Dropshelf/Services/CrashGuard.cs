@@ -104,8 +104,9 @@ internal static class CrashGuard
         try
         {
             string? stayDownReason = null;
-            string? target = RelaunchTarget();
-            if (target == null)
+            bool packaged = PackageIdentity.IsPackaged;
+            string? target = packaged ? null : RelaunchTarget();
+            if (!packaged && target == null)
             {
                 stayDownReason = "No executable to relaunch (neither the installed exe nor this one exists)";
             }
@@ -151,7 +152,16 @@ internal static class CrashGuard
                 return;
             }
 
-            Process.Start(new ProcessStartInfo(target!, Installer.RestartedArgument) { UseShellExecute = false });
+            // The MSIX build is started through the shell by its AppUserModelID; a portable exe is started by path.
+            if (packaged)
+            {
+                PackageIdentity.Relaunch(Installer.RestartedArgument);
+            }
+            else
+            {
+                Process.Start(new ProcessStartInfo(target!, Installer.RestartedArgument) { UseShellExecute = false });
+            }
+
             Log.Info("Relaunching after a fatal error");
         }
         catch (Exception ex)

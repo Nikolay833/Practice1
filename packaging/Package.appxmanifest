@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Template for the MSIX manifest. packaging/build-msix.ps1 fills in {{VERSION}} and {{ARCH}} and writes the result as
+  AppxManifest.xml next to Dropshelf.exe, once per architecture.
+
+  Identity/Publisher must be exactly the subject of the certificate that signs the bundle (packaging/sign-msix.ps1).
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
+  xmlns:uap5="http://schemas.microsoft.com/appx/manifest/uap/windows10/5"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap uap3 uap5 rescap">
+
+  <Identity Name="Dropshelf" Publisher="CN=Dropshelf" Version="{{VERSION}}" ProcessorArchitecture="{{ARCH}}" />
+
+  <Properties>
+    <DisplayName>Dropshelf</DisplayName>
+    <PublisherDisplayName>Dropshelf</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.22621.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+
+  <Applications>
+    <Application Id="App" Executable="Dropshelf.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="Dropshelf"
+        Description="A drag-and-drop shelf, basket and clipboard history in a pill at the top of your screen."
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
+      </uap:VisualElements>
+
+      <Extensions>
+        <!-- Start with Windows. Shown (and switchable) in Task Manager > Startup apps; the app's own setting asks for it. -->
+        <uap5:Extension Category="windows.startupTask" Executable="Dropshelf.exe" EntryPoint="Windows.FullTrustApplication">
+          <uap5:StartupTask TaskId="DropshelfStartup" Enabled="true" DisplayName="Dropshelf" />
+        </uap5:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <!-- A normal desktop app (WPF) running with package identity. -->
+    <rescap:Capability Name="runFullTrust" />
+    <!-- Windows calendars (appointment store), read-only. -->
+    <uap:Capability Name="appointments" />
+    <!-- Windows notifications shown on the pill. The user still has to allow it in a Windows prompt. -->
+    <uap3:Capability Name="userNotificationListener" />
+  </Capabilities>
+</Package>

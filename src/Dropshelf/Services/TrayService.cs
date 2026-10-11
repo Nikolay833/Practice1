@@ -32,7 +32,8 @@ internal sealed class TrayService : IDisposable
         AddItem("Quick note", quickNote);
         _menu.Items.Add(new WinForms.ToolStripSeparator());
         AddItem("Settings…", openSettings);
-        AddItem("Uninstall…", uninstall);
+        // The MSIX build is removed by Windows (Settings > Apps), not by a cleanup script of its own: the item says so and opens that page.
+        AddItem(PackageIdentity.IsPackaged ? "Uninstall in Settings → Apps" : "Uninstall…", uninstall);
         _menu.Items.Add(new WinForms.ToolStripSeparator());
         AddItem("Quit", quit);
 

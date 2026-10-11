@@ -18,6 +18,9 @@ internal enum WindowsCalendarState
     /// <summary>The appointment store needs package identity (the installed MSIX build); a plain exe cannot read it.</summary>
     Unavailable,
 
+    /// <summary>Packaged, but Windows refused access: Settings > Privacy & security > Calendar (<c>ms-settings:privacy-calendar</c>).</summary>
+    AccessDenied,
+
     Available,
 }
 
@@ -28,7 +31,7 @@ internal sealed class CalendarSecrets
 }
 
 /// <summary>
-/// Today's and tomorrow's events from two sources: the Windows appointment store (packaged builds only) and any number of ICS
+/// Today's and tomorrow's events from two sources: the Windows appointment store (MSIX build only) and any number of ICS
 /// feeds. Feeds are fetched every 15 minutes and after resume, parsed off the UI thread and kept in memory; the merged list
 /// is rebuilt after each fetch and at midnight. The feed URLs live in <c>calendar.json</c>, encrypted with DPAPI, and are
 /// never written to the log. Nothing runs while the calendar is switched off.
@@ -249,13 +252,22 @@ internal sealed class CalendarService : IDisposable
 
     // ---- Sources ------------------------------------------------------------------------------------
 
-    /// <summary>Windows calendars through the appointment store. Needs package identity, so a plain exe lands in the catch.</summary>
+    /// <summary>
+    /// Windows calendars through the appointment store (read-only, all calendars): Subject, Location, StartTime, Duration and AllDay
+    /// of every appointment in the window. Needs package identity, so a portable exe never asks; a null store means the user (or
+    /// policy) turned calendar access off for the app.
+    /// </summary>
     private async Task ReadWindowsAsync(DateTimeOffset from, DateTimeOffset to)
     {
         if (!_settings.Current.CalendarUseWindows)
         {
-            Windows = WindowsCalendarState.Off;
-            _windowsEvents = new List<CalendarEvent>();
+            SetWindows(WindowsCalendarState.Off);
+            return;
+        }
+
+        if (!PackageIdentity.IsPackaged)
+        {
+            SetWindows(WindowsCalendarState.Unavailable);
             return;
         }
 
@@ -264,16 +276,16 @@ internal sealed class CalendarService : IDisposable
             AppointmentStore? store = await AppointmentManager.RequestStoreAsync(AppointmentStoreAccessType.AllCalendarsReadOnly);
             if (store == null)
             {
-                Windows = WindowsCalendarState.Unavailable;
-                _windowsEvents = new List<CalendarEvent>();
+                SetWindows(WindowsCalendarState.AccessDenied);
                 return;
             }
 
             var options = new FindAppointmentsOptions { MaxCount = 200 };
-            foreach (string property in AppointmentProperties.DefaultProperties)
-            {
-                options.FetchProperties.Add(property);
-            }
+            options.FetchProperties.Add(AppointmentProperties.Subject);
+            options.FetchProperties.Add(AppointmentProperties.Location);
+            options.FetchProperties.Add(AppointmentProperties.StartTime);
+            options.FetchProperties.Add(AppointmentProperties.Duration);
+            options.FetchProperties.Add(AppointmentProperties.AllDay);
 
             IReadOnlyList<Appointment> found = await store.FindAppointmentsAsync(from, to - from, options);
             _windowsEvents = found.Select(a => new CalendarEvent(
@@ -285,16 +297,31 @@ internal sealed class CalendarService : IDisposable
                 0)).ToList();
             Windows = WindowsCalendarState.Available;
         }
+        catch (UnauthorizedAccessException ex)
+        {
+            SetWindows(WindowsCalendarState.AccessDenied);
+            LogWindowsFailureOnce(ex);
+        }
         catch (Exception ex)
         {
-            // No package identity (a loose exe), access denied by the user, or no calendar app: the source is simply unavailable.
-            Windows = WindowsCalendarState.Unavailable;
-            _windowsEvents = new List<CalendarEvent>();
-            if (!_loggedWindowsFailure)
-            {
-                _loggedWindowsFailure = true;
-                Log.Info($"Windows calendars unavailable ({ex.GetType().Name}); they need the installed (MSIX) version");
-            }
+            // No calendar app installed, or the store failed in some other way: the source is simply unavailable.
+            SetWindows(WindowsCalendarState.Unavailable);
+            LogWindowsFailureOnce(ex);
+        }
+    }
+
+    private void SetWindows(WindowsCalendarState state)
+    {
+        Windows = state;
+        _windowsEvents = new List<CalendarEvent>();
+    }
+
+    private void LogWindowsFailureOnce(Exception ex)
+    {
+        if (!_loggedWindowsFailure)
+        {
+            _loggedWindowsFailure = true;
+            Log.Info($"Windows calendars unavailable ({ex.GetType().Name}: {ex.Message})");
         }
     }
 

@@ -17,3 +17,6 @@ publish/
 TestResults/
 *.tmp
 __pycache__/
+
+# MSIX signing
+*.pfx

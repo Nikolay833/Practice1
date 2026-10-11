@@ -102,6 +102,26 @@ internal static class NativeMethods
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     public static extern uint GetLongPathName(string lpszShortPath, System.Text.StringBuilder lpszLongPath, uint cchBuffer);
 
+    // ---- Package identity (MSIX) and emulation ----------------------------------------------------
+    public const int ERROR_INSUFFICIENT_BUFFER = 122;
+    public const int APPMODEL_ERROR_NO_PACKAGE = 15700;
+    public const ushort IMAGE_FILE_MACHINE_ARM64 = 0xAA64;
+
+    /// <summary>0 = packaged (name copied), ERROR_INSUFFICIENT_BUFFER = packaged (buffer too small), APPMODEL_ERROR_NO_PACKAGE = a plain exe.</summary>
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+    public static extern int GetCurrentPackageFullName(ref uint packageFullNameLength, System.Text.StringBuilder? packageFullName);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+    public static extern int GetCurrentPackageFamilyName(ref uint packageFamilyNameLength, System.Text.StringBuilder? packageFamilyName);
+
+    [DllImport("kernel32.dll")]
+    public static extern IntPtr GetCurrentProcess();
+
+    /// <summary>Windows 10 1709+. <paramref name="processMachine"/> is 0 (IMAGE_FILE_MACHINE_UNKNOWN) when the process is not emulated.</summary>
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool IsWow64Process2(IntPtr process, out ushort processMachine, out ushort nativeMachine);
+
     // ---- Hotkeys / clipboard listener --------------------------------------------------------
     public const uint MOD_ALT = 0x0001;
     public const uint MOD_CONTROL = 0x0002;

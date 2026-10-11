@@ -187,6 +187,15 @@ internal sealed class ActivityHost
         }
     }
 
+    /// <summary>Ends <paramref name="activity"/>'s HUD right now (a click on it), if it is the one showing.</summary>
+    public void DismissHud(IPillActivity activity)
+    {
+        if (ReferenceEquals(_hud, activity))
+        {
+            EndHud();
+        }
+    }
+
     private void EndHud()
     {
         _hudTimer.Stop();

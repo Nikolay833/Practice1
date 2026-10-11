@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       release:
-        description: Publish a GitHub release with both builds
+        description: Publish a GitHub release with all builds
         type: boolean
         default: true
 
@@ -46,10 +46,45 @@ jobs:
           path: out/Dropshelf-${{ matrix.arch }}.exe
           if-no-files-found: error
 
+  msix:
+    # The second distribution: one signed .msixbundle with an x64 and an arm64 package (Windows installs the matching one).
+    # Packaged with makeappx / signtool from the Windows SDK on the runner; see packaging/.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build bundle (x64 + arm64)
+        shell: pwsh
+        run: ./packaging/build-msix.ps1 -Version 1.0.${{ github.run_number }}.0 -OutDir msix-out
+
+      # Uses the MSIX_PFX_BASE64 / MSIX_PFX_PASSWORD secrets when they exist (one certificate for every release, see the README),
+      # otherwise a new self-signed certificate for this run.
+      - name: Sign bundle
+        shell: pwsh
+        env:
+          MSIX_PFX_BASE64: ${{ secrets.MSIX_PFX_BASE64 }}
+          MSIX_PFX_PASSWORD: ${{ secrets.MSIX_PFX_PASSWORD }}
+        run: ./packaging/sign-msix.ps1 -Bundle msix-out/Dropshelf.msixbundle -OutDir msix-out
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Dropshelf-msix
+          path: |
+            msix-out/Dropshelf.msixbundle
+            msix-out/Dropshelf.cer
+          if-no-files-found: error
+
   release:
     # Runs on pushes to main, on v* tags, or from the Actions tab via "Run workflow".
-    if: (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))) || (github.event_name == 'workflow_dispatch' && inputs.release)
-    needs: build
+    # The portable exes are the main product: if the (newer, more fragile) MSIX job failed, the release still goes out without it.
+    if: ${{ !cancelled() && needs.build.result == 'success' && ((github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))) || (github.event_name == 'workflow_dispatch' && inputs.release)) }}
+    needs: [build, msix]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -83,4 +118,22 @@ jobs:
 
           Running the exe installs Dropshelf and starts it at every sign-in. Running a newer exe later updates it.
           EOF
+          # The MSIX version (notifications on the pill, Windows calendar), only when the msix job produced it.
+          if [ -f dist/Dropshelf.msixbundle ] && [ -f dist/Dropshelf.cer ]; then
+            cp tools/Install-Dropshelf-MSIX.ps1 dist/
+            cat >> notes.md <<'EOF'
+
+          ## MSIX version (optional)
+
+          Adds **notifications on the pill** and **Windows calendar** events. One bundle for x64 and Arm64. It is signed with a self-signed certificate, so Windows must trust `Dropshelf.cer` once:
+
+          ```powershell
+          irm https://github.com/Nikolay833/Practice1/releases/latest/download/Install-Dropshelf-MSIX.ps1 | iex
+          ```
+
+          The script trusts the certificate (it asks for administrator permission once) and installs `Dropshelf.msixbundle`.
+          EOF
+          else
+            echo "::warning::No MSIX bundle in the artifacts; releasing the portable exes only."
+          fi
           gh release create "$TAG" dist/* --title "Dropshelf $TAG" --notes-file notes.md --target "$GITHUB_SHA" --latest --verify-tag=false

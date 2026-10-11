@@ -74,7 +74,8 @@ derived from Droppy or its authors, and it uses no Droppy code or assets.
   mode (work, short break, ... a long break after the last round; lengths in Settings). While it runs the pill shows a progress
   ring around a stopwatch and the remaining time; the ring goes from the accent (green on breaks) to orange in the last minute.
   When a phase ends the pill grows with a spring *ding*, the mascot bounces and a soft chime plays (mute it in Settings). Time is
-  kept as an end timestamp, so it is exact, survives sleep, and a running timer survives a restart.
+  measured with a monotonic clock, so clock changes do not shift it; sleep time is counted, a phase that ended during a long
+  sleep stops instead of starting a stale break, and a running timer survives a restart.
 - **Quick notes** - the *Notes* tab has a note list and a plain-text editor, auto-saved 500 ms after you stop typing to
   `notes.json`, encrypted with Windows DPAPI like the clipboard history. The first line is the title. Drop text onto the tab to
   append it. `Ctrl+Shift+N` opens the shelf on the tab with the caret in the editor. The shelf is normally a no-activate window;
@@ -182,11 +183,11 @@ Dropshelf is meant to be started once and then forgotten.
   a debugger, with `--no-install`, and for anything that is not the single-file `Dropshelf.exe` (for example `dotnet run`
   or a loose debug build). If the copy fails, the app simply keeps running from where it was started.
 - **Updating** - download the new `Dropshelf.exe` and double-click it. It asks the running instance to quit, waits up to
-  5 seconds for it, overwrites the installed exe and starts it again. Your shelf, clipboard history and settings are kept.
+  10 seconds for it to exit, replaces the installed exe atomically (an older exe never replaces a newer one) and starts it again. Your shelf, clipboard history and settings are kept.
 - **Starts with Windows** - "Launch at startup" is on by default. The `HKCU\...\Run` value points at the installed exe
   (quoted, with `--autostart`) and is rewritten at every start if the path changed. Turn it off in Settings.
 - **Crash recovery** - after a fatal error the app logs it and starts a fresh copy of itself (`--restarted`). To avoid a
-  crash loop it relaunches at most 3 times within 2 minutes (`restarts.json`); after that it tells you and stays down.
+  crash loop it relaunches at most 3 times within 30 minutes (`restarts.json`, reset after 10 healthy minutes); after that it tells you and stays down.
   Ordinary exceptions inside a single UI handler are logged and the app keeps running, as before.
 - **Windows restarts** - the app registers with `RegisterApplicationRestart`, so Windows Update reboots and "restart apps
   after signing in" bring it back.

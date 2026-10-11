@@ -199,13 +199,29 @@ Command-line switches: `--no-install` (run from where it is, never self-install)
 
 ## Download
 
-Every push builds the app on GitHub Actions.
+There are two builds:
 
-1. Open the **Actions** tab of the repository and pick the latest successful **Build** run
-   (or start one with **Run workflow**).
-2. Download the **Dropshelf-win-x64** artifact and unzip it.
-3. Run `Dropshelf.exe`. It is a single self-contained file, so no .NET install is needed. On first run it installs
-   itself and starts with Windows (see [Always running](#always-running)); to update later, just run the new exe.
+| Your PC | File |
+|---|---|
+| Intel or AMD processor (most PCs) | `Dropshelf-x64.exe` |
+| Arm processor (Snapdragon, Surface Pro X / Pro 11, Copilot+ PCs) | `Dropshelf-arm64.exe` |
+
+Not sure? **Settings → System → About → System type** says "x64-based processor" or "ARM-based processor".
+
+**Easiest:** open the latest [release](https://github.com/Nikolay833/Practice1/releases/latest), download
+`Install-Dropshelf.cmd` and double-click it. It detects your processor and installs the matching build. Or from
+PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/Nikolay833/Practice1/main/tools/install.ps1 | iex
+```
+
+Or download the exe yourself from the release and run it. It is a single self-contained file, so no .NET install is
+needed. On first run it installs itself and starts with Windows (see [Always running](#always-running)); to update
+later, or to switch between x64 and arm64, just run the other exe.
+
+Releases are published on pushes to `main`, on `v*` tags, and from **Actions → Build → Run workflow**. Every other
+push still builds both exes as the **Dropshelf-win-x64** and **Dropshelf-win-arm64** artifacts of its Actions run.
 
 ## Build locally
 
@@ -216,7 +232,7 @@ Requirements: the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
 ```powershell
 dotnet build Dropshelf.sln -c Release
 
-# single-file executable, same as CI
+# single-file executable, same as CI (use -r win-arm64 for the Arm build)
 dotnet publish src/Dropshelf/Dropshelf.csproj -c Release -r win-x64 --self-contained true `
   -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o out
 ```

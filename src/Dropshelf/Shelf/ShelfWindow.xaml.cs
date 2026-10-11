@@ -1,10 +1,14 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
+using Dropshelf.Activities;
 using Dropshelf.Animation;
 using Dropshelf.Interop;
 using Dropshelf.Services;
@@ -28,10 +32,13 @@ public partial class ShelfWindow : Window
     private const int HoverDelayMs = 150;
     private const double DragMarginDip = 16;     // the pill becomes solid this close to the cursor while dragging
     private const int DragStartPx = 8;
+    private const string ShelfTabId = "shelf";
+    private const double ActivityWingGap = 14;   // space between a compact view and the pill edge
 
     private readonly ShelfStore _store;
     private readonly SettingsService _settings;
     private readonly Action _openSettings;
+    private readonly ActivityHost _activities;
     private readonly DispatcherTimer _hoverTimer;
     private readonly DispatcherTimer _collapseTimer;
 
@@ -45,6 +52,10 @@ public partial class ShelfWindow : Window
     private readonly Spring _stretchH = new(0, 420, 0.8);
     private readonly Spring _shiftX = new(0, 420, 0.8);
     private readonly Spring _glow = new(0, 140, 0.9);       // 0..1 brightness of the blue bloom / rim
+    private readonly Spring _collapsedW = new(CollapsedWidth, 520, 0.72);    // width / height of the collapsed pill: grows for activities
+    private readonly Spring _collapsedH = new(CollapsedHeight, 520, 0.72);
+    private readonly Spring _compact = new(0, 420, 0.9);                      // 0 = idle pill (mascot left), 1 = activity (mascot centred)
+    private readonly Spring _hide = new(0, 380, 1.0);                         // 1 = slid away above the screen (fullscreen app in front)
     private readonly FrameLoop _loop;
     private readonly ScaleTransform _mascotScale = new(0.5, 0.5);
     private readonly TranslateTransform _mascotMove = new(16, 5);
@@ -57,14 +68,35 @@ public partial class ShelfWindow : Window
     private bool _leftWasDown;
     private bool _leftDragging;        // left button held and moved since it went down
     private NativeMethods.POINT _leftPress;
+    private string _tab = ShelfTabId;
+    private string _tabKey = string.Empty;
+    private bool _fullscreen;
+    private bool _hiddenNative;
+    private bool _wheelEnabled;
+    private int _wheelX = int.MinValue, _wheelY, _wheelW, _wheelH;
+    private bool _wheelPublished;
 
-    public ShelfWindow(ShelfStore store, SettingsService settings, Action openSettings)
+    internal ShelfWindow(ShelfStore store, SettingsService settings, Action openSettings, ActivityHost activities)
     {
         InitializeComponent();
         _store = store;
         _settings = settings;
         _openSettings = openSettings;
+        _activities = activities;
         _loop = new FrameLoop(OnFrame);
+
+        // Activities: compact views around the mascot, tabs in the expanded shelf.
+        Grid.SetColumn(_activities.LeftView, 0);
+        Grid.SetColumn(_activities.RightView, 2);
+        CompactLayer.Children.Add(_activities.LeftView);
+        CompactLayer.Children.Add(_activities.RightView);
+        Pages.Adopt(ShelfPage);
+        Tabs.TabClicked += id => SelectTab(id);
+        _activities.CompactChanged += OnCompactChanged;
+        _activities.TabsChanged += RebuildTabs;
+        _settings.Changed += OnSettingChanged;
+        RebuildTabs();
+        ApplyMascotSetting();
 
         var mascotTransform = new TransformGroup();
         mascotTransform.Children.Add(_mascotScale);
@@ -126,12 +158,17 @@ public partial class ShelfWindow : Window
         WindowHelper.MakeToolWindow(_hwnd, noActivate: true);
         WindowHelper.SetClickThrough(_hwnd, true);
         HwndSource.FromHwnd(_hwnd)?.AddHook(WndProc);
+        OnCompactChanged();
         ApplyLayout();
         _hoverTimer.Start();
     }
 
     protected override void OnClosed(EventArgs e)
     {
+        _settings.Changed -= OnSettingChanged;
+        _activities.CompactChanged -= OnCompactChanged;
+        _activities.TabsChanged -= RebuildTabs;
+        PublishWheelRegion(null);
         _hoverTimer.Stop();
         _collapseTimer.Stop();
         _loop.Stop();
@@ -176,6 +213,8 @@ public partial class ShelfWindow : Window
         }
 
         _expanded = true;
+        _activities.SetExpandedOpen(true);
+        PublishWheelRegion(null);
         _monitor = MonitorInfo.Primary();
         WindowHelper.SetClickThrough(_hwnd, false);
         _ = PruneMissingAsync(); // drop files that vanished while the shelf was closed, without blocking the UI
@@ -219,6 +258,7 @@ public partial class ShelfWindow : Window
         }
 
         _expanded = false;
+        _activities.SetExpandedOpen(false);
         ExpandedPanel.IsHitTestVisible = false;
         DropHighlight.Visibility = Visibility.Collapsed;
         _dragOver = false;
@@ -243,6 +283,13 @@ public partial class ShelfWindow : Window
         if (_expanded)
         {
             _hoverTimer.Stop();
+            return;
+        }
+
+        if (IsSlidAway)
+        {
+            WindowHelper.SetClickThrough(_hwnd, true); // a fullscreen app is in front: never catch input
+            _hoverSince = 0;
             return;
         }
 
@@ -360,13 +407,20 @@ public partial class ShelfWindow : Window
         _stretchH.Step(dt);
         _shiftX.Step(dt);
         _glow.Step(dt);
+        _collapsedW.Step(dt);
+        _collapsedH.Step(dt);
+        _compact.Step(dt);
+        _hide.Step(dt);
         ApplyLayout();
 
         bool settled = _progress.SettleIfClose(0.0005, 0.01) & _stretchW.SettleIfClose(0.02, 0.2)
-                       & _stretchH.SettleIfClose(0.02, 0.2) & _shiftX.SettleIfClose(0.02, 0.2) & _glow.SettleIfClose(0.002, 0.02);
+                       & _stretchH.SettleIfClose(0.02, 0.2) & _shiftX.SettleIfClose(0.02, 0.2) & _glow.SettleIfClose(0.002, 0.02)
+                       & _collapsedW.SettleIfClose(0.05, 0.5) & _collapsedH.SettleIfClose(0.05, 0.5)
+                       & _compact.SettleIfClose(0.002, 0.02) & _hide.SettleIfClose(0.002, 0.02);
         if (settled)
         {
             ApplyLayout();
+            OnSettled();
             return false;
         }
 
@@ -382,21 +436,30 @@ public partial class ShelfWindow : Window
         }
 
         double p = Math.Clamp(_progress.Value, 0, 1.2);
-        double w = Lerp(CollapsedWidth, ExpandedWidth, p) + _stretchW.Value;
-        double h = Lerp(CollapsedHeight, ExpandedHeight, p) + _stretchH.Value;
+        double cw = _collapsedW.Value, ch = _collapsedH.Value;
+        double w = Lerp(cw, ExpandedWidth, p) + _stretchW.Value;
+        double h = Lerp(ch, ExpandedHeight, p) + _stretchH.Value;
         double r = Math.Max(0, Lerp(CollapsedRadius, ExpandedRadius, p));
 
         int pxW = (int)Math.Round(w * _monitor.Scale);
         int pxH = (int)Math.Round(h * _monitor.Scale);
         int x = _monitor.Left + (_monitor.Width - pxW) / 2 + (int)Math.Round(_shiftX.Value * _monitor.Scale);
-        int y = _monitor.Top; // flush with the top edge of the screen
+        double hide = Math.Clamp(_hide.Value, 0, 1);
+        int y = _monitor.Top - (int)Math.Round(pxH * hide); // flush with the top edge of the screen; slides away for fullscreen apps
         WindowHelper.SetBoundsTopmost(_hwnd, x, y, pxW, pxH);
+        Pill.Opacity = 1 - hide;
+        PublishWheelRegion(hide < 0.5 && !_expanded ? new NativeMethods.RECT { Left = x, Top = y, Right = x + pxW, Bottom = y + pxH } : null);
 
         var radius = new CornerRadius(0, 0, r, r);
         Pill.CornerRadius = radius;
         GlowRim.CornerRadius = radius;
         ExpandedPanel.Opacity = Math.Clamp((p - 0.45) / 0.55, 0, 1);
-        CollapsedLayer.Opacity = 1 - Math.Clamp(p / 0.35, 0, 1);
+        double compact = Math.Clamp(_compact.Value, 0, 1);
+        double notExpanding = 1 - Math.Clamp(p / 0.35, 0, 1);
+        CollapsedLayer.Opacity = notExpanding * (1 - compact);
+        CompactLayer.Opacity = notExpanding;
+        CompactLayer.Width = Math.Max(1, cw);
+        CompactLayer.Height = Math.Max(1, ch);
 
         double glow = Math.Clamp(_glow.Value, 0, 1);
         GlowRim.Opacity = glow;
@@ -407,8 +470,9 @@ public partial class ShelfWindow : Window
         double scale = Lerp(0.5, 0.9, m);
         _mascotScale.ScaleX = scale;
         _mascotScale.ScaleY = scale;
-        _mascotMove.X = Lerp(16, 14, m);
-        _mascotMove.Y = Lerp(5, 8, m);
+        double collapsedX = Lerp(16, cw / 2 - 11, compact); // idle: at the left; with an activity: centred between its two views
+        _mascotMove.X = Lerp(collapsedX, 14, m);
+        _mascotMove.Y = Lerp(5 + (ch - CollapsedHeight) / 2, 8, m);
     }
 
     private static double Lerp(double a, double b, double t) => a + (b - a) * t;
@@ -425,7 +489,12 @@ public partial class ShelfWindow : Window
             _stretchH.Snap(0);
             _shiftX.Snap(0);
             _glow.Snap(_glow.Target);
+            _collapsedW.Snap(_collapsedW.Target);
+            _collapsedH.Snap(_collapsedH.Target);
+            _compact.Snap(_compact.Target);
+            _hide.Snap(_hide.Target);
             ApplyLayout();
+            OnSettled();
         }
         else
         {
@@ -534,6 +603,7 @@ public partial class ShelfWindow : Window
         SetDragOver(accept);
         if (accept)
         {
+            SelectTab(ShelfTabId); // files dragged in always land on the shelf
             DropHighlight.Visibility = _expanded ? Visibility.Visible : Visibility.Collapsed;
             Expand();
         }
@@ -566,5 +636,237 @@ public partial class ShelfWindow : Window
         EmptyState.Visibility = n > 0 ? Visibility.Collapsed : Visibility.Visible;
         ItemsView.Visibility = n > 0 ? Visibility.Visible : Visibility.Collapsed;
         ClearButton.IsEnabled = n > 0;
+        UpdateHeader();
+    }
+
+    private void UpdateHeader()
+    {
+        bool shelf = _tab == ShelfTabId;
+        ClearButton.Visibility = shelf ? Visibility.Visible : Visibility.Collapsed;
+        CountText.Visibility = shelf && _store.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    // ---- Tabs ---------------------------------------------------------------------------------------
+
+    /// <summary>The tab strip is "Shelf" plus one tab per activity that currently has an expanded view.</summary>
+    private void RebuildTabs()
+    {
+        var tabs = new List<(string Id, string Title)> { (ShelfTabId, "Shelf") };
+        foreach (IPillActivity activity in _activities.TabActivities)
+        {
+            tabs.Add((activity.Id, activity.TabTitle!));
+        }
+
+        string key = string.Join('|', tabs.Select(t => t.Id));
+        if (key != _tabKey)
+        {
+            _tabKey = key;
+            Tabs.SetTabs(tabs);
+        }
+
+        if (_tab != ShelfTabId && tabs.All(t => t.Id != _tab))
+        {
+            SelectTab(ShelfTabId); // the activity behind the current tab went away (playback ended...)
+        }
+    }
+
+    private void SelectTab(string id, bool instant = false)
+    {
+        IPillActivity? activity = id == ShelfTabId ? null : _activities.TabActivities.FirstOrDefault(a => a.Id == id);
+        if (id != ShelfTabId && activity == null)
+        {
+            id = ShelfTabId;
+        }
+
+        FrameworkElement? page = activity == null ? ShelfPage : _activities.GetExpanded(activity);
+        if (page == null)
+        {
+            id = ShelfTabId;
+            page = ShelfPage;
+        }
+
+        bool changed = _tab != id;
+        _tab = id;
+        Tabs.Select(id, instant);
+        if (changed || Pages.Current != page)
+        {
+            Pages.Show(page, instant || !_expanded);
+        }
+
+        UpdateHeader();
+    }
+
+    /// <summary>All springs are at rest: a collapsed pill goes back to the default tab; a pill that slid away leaves the screen.</summary>
+    private void OnSettled()
+    {
+        if (!_expanded && _tab != ShelfTabId)
+        {
+            SelectTab(ShelfTabId, instant: true);
+        }
+
+        if (_hide.Value >= 0.999 && _hide.Target >= 1 && !_hiddenNative)
+        {
+            _hiddenNative = true;
+            NativeMethods.ShowWindow(_hwnd, NativeMethods.SW_HIDE); // off-screen is not enough with a monitor above
+        }
+    }
+
+    // ---- Activities, fullscreen, appearance ---------------------------------------------------------
+
+    private bool IsSlidAway => _hide.Target >= 1;
+
+    /// <summary>Sizes the collapsed pill to the current activity content (or back to the idle pill) with springs.</summary>
+    private void OnCompactChanged()
+    {
+        CompactContent? content = _activities.Content;
+        double slot = _settings.Current.ShowMascot ? 38 : 14;
+        MascotSlot.Width = new GridLength(slot);
+
+        double targetW = CollapsedWidth, targetH = CollapsedHeight;
+        if (content != null)
+        {
+            double half = Math.Max(content.LeftWidth, content.RightWidth) + ActivityWingGap;
+            targetW = Math.Max(CollapsedWidth, slot + 2 * half);
+            targetH = CollapsedHeight + content.ExtraHeight;
+        }
+
+        _collapsedW.Target = targetW;
+        _collapsedH.Target = targetH;
+        _compact.Target = content != null ? 1 : 0;
+
+        if (AnimationSettings.IsOff)
+        {
+            _collapsedW.Snap(targetW);
+            _collapsedH.Snap(targetH);
+            _compact.Snap(_compact.Target);
+            ApplyLayout();
+        }
+        else
+        {
+            AnimationSettings.Configure(_collapsedW, 520, 0.72); // a little overshoot: the pill "grows"
+            AnimationSettings.Configure(_collapsedH, 520, 0.72);
+            AnimationSettings.Configure(_compact, 420, 0.9);
+            _loop.Start();
+        }
+
+        UpdateSlide();
+    }
+
+    /// <summary>A fullscreen app is (or is no longer) in front: slide the pill away, unless a HUD that may show over it is up.</summary>
+    public void SetFullscreen(bool fullscreen)
+    {
+        _fullscreen = fullscreen;
+        if (fullscreen && _expanded)
+        {
+            Collapse();
+        }
+
+        UpdateSlide();
+    }
+
+    private void UpdateSlide()
+    {
+        if (_hwnd == IntPtr.Zero)
+        {
+            return;
+        }
+
+        bool away = _fullscreen && !_activities.IsHudShowing;
+        double target = away ? 1 : 0;
+        if (Math.Abs(_hide.Target - target) < 0.5)
+        {
+            return;
+        }
+
+        if (!away && _hiddenNative)
+        {
+            _hiddenNative = false;
+            NativeMethods.ShowWindow(_hwnd, NativeMethods.SW_SHOWNOACTIVATE);
+        }
+
+        _hide.Target = target;
+        if (away)
+        {
+            _hoverSince = 0;
+            WindowHelper.SetClickThrough(_hwnd, true);
+        }
+
+        if (AnimationSettings.IsOff)
+        {
+            _hide.Snap(target);
+            ApplyLayout();
+            OnSettled();
+        }
+        else
+        {
+            AnimationSettings.Configure(_hide, 380, 1.0);
+            _loop.Start();
+        }
+    }
+
+    private void OnSettingChanged(string name)
+    {
+        if (name == nameof(AppSettings.ShowMascot))
+        {
+            ApplyMascotSetting();
+        }
+    }
+
+    private void ApplyMascotSetting()
+    {
+        Mascot.Visibility = _settings.Current.ShowMascot ? Visibility.Visible : Visibility.Collapsed;
+        OnCompactChanged();
+    }
+
+    /// <summary>
+    /// Where the mouse wheel is captured for the volume scroll (the collapsed pill's bounds), or null. Set by the app, which
+    /// hands it to the mouse hook.
+    /// </summary>
+    internal Action<NativeMethods.RECT?>? WheelRegionSink { get; set; }
+
+    /// <summary>Wheel over the collapsed pill changes the volume (the setting is on and there is a volume to change).</summary>
+    public bool WheelEnabled
+    {
+        get => _wheelEnabled;
+        set
+        {
+            _wheelEnabled = value;
+            if (!value)
+            {
+                PublishWheelRegion(null);
+            }
+            else
+            {
+                ApplyLayout(); // publishes the current bounds
+            }
+        }
+    }
+
+    private void PublishWheelRegion(NativeMethods.RECT? region)
+    {
+        if (!_wheelEnabled || WheelRegionSink == null)
+        {
+            region = null;
+        }
+
+        if (region is { } r)
+        {
+            if (_wheelPublished && r.Left == _wheelX && r.Top == _wheelY && r.Width == _wheelW && r.Height == _wheelH)
+            {
+                return;
+            }
+
+            _wheelX = r.Left;
+            _wheelY = r.Top;
+            _wheelW = r.Width;
+            _wheelH = r.Height;
+            _wheelPublished = true;
+            WheelRegionSink!(r);
+        }
+        else if (_wheelPublished)
+        {
+            _wheelPublished = false;
+            WheelRegionSink?.Invoke(null);
+        }
     }
 }

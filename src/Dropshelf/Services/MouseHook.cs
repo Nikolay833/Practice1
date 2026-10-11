@@ -18,7 +18,10 @@ internal sealed class MouseHook : IDisposable
 {
     private const int MaxQueued = 2048; // moves are dropped beyond this while the UI thread is stalled
 
-    private readonly record struct MouseEvent(int Msg, int X, int Y);
+    private readonly record struct MouseEvent(int Msg, int X, int Y, int Delta = 0);
+
+    /// <summary>Screen rectangle (physical pixels) where the wheel is captured; immutable so the hook thread can read it without locking.</summary>
+    private sealed record WheelRegion(int Left, int Top, int Right, int Bottom);
 
     private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
     private readonly ConcurrentQueue<MouseEvent> _queue = new();
@@ -33,6 +36,7 @@ internal sealed class MouseHook : IDisposable
     private int _queued;
     private int _drainPending;
     private volatile bool _installed;
+    private volatile WheelRegion? _wheelRegion;
 
     public MouseHook()
     {
@@ -46,6 +50,16 @@ internal sealed class MouseHook : IDisposable
     public event Action<int, int>? LeftDown;
     public event Action<int, int>? LeftUp;
     public event Action<int, int>? Move;
+
+    /// <summary>Wheel turned inside the region set by <see cref="SetWheelRegion"/>: x, y and the raw wheel delta (120 per notch, positive = away from the user).</summary>
+    public event Action<int, int, int>? Wheel;
+
+    /// <summary>
+    /// Captures the mouse wheel over a screen rectangle: wheel events there are delivered to <see cref="Wheel"/> and are
+    /// not passed on to the window underneath. Pass <c>null</c> to stop capturing. Requires the hook to be installed.
+    /// </summary>
+    public void SetWheelRegion(NativeMethods.RECT? region) =>
+        _wheelRegion = region is { } r ? new WheelRegion(r.Left, r.Top, r.Right, r.Bottom) : null;
 
     public void Install()
     {
@@ -156,7 +170,23 @@ internal sealed class MouseHook : IDisposable
             try
             {
                 int msg = wParam.ToInt32();
-                if (msg is NativeMethods.WM_MOUSEMOVE or NativeMethods.WM_LBUTTONDOWN or NativeMethods.WM_LBUTTONUP)
+                if (msg == NativeMethods.WM_MOUSEWHEEL && _wheelRegion is { } region)
+                {
+                    var data = Marshal.PtrToStructure<NativeMethods.MSLLHOOKSTRUCT>(lParam);
+                    if (data.pt.X >= region.Left && data.pt.X < region.Right && data.pt.Y >= region.Top && data.pt.Y < region.Bottom)
+                    {
+                        int delta = (short)((data.mouseData >> 16) & 0xFFFF);
+                        _queue.Enqueue(new MouseEvent(msg, data.pt.X, data.pt.Y, delta));
+                        Interlocked.Increment(ref _queued);
+                        if (Interlocked.Exchange(ref _drainPending, 1) == 0)
+                        {
+                            _dispatcher.BeginInvoke(DispatcherPriority.Input, _drain);
+                        }
+
+                        return (IntPtr)1; // swallow: the window under the pill must not scroll as well
+                    }
+                }
+                else if (msg is NativeMethods.WM_MOUSEMOVE or NativeMethods.WM_LBUTTONDOWN or NativeMethods.WM_LBUTTONUP)
                 {
                     // Always keep button events (their order matters); only moves are shed when the UI is far behind.
                     if (msg != NativeMethods.WM_MOUSEMOVE || Volatile.Read(ref _queued) < MaxQueued)
@@ -200,6 +230,7 @@ internal sealed class MouseHook : IDisposable
                     case NativeMethods.WM_MOUSEMOVE: Move?.Invoke(e.X, e.Y); break;
                     case NativeMethods.WM_LBUTTONDOWN: LeftDown?.Invoke(e.X, e.Y); break;
                     case NativeMethods.WM_LBUTTONUP: LeftUp?.Invoke(e.X, e.Y); break;
+                    case NativeMethods.WM_MOUSEWHEEL: Wheel?.Invoke(e.X, e.Y, e.Delta); break;
                 }
             }
             catch (Exception ex)

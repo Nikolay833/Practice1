@@ -1,7 +1,7 @@
 <Window x:Class="Dropshelf.Settings.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Dropshelf Settings" Width="476" Height="700"
+        Title="Dropshelf Settings" Width="476" Height="740"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         ResizeMode="NoResize" WindowStartupLocation="CenterScreen" UseLayoutRounding="True"
         FontFamily="{StaticResource UiFont}" Foreground="{StaticResource TextBrush}">
@@ -42,8 +42,44 @@
                                 <Setter TargetName="Bd" Property="Background" Value="{StaticResource PressedBrush}"/>
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource AccentBrush}"/>
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource AccentBrush}"/>
                                 <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="Divider" TargetType="Border">
+            <Setter Property="Height" Value="1"/>
+            <Setter Property="Margin" Value="0,11"/>
+            <Setter Property="Background" Value="{StaticResource StrokeBrush}"/>
+        </Style>
+
+        <!-- Round colour swatch; the colour is the Background, a white ring marks the chosen one. -->
+        <Style x:Key="Swatch" TargetType="RadioButton">
+            <Setter Property="Width" Value="28"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="Margin" Value="0,0,8,6"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Grid Background="Transparent">
+                            <Ellipse x:Name="Ring" Stroke="White" StrokeThickness="2" Opacity="0"/>
+                            <Ellipse x:Name="Dot" Fill="{TemplateBinding Background}" Margin="4"/>
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              TextElement.Foreground="White" TextElement.FontSize="11"
+                                              TextElement.FontFamily="{StaticResource IconFont}"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Dot" Property="Margin" Value="3"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Ring" Property="Opacity" Value="1"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -95,10 +131,140 @@
                         </StackPanel>
                     </Border>
                     <Border Style="{StaticResource Card}">
+                        <CheckBox IsChecked="{Binding HideInFullscreen, Mode=TwoWay}">
+                            <StackPanel>
+                                <TextBlock Text="Hide in fullscreen apps" Style="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="The pill slides away while a game, video or presentation is fullscreen" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
+                            </StackPanel>
+                        </CheckBox>
+                    </Border>
+                    <Border Style="{StaticResource Card}">
                         <StackPanel>
                             <TextBlock Text="Install location" Style="{StaticResource TextPrimary}"/>
                             <TextBlock x:Name="InstallPath" Style="{StaticResource TextSecondary}" FontSize="11"
                                        TextWrapping="Wrap" Margin="0,3,0,0"/>
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock Text="SHELF" Style="{StaticResource SectionLabel}"/>
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <CheckBox IsChecked="{Binding RememberShelf, Mode=TwoWay}">
+                                <StackPanel>
+                                    <TextBlock Text="Remember shelf items" Style="{StaticResource TextPrimary}"/>
+                                    <TextBlock Text="Keep what is on the shelf after a restart" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
+                                </StackPanel>
+                            </CheckBox>
+                            <Border Style="{StaticResource Divider}"/>
+                            <CheckBox IsChecked="{Binding ExpandShelfOnHover, Mode=TwoWay}">
+                                <StackPanel>
+                                    <TextBlock Text="Expand shelf on hover" Style="{StaticResource TextPrimary}"/>
+                                    <TextBlock Text="When off, the shelf opens only when you drag over it or click it" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
+                                </StackPanel>
+                            </CheckBox>
+                            <Border Style="{StaticResource Divider}"/>
+                            <CheckBox IsChecked="{Binding ShakeToOpenBasket, Mode=TwoWay}">
+                                <StackPanel>
+                                    <TextBlock Text="Shake to open basket" Style="{StaticResource TextPrimary}"/>
+                                    <TextBlock Text="Shake the mouse left and right while dragging" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
+                                </StackPanel>
+                            </CheckBox>
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock Text="MEDIA &amp; HUD" Style="{StaticResource SectionLabel}"/>
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <CheckBox IsChecked="{Binding ShowNowPlaying, Mode=TwoWay}">
+                                <StackPanel>
+                                    <TextBlock Text="Show now playing" Style="{StaticResource TextPrimary}"/>
+                                    <TextBlock Text="Album art and equalizer on the pill, and a Now Playing tab with controls" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </CheckBox>
+                            <Border Style="{StaticResource Divider}"/>
+                            <CheckBox IsChecked="{Binding ShowVolumeHud, Mode=TwoWay}">
+                                <StackPanel>
+                                    <TextBlock Text="Volume HUD" Style="{StaticResource TextPrimary}"/>
+                                    <TextBlock Text="Show the volume on the pill when it changes" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
+                                </StackPanel>
+                            </CheckBox>
+                            <Border Style="{StaticResource Divider}"/>
+                            <CheckBox IsChecked="{Binding ReplaceWindowsOsd, Mode=TwoWay}">
+                                <StackPanel>
+                                    <TextBlock Text="Replace Windows volume popup" Style="{StaticResource TextPrimary}"/>
+                                    <TextBlock Text="Hide the native volume and brightness popup (best effort; if it cannot be hidden both show)" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </CheckBox>
+                            <Border Style="{StaticResource Divider}"/>
+                            <CheckBox IsChecked="{Binding ScrollToChangeVolume, Mode=TwoWay}">
+                                <StackPanel>
+                                    <TextBlock Text="Scroll over the pill to change volume" Style="{StaticResource TextPrimary}"/>
+                                    <TextBlock Text="Turn the mouse wheel on the collapsed pill" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
+                                </StackPanel>
+                            </CheckBox>
+                            <Border Style="{StaticResource Divider}"/>
+                            <CheckBox IsChecked="{Binding ShowVolumeHudInFullscreen, Mode=TwoWay}" IsEnabled="{Binding HideInFullscreen}">
+                                <StackPanel>
+                                    <TextBlock Text="Show volume HUD in fullscreen" Style="{StaticResource TextPrimary}"/>
+                                    <TextBlock Text="Let the volume HUD slide in over a fullscreen app" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
+                                </StackPanel>
+                            </CheckBox>
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <CheckBox IsChecked="{Binding ShowBrightnessHud, Mode=TwoWay}">
+                                <StackPanel>
+                                    <TextBlock Text="Brightness HUD" Style="{StaticResource TextPrimary}"/>
+                                    <TextBlock Text="Laptop screens only" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
+                                </StackPanel>
+                            </CheckBox>
+                            <Border Style="{StaticResource Divider}"/>
+                            <CheckBox IsChecked="{Binding ShowBatteryHud, Mode=TwoWay}">
+                                <StackPanel>
+                                    <TextBlock Text="Battery notices" Style="{StaticResource TextPrimary}"/>
+                                    <TextBlock Text="Charger plugged in or removed, low battery at 20% and 10%, fully charged" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </CheckBox>
+                            <Border Style="{StaticResource Divider}"/>
+                            <CheckBox IsChecked="{Binding ShowBluetoothHud, Mode=TwoWay}">
+                                <StackPanel>
+                                    <TextBlock Text="Bluetooth devices" Style="{StaticResource TextPrimary}"/>
+                                    <TextBlock Text="Headphones, keyboards and mice connecting or disconnecting" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
+                                </StackPanel>
+                            </CheckBox>
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock Text="APPEARANCE" Style="{StaticResource SectionLabel}"/>
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <TextBlock Text="Accent color" Style="{StaticResource TextPrimary}"/>
+                            <WrapPanel x:Name="AccentSwatches" Margin="0,10,0,0"/>
+                            <Border Style="{StaticResource Divider}"/>
+                            <Grid>
+                                <TextBlock Text="Pill style" Style="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                    <RadioButton x:Name="StyleBlack" Content="Black" Tag="Black" GroupName="PillStyle"
+                                                 Style="{StaticResource Segment}" Checked="PillStyle_Checked"/>
+                                    <RadioButton x:Name="StyleGlass" Content="Glass" Tag="Glass" GroupName="PillStyle"
+                                                 Style="{StaticResource Segment}" Checked="PillStyle_Checked"/>
+                                </StackPanel>
+                            </Grid>
+                            <Border Style="{StaticResource Divider}"/>
+                            <CheckBox IsChecked="{Binding ShowMascot, Mode=TwoWay}">
+                                <StackPanel>
+                                    <TextBlock Text="Show mascot" Style="{StaticResource TextPrimary}"/>
+                                    <TextBlock Text="The little drop on the pill" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
+                                </StackPanel>
+                            </CheckBox>
+                            <Border Style="{StaticResource Divider}"/>
+                            <CheckBox IsChecked="{Binding MascotFollowsAccent, Mode=TwoWay}" IsEnabled="{Binding ShowMascot}">
+                                <StackPanel>
+                                    <TextBlock Text="Mascot follows accent color" Style="{StaticResource TextPrimary}"/>
+                                    <TextBlock Text="When off, the mascot stays blue" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
+                                </StackPanel>
+                            </CheckBox>
                         </StackPanel>
                     </Border>
 
@@ -119,34 +285,6 @@
                             <TextBlock x:Name="AnimationHint" Style="{StaticResource TextSecondary}" FontSize="11"
                                        TextWrapping="Wrap" Margin="0,8,0,0"/>
                         </StackPanel>
-                    </Border>
-
-                    <TextBlock Text="SHELF" Style="{StaticResource SectionLabel}"/>
-                    <Border Style="{StaticResource Card}">
-                        <CheckBox IsChecked="{Binding RememberShelf, Mode=TwoWay}">
-                            <StackPanel>
-                                <TextBlock Text="Remember shelf items" Style="{StaticResource TextPrimary}"/>
-                                <TextBlock Text="Keep what is on the shelf after a restart" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
-                            </StackPanel>
-                        </CheckBox>
-                    </Border>
-                    <Border Style="{StaticResource Card}">
-                        <CheckBox IsChecked="{Binding ExpandShelfOnHover, Mode=TwoWay}">
-                            <StackPanel>
-                                <TextBlock Text="Expand shelf on hover" Style="{StaticResource TextPrimary}"/>
-                                <TextBlock Text="When off, the shelf opens only when you drag over it or click it" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
-                            </StackPanel>
-                        </CheckBox>
-                    </Border>
-
-                    <TextBlock Text="BASKET" Style="{StaticResource SectionLabel}"/>
-                    <Border Style="{StaticResource Card}">
-                        <CheckBox IsChecked="{Binding ShakeToOpenBasket, Mode=TwoWay}">
-                            <StackPanel>
-                                <TextBlock Text="Shake to open basket" Style="{StaticResource TextPrimary}"/>
-                                <TextBlock Text="Shake the mouse left and right while dragging" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
-                            </StackPanel>
-                        </CheckBox>
                     </Border>
 
                     <TextBlock Text="CLIPBOARD" Style="{StaticResource SectionLabel}"/>

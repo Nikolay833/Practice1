@@ -14,7 +14,8 @@ namespace Dropshelf.Animation;
 /// </summary>
 internal static class TileAnimator
 {
-    private static readonly Color Glow = Color.FromRgb(0x3B, 0x82, 0xF6);
+    // The hover glow follows the accent colour (read each time a tile is lifted).
+    private static Color Glow => Themes.ThemeService.Current?.Accent ?? Themes.ThemeService.DefaultAccent;
 
     private sealed class Transforms
     {

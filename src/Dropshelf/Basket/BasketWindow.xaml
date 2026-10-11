@@ -40,7 +40,7 @@
                 </Grid>
                 <shelf:ItemListView x:Name="ItemsView" IsWrap="True" TileWidth="64" RemoveOnAnyDrop="True"/>
                 <Border x:Name="DropHighlight" Visibility="Collapsed" IsHitTestVisible="False" CornerRadius="14"
-                        BorderThickness="1.5" BorderBrush="{StaticResource AccentBrush}" Background="#143B82F6"/>
+                        BorderThickness="1.5" BorderBrush="{DynamicResource AccentBrush}" Background="{DynamicResource AccentWashBrush}"/>
             </Grid>
 
             <!-- Footer -->

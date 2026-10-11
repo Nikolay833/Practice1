@@ -17,11 +17,11 @@
             <ModelVisual3D>
                 <ModelVisual3D.Content>
                     <Model3DGroup>
-                        <AmbientLight Color="#FF4A5784"/>
+                        <AmbientLight x:Name="Ambient" Color="#FF4A5784"/>
                         <!-- Key light: upper right, in front of the drop -->
                         <DirectionalLight Color="#FFFFFFFF" Direction="-0.45,-0.7,-1"/>
                         <!-- Cool rim light from the lower left gives the glassy edge -->
-                        <DirectionalLight Color="#FF5B7BFF" Direction="0.9,0.35,-0.5"/>
+                        <DirectionalLight x:Name="RimLight" Color="#FF5B7BFF" Direction="0.9,0.35,-0.5"/>
                         <GeometryModel3D x:Name="Body">
                             <GeometryModel3D.Material>
                                 <MaterialGroup>
@@ -29,14 +29,14 @@
                                         <DiffuseMaterial.Brush>
                                             <!-- v runs from the tip (0) to the belly (1); slightly translucent -->
                                             <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                                <GradientStop Color="#EB7DB2FF" Offset="0"/>
-                                                <GradientStop Color="#EB3B82F6" Offset="0.55"/>
-                                                <GradientStop Color="#EB3B5BFF" Offset="1"/>
+                                                <GradientStop x:Name="StopTip" Color="#EB7DB2FF" Offset="0"/>
+                                                <GradientStop x:Name="StopMid" Color="#EB3B82F6" Offset="0.55"/>
+                                                <GradientStop x:Name="StopBase" Color="#EB3B5BFF" Offset="1"/>
                                             </LinearGradientBrush>
                                         </DiffuseMaterial.Brush>
                                     </DiffuseMaterial>
                                     <SpecularMaterial Brush="White" SpecularPower="60"/>
-                                    <EmissiveMaterial Brush="#503B5BFF"/>
+                                    <EmissiveMaterial x:Name="Emissive" Brush="#503B5BFF"/>
                                 </MaterialGroup>
                             </GeometryModel3D.Material>
                         </GeometryModel3D>

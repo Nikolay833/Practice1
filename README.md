@@ -29,11 +29,36 @@ derived from Droppy or its authors, and it uses no Droppy code or assets.
   Clipboard content flagged as private by password managers (`ExcludeClipboardContentFromMonitorProcessing`,
   `CanIncludeInClipboardHistory`) is never recorded. Text over 1,000,000 characters is not recorded. The history file
   is encrypted at rest with Windows DPAPI (current user); copied images are stored as PNG files.
+- **Pill activities** - the collapsed pill can show live content like a Dynamic Island: a priority-ordered set of
+  activities, each with a compact view left and right of the mascot (the pill springs wider to fit it) and optionally a
+  tab in the expanded shelf. Short-lived HUDs (volume, brightness, battery, Bluetooth) take the pill over for about
+  1.8 seconds and then hand it back. The expanded shelf has a tab bar: **Shelf** (default, and selected again whenever you
+  drag files in) plus one tab per activity that has an expanded view. See [Pill activities](#pill-activities).
+  - **Now playing** - album art left of the mascot and an equalizer right of it while media plays (also for ten seconds
+    after a pause). The *Now Playing* tab has big art over a soft glow of itself, title, artist, source app, a seekable
+    scrubber and previous / play-pause / next. Works with any app that reports to Windows' media controls (Spotify, browsers,
+    Media Player...). The equalizer follows the real output level (Core Audio peak meter) and falls back to a pseudo-random
+    animation if no meter is available.
+  - **Volume and brightness HUD** - a speaker glyph (muted / low / medium / high), an animated fill bar and the percentage
+    when the volume changes; the same for the brightness of a laptop panel. Scrolling the mouse wheel over the collapsed
+    pill changes the volume. The native Windows volume popup can be hidden while the HUD shows (best effort, see
+    [Notes](#notes-on-the-windows-hooks)).
+  - **Battery and Bluetooth** - plugging in or unplugging the charger (charging bolt, percentage), low battery warnings at
+    20 % and 10 % (red pulse) and a fully-charged notice; Bluetooth devices connecting or disconnecting with their name,
+    an icon (headphones, keyboard, mouse...) and their battery level when Windows reports it. Nothing is shown on a
+    desktop without a battery.
+- **Appearance** - eight accent colours (Blue default, Indigo, Purple, Pink, Red, Orange, Green, Teal) plus *Windows accent*,
+  which follows the accent colour you set in Windows. The accent applies live everywhere, including the mascot (optional).
+  Pill style *Black* (default) or *Glass* (dark, translucent). The mascot can be hidden.
+- **Hide in fullscreen** - the pill slides up out of view while a game, video or presentation is fullscreen on the pill's
+  monitor, and HUDs stay quiet (optionally except the volume HUD).
 - **Always running** - installs itself on first run, starts with Windows, relaunches after a crash and comes back after
   update reboots (see [Always running](#always-running)).
 - **Tray icon** - Show shelf, Open basket, Clipboard history, Settings, Uninstall, Quit. Only one instance runs at a time.
-- **Settings** - launch at startup (on by default), install location and autostart status, animation level, remember
-  shelf items, shake to open basket, clipboard history on/off and size, expand shelf on hover. Changes apply immediately.
+- **Settings** - grouped into General (launch at startup, hide in fullscreen apps, install location), Shelf (remember items,
+  expand on hover, shake to open basket), Media & HUD (now playing, volume / brightness / battery / Bluetooth HUDs, replace the
+  Windows volume popup, scroll for volume, volume HUD in fullscreen), Appearance (accent, pill style, mascot), Animations and
+  Clipboard (on/off and size). Changes apply immediately.
 - **Animations** - everything is spring-driven and runs at the display's frame rate; frames are only produced while
   something is moving (see [Animations](#animations)).
 
@@ -66,6 +91,38 @@ Settings > Animations has three levels:
 
 If you never choose a level, Windows' *Animation effects* switch (Settings > Accessibility > Visual effects) is honoured:
 with it off, the level is Subtle. Picking Full yourself overrides that.
+
+## Pill activities
+
+`Activities/` holds the base for everything that lives on the pill, so later features (timer, notes, calendar...) plug in
+without touching the shelf window.
+
+- `IPillActivity` - an id, a priority, `IsActive`, a kind (`Live`: stays while active; `Hud`: raises `HudRequested` and is shown
+  for about 1.8 s), a compact content factory (`CompactContent`: one element left and one right of the mascot, with their
+  widths), an optional expanded view (a tab title and a content factory) and the events `StateChanged` / `HudRequested`.
+  `PillActivityBase` implements the boilerplate.
+- `ActivityHost` - decides what the pill shows (a requested HUD, otherwise the active live activity with the highest
+  priority), crossfades between activities with springs (`CrossfadeHost`) and tells the shelf window which tabs exist
+  (`ActivityTabBar`). Register an activity once in `App.StartActivities`.
+- The shelf window springs the pill to the size the current content needs; the mascot slides to the centre between the two
+  views while an activity is shown. Nothing runs while nothing changes: WinRT / COM events are marshalled to the UI thread,
+  and frames are only produced while a spring moves.
+
+Every activity is created inside a `try`; on a machine where its API is missing (no Core Audio, no WinRT media controls, no
+WMI brightness class...) the feature is simply off and the rest keeps working.
+
+## Notes on the windows hooks
+
+- **Volume popup** - the native popup is looked up right after a volume or brightness change and hidden: on Windows 10 / early
+  Windows 11 the small topmost `NativeHWNDHost` window (with a `DirectUIHWND` child) of explorer.exe is minimized; on Windows 11
+  22H2+ a small, topmost, bottom-centred `XamlExplorerHostIslandWindow` of explorer.exe is hidden. If the window cannot be
+  found, both popups show. Turning *Replace Windows volume popup* off just stops the hiding. It is only hidden when the HUD
+  really shows (not while the shelf is open or a fullscreen app hides the pill).
+- **Scroll for volume** - uses the same low-level mouse hook as shake-to-open basket (installed only while one of the two
+  is on). The wheel is only captured over the collapsed pill; anywhere else it passes through untouched.
+- **Fullscreen** - checked once a second while *Hide in fullscreen apps* is on: the foreground window must cover the whole
+  pill monitor and either `SHQueryUserNotificationState` reports busy / D3D fullscreen / presentation mode, or the window has no
+  title bar. The desktop and shell windows never count.
 
 ## Always running
 
@@ -112,14 +169,16 @@ Every push builds the app on GitHub Actions.
 
 ## Build locally
 
-Requirements: the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0).
+Requirements: the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0). The project targets
+`net8.0-windows10.0.19041.0` (the Windows 10 2004 SDK projection, for `Windows.Media.Control`, `Windows.Devices.*` and
+`UISettings`) and supports Windows 10 1809 and later; NuGet fetches the SDK projection on restore.
 
 ```powershell
 dotnet build Dropshelf.sln -c Release
 
 # single-file executable, same as CI
 dotnet publish src/Dropshelf/Dropshelf.csproj -c Release -r win-x64 --self-contained true `
-  -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o out
+  -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o out
 ```
 
 The project sets `EnableWindowsTargeting`, so it also compiles on Linux/macOS, but it only runs on Windows 10/11.
@@ -137,11 +196,17 @@ The installed program is in `%LOCALAPPDATA%\Programs\Dropshelf`.
 ```
 src/Dropshelf/
   Animation/  spring integrator, animation setting, 3D mascot (MascotView, TeardropMesh), tile animations
+  Activities/ pill activity base (IPillActivity, ActivityHost, CrossfadeHost, tab bar)
+    Media/    now playing (Windows.Media.Control session, equalizer, Now Playing tab)
+    Hud/      volume + brightness HUD, HUD building blocks, native popup suppression
+    Power/    battery HUD
+    Devices/  Bluetooth HUD
   Shelf/      notch window, item model, drag/drop, shared tile list
   Basket/     floating basket window
   Clipboard/  history service, popup window
-  Services/   hotkeys, mouse hook, shake detection, settings, installer, startup registration, crash guard, tray
-  Interop/    P/Invoke and window helpers
+  Services/   hotkeys, mouse hook, shake detection, settings, installer, startup registration, crash guard, tray,
+              Core Audio endpoint (volume + meter), fullscreen watcher
+  Interop/    P/Invoke, Core Audio COM declarations and window helpers
   Settings/   settings window, uninstall dialog
-  Themes/     shared WPF styles
+  Themes/     shared WPF styles, accent + pill style service
 ```

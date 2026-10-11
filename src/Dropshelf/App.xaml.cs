@@ -3,6 +3,11 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Windows;
+using Dropshelf.Activities;
+using Dropshelf.Activities.Devices;
+using Dropshelf.Activities.Hud;
+using Dropshelf.Activities.Media;
+using Dropshelf.Activities.Power;
 using Dropshelf.Animation;
 using Dropshelf.Basket;
 using Dropshelf.Clipboard;
@@ -10,6 +15,7 @@ using Dropshelf.Interop;
 using Dropshelf.Services;
 using Dropshelf.Settings;
 using Dropshelf.Shelf;
+using Dropshelf.Themes;
 
 namespace Dropshelf;
 
@@ -38,6 +44,17 @@ public partial class App : Application
     private ClipboardWindow? _clipboardWindow;
     private SettingsWindow? _settingsWindow;
     private bool _clipboardHotkeyRegistered;
+    private ThemeService? _theme;
+    private ActivityHost? _activityHost;
+    private AudioEndpointService? _audio;
+    private MediaSessionService? _media;
+    private NowPlayingActivity? _nowPlaying;
+    private VolumeActivity? _volume;
+    private BrightnessActivity? _brightness;
+    private BatteryActivity? _battery;
+    private BluetoothActivity? _bluetooth;
+    private OsdSuppressor? _osd;
+    private FullscreenWatcher? _fullscreen;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -80,6 +97,7 @@ public partial class App : Application
         AppPaths.EnsureDirectories();
         _settings = new SettingsService();
         AnimationSettings.Attach(_settings.Current);
+        _theme = new ThemeService(_settings); // accent + pill style resources; must exist before any window is created
         _shelf = new ShelfStore(_settings);
         _basketStore = new ItemStore();
 
@@ -88,6 +106,7 @@ public partial class App : Application
         _clipboard = new ClipboardHistoryService(_messages, _settings);
 
         _mouseHook = new MouseHook();
+        _mouseHook.Wheel += (_, _, delta) => _volume?.ScrollBy(delta);
         _shake = new ShakeDetector(_mouseHook);
         // The mouse hook runs on its own thread and forwards events to the UI thread, so this runs on the UI thread.
         _shake.Shaken += () =>
@@ -98,8 +117,24 @@ public partial class App : Application
             }
         };
 
-        _shelfWindow = new ShelfWindow(_shelf, _settings, ShowSettings);
+        _activityHost = new ActivityHost();
+        StartActivities();
+
+        _shelfWindow = new ShelfWindow(_shelf, _settings, ShowSettings, _activityHost);
+        _shelfWindow.WheelRegionSink = region => _mouseHook.SetWheelRegion(region);
         _shelfWindow.Show();
+
+        _fullscreen = new FullscreenWatcher(_settings);
+        _fullscreen.Changed += fullscreen =>
+        {
+            _activityHost.SetFullscreen(fullscreen);
+            _shelfWindow.SetFullscreen(fullscreen);
+        };
+        if (_fullscreen.IsFullscreen)
+        {
+            _activityHost.SetFullscreen(true); // a fullscreen app was already in front at start-up
+            _shelfWindow.SetFullscreen(true);
+        }
 
         _tray = new TrayService(
             showShelf: () => _shelfWindow.ShowExpanded(),
@@ -134,14 +169,72 @@ public partial class App : Application
         }
 
         _settings.Changed += OnSettingChanged;
-        ApplyShakeSetting();
+        ApplyMouseHookSetting();
         ApplyClipboardSetting();
+    }
+
+    /// <summary>
+    /// Creates the pill activities. Each one is set up on its own: if Core Audio, WinRT or WMI is missing on this machine the
+    /// matching feature stays off and the rest of the app is unaffected.
+    /// </summary>
+    private void StartActivities()
+    {
+        _osd = new OsdSuppressor { Gate = hud => _activityHost!.CanShowHud(hud) };
+
+        TryStep("audio endpoint", () => _audio = new AudioEndpointService());
+        if (_audio is { IsAvailable: true })
+        {
+            TryStep("volume HUD", () =>
+            {
+                _volume = new VolumeActivity(_audio, _settings!, _osd);
+                _activityHost!.Register(_volume);
+            });
+        }
+
+        TryStep("now playing", () =>
+        {
+            _media = new MediaSessionService();
+            _nowPlaying = new NowPlayingActivity(_media, _audio, _settings!);
+            _activityHost!.Register(_nowPlaying);
+            _ = _media.StartAsync();
+        });
+
+        TryStep("brightness HUD", () =>
+        {
+            _brightness = new BrightnessActivity(_settings!, _osd);
+            _activityHost!.Register(_brightness);
+            _ = _brightness.StartAsync();
+        });
+
+        TryStep("battery HUD", () =>
+        {
+            _battery = new BatteryActivity(_settings!);
+            _activityHost!.Register(_battery);
+        });
+
+        TryStep("Bluetooth HUD", () =>
+        {
+            _bluetooth = new BluetoothActivity(_settings!);
+            _activityHost!.Register(_bluetooth);
+            _bluetooth.Start();
+        });
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
         // Tear down in reverse order; every step tolerates a half-started app (second instance) and a failing
         // step never stops the later ones (tray icon, settings flush and mutex release must always run).
+        TryStep("fullscreen watcher", () => _fullscreen?.Dispose());
+        TryStep("Bluetooth HUD", () => _bluetooth?.Dispose());
+        TryStep("battery HUD", () => _battery?.Dispose());
+        TryStep("brightness HUD", () => _brightness?.Dispose());
+        TryStep("now playing", () =>
+        {
+            _nowPlaying?.Dispose();
+            _media?.Dispose();
+        });
+        TryStep("audio endpoint", () => _audio?.Dispose());
+        TryStep("theme", () => _theme?.Dispose());
         TryStep("mouse hook", () => _mouseHook?.Dispose());
         TryStep("shake detector", () => _shake?.Dispose());
         TryStep("hotkeys", () => _hotkeys?.Dispose());
@@ -188,7 +281,7 @@ public partial class App : Application
         }
         catch (Exception ex)
         {
-            Log.Error($"Shutdown step '{name}' failed", ex);
+            Log.Error($"Step '{name}' failed", ex);
         }
     }
 
@@ -210,7 +303,14 @@ public partial class App : Application
                 _shelf?.OnRememberChanged();
                 break;
             case nameof(AppSettings.ShakeToOpenBasket):
-                ApplyShakeSetting();
+            case nameof(AppSettings.ScrollToChangeVolume):
+                ApplyMouseHookSetting();
+                break;
+            case nameof(AppSettings.ShowNowPlaying):
+                _nowPlaying?.ApplySettings();
+                break;
+            case nameof(AppSettings.HideInFullscreen):
+                _fullscreen?.ApplySettings();
                 break;
             case nameof(AppSettings.Animations):
                 _shelfWindow?.OnAnimationModeChanged();
@@ -226,10 +326,19 @@ public partial class App : Application
         }
     }
 
-    /// <summary>The low-level mouse hook is only installed while shake-to-open is enabled.</summary>
-    private void ApplyShakeSetting()
+    /// <summary>
+    /// The low-level mouse hook is only installed while it is needed: shake-to-open is enabled, or the wheel over the pill
+    /// changes the volume (which also needs a working volume control).
+    /// </summary>
+    private void ApplyMouseHookSetting()
     {
-        if (_settings!.Current.ShakeToOpenBasket)
+        bool wheel = _settings!.Current.ScrollToChangeVolume && _volume != null;
+        if (_shelfWindow != null)
+        {
+            _shelfWindow.WheelEnabled = wheel;
+        }
+
+        if (_settings.Current.ShakeToOpenBasket || wheel)
         {
             _mouseHook!.Install();
         }

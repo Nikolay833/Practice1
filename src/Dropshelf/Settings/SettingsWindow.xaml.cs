@@ -5,8 +5,10 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using Dropshelf.Animation;
 using Dropshelf.Services;
+using Dropshelf.Themes;
 
 namespace Dropshelf.Settings;
 
@@ -23,11 +25,80 @@ public partial class SettingsWindow : Window
         DataContext = _settings;
 
         ShowAnimationMode();
+        BuildAccentSwatches();
+        StyleBlack.IsChecked = _settings.PillStyle == PillStyle.Black;
+        StyleGlass.IsChecked = _settings.PillStyle == PillStyle.Glass;
         UpdateInstallInfo();
         _initializing = false;
 
         _settings.PropertyChanged += OnSettingChanged;
-        Closed += (_, _) => _settings.PropertyChanged -= OnSettingChanged;
+        if (ThemeService.Current is { } theme)
+        {
+            theme.Changed += RefreshWindowsSwatch;
+        }
+
+        Closed += (_, _) =>
+        {
+            _settings.PropertyChanged -= OnSettingChanged;
+            if (ThemeService.Current is { } t)
+            {
+                t.Changed -= RefreshWindowsSwatch;
+            }
+        };
+    }
+
+    private RadioButton? _windowsSwatch;
+
+    /// <summary>One round swatch per accent preset; "Windows" shows the current Windows accent and follows it.</summary>
+    private void BuildAccentSwatches()
+    {
+        foreach (AccentPreset preset in Enum.GetValues<AccentPreset>())
+        {
+            var swatch = new RadioButton
+            {
+                Style = (Style)FindResource("Swatch"),
+                GroupName = "Accent",
+                Tag = preset,
+                ToolTip = preset == AccentPreset.Windows ? "Windows accent color" : preset.ToString(),
+                Background = new SolidColorBrush(ThemeService.ColorOf(preset)),
+                IsChecked = _settings.Accent == preset,
+            };
+            if (preset == AccentPreset.Windows)
+            {
+                swatch.Content = "\uE790"; // palette glyph marks "follow Windows"
+                _windowsSwatch = swatch;
+            }
+
+            swatch.Checked += (_, _) =>
+            {
+                if (!_initializing)
+                {
+                    _settings.Accent = preset;
+                }
+            };
+            AccentSwatches.Children.Add(swatch);
+        }
+    }
+
+    private void RefreshWindowsSwatch()
+    {
+        if (_windowsSwatch != null)
+        {
+            _windowsSwatch.Background = new SolidColorBrush(ThemeService.ColorOf(AccentPreset.Windows));
+        }
+    }
+
+    private void PillStyle_Checked(object sender, RoutedEventArgs e)
+    {
+        if (_initializing || sender is not RadioButton { Tag: string tag })
+        {
+            return;
+        }
+
+        if (Enum.TryParse(tag, out PillStyle style))
+        {
+            _settings.PillStyle = style;
+        }
     }
 
     private void OnSettingChanged(object? sender, PropertyChangedEventArgs e)

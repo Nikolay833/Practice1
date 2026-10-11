@@ -1,9 +1,11 @@
 using System;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using System.Windows.Media.Media3D;
 using System.Windows.Threading;
 using Dropshelf.Interop;
+using Dropshelf.Themes;
 
 namespace Dropshelf.Animation;
 
@@ -80,8 +82,26 @@ public partial class MascotView : UserControl
         _idleTimer = new DispatcherTimer(DispatcherPriority.Background);
         _idleTimer.Tick += (_, _) => OnIdleTick();
 
-        Loaded += (_, _) => Start();
-        Unloaded += (_, _) => Stop();
+        Loaded += (_, _) =>
+        {
+            if (ThemeService.Current is { } theme)
+            {
+                theme.Changed -= ApplyAccent;
+                theme.Changed += ApplyAccent;
+            }
+
+            ApplyAccent();
+            Start();
+        };
+        Unloaded += (_, _) =>
+        {
+            if (ThemeService.Current is { } theme)
+            {
+                theme.Changed -= ApplyAccent;
+            }
+
+            Stop();
+        };
         IsVisibleChanged += (_, _) =>
         {
             if (IsVisible)
@@ -148,6 +168,30 @@ public partial class MascotView : UserControl
         _hop.Velocity -= 1.5;
         _blinkClock = 0;
         EnsureLoop();
+    }
+
+    // ---- Accent ---------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Tints the body, rim light, emissive glow and drop shadow from the accent (or the default blue when the mascot is set
+    /// not to follow it). The shades are derived with the same hue/saturation steps that turn the default blue #3B82F6 into
+    /// the original tip #7DB2FF and belly #3B5BFF.
+    /// </summary>
+    private void ApplyAccent()
+    {
+        System.Windows.Media.Color accent = ThemeService.Current?.MascotAccent ?? ThemeService.DefaultAccent;
+        System.Windows.Media.Color tip = ColorUtil.Tip(accent);
+        System.Windows.Media.Color deep = ColorUtil.Deep(accent);
+        System.Windows.Media.Color glow = ColorUtil.Glow(accent);
+
+        StopTip.Color = ColorUtil.WithAlpha(tip, 0xEB);
+        StopMid.Color = ColorUtil.WithAlpha(accent, 0xEB);
+        StopBase.Color = ColorUtil.WithAlpha(deep, 0xEB);
+        RimLight.Color = glow;
+        double tint = accent == ThemeService.DefaultAccent ? 0 : 0.35; // the default keeps its original ambient light
+        Ambient.Color = ColorUtil.Mix(System.Windows.Media.Color.FromRgb(0x4A, 0x57, 0x84), ColorUtil.Mix(Colors.Black, accent, 0.45), tint);
+        Emissive.Brush = new System.Windows.Media.SolidColorBrush(ColorUtil.WithAlpha(deep, 0x50));
+        Glow.Color = deep;
     }
 
     // ---- Lifecycle ------------------------------------------------------------------------------

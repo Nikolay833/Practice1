@@ -74,7 +74,7 @@
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding IsPinned}" Value="True">
                                                 <Setter Property="Text" Value="&#xE840;"/>
-                                                <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+                                                <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
@@ -117,8 +117,8 @@
             <Grid x:Name="ListHost" Grid.Row="1" Margin="0,10,0,6" ClipToBounds="True">
                 <!-- Highlight bar that glides between rows (position and height are springs, see code-behind) -->
                 <Border x:Name="GlideBar" VerticalAlignment="Top" Height="0" Visibility="Collapsed" IsHitTestVisible="False"
-                        CornerRadius="12" Background="{StaticResource AccentSoftBrush}"
-                        BorderBrush="{StaticResource AccentStrokeBrush}" BorderThickness="1">
+                        CornerRadius="12" Background="{DynamicResource AccentSoftBrush}"
+                        BorderBrush="{DynamicResource AccentStrokeBrush}" BorderThickness="1">
                     <Border.RenderTransform>
                         <TranslateTransform x:Name="GlideShift"/>
                     </Border.RenderTransform>

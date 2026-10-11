@@ -128,9 +128,10 @@ internal static class Installer
                 return true;
             }
 
-            // Ask a running instance (the installed copy, usually) to quit so its exe can be overwritten, then wait for it
-            // to be really gone: it is found by its path, so no PID has to be handed over.
-            List<Process> running = RunningInstalledProcesses();
+            // Ask every other running Dropshelf to quit, wherever it was started from (the installed copy, a copy in Downloads,
+            // the MSIX version), so this one can replace it. One that does not quit in time is ended: otherwise this launch
+            // would silently give way to it and the old version would keep running.
+            List<Process> running = OtherDropshelfProcesses();
             bool signalled = false;
             if (EventWaitHandle.TryOpenExisting(QuitEventName, out EventWaitHandle? quit))
             {
@@ -141,9 +142,9 @@ internal static class Installer
                 }
             }
 
-            if (!WaitForExit(running, signalled ? ProcessExitWaitMs : 0))
+            if (!WaitForExit(running, signalled ? ProcessExitWaitMs : 0, killIfStuck: true))
             {
-                Log.Error("Install skipped: the installed Dropshelf is still running and did not quit in time");
+                Log.Error("Install skipped: another Dropshelf is still running and could not be ended");
                 return false;
             }
 
@@ -234,15 +235,19 @@ internal static class Installer
     private static bool IsOlderThan(string source, string installed) =>
         FileVersionOf(source) is { } s && FileVersionOf(installed) is { } i && s < i;
 
-    /// <summary>Other running Dropshelf processes that were started from the installed exe.</summary>
-    private static List<Process> RunningInstalledProcesses()
+    /// <summary>
+    /// Other Dropshelf processes in this sign-in session, whatever folder (or MSIX package) they run from. Processes of other
+    /// users or sessions are left alone.
+    /// </summary>
+    private static List<Process> OtherDropshelfProcesses()
     {
+        int session = Process.GetCurrentProcess().SessionId;
         var found = new List<Process>();
         foreach (Process p in Process.GetProcessesByName("Dropshelf"))
         {
             try
             {
-                if (p.Id != Environment.ProcessId && SamePath(p.MainModule?.FileName, InstalledExe))
+                if (p.Id != Environment.ProcessId && p.SessionId == session)
                 {
                     found.Add(p);
                     continue;
@@ -250,7 +255,7 @@ internal static class Installer
             }
             catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
             {
-                // Not ours to inspect (other user / elevated) or already gone.
+                // Already gone.
             }
 
             p.Dispose();
@@ -259,8 +264,11 @@ internal static class Installer
         return found;
     }
 
-    /// <summary>Waits up to <paramref name="timeoutMs"/> in total for the processes to exit and disposes them. True when all are gone.</summary>
-    private static bool WaitForExit(List<Process> processes, int timeoutMs)
+    /// <summary>
+    /// Waits up to <paramref name="timeoutMs"/> in total for the processes to exit; with <paramref name="killIfStuck"/> the
+    /// ones still running then are ended. Disposes them. True when all are gone.
+    /// </summary>
+    private static bool WaitForExit(List<Process> processes, int timeoutMs, bool killIfStuck = false)
     {
         long deadline = Environment.TickCount64 + timeoutMs;
         bool allGone = true;
@@ -270,19 +278,49 @@ internal static class Installer
             {
                 try
                 {
-                    if (!p.WaitForExit((int)Math.Max(0, deadline - Environment.TickCount64)))
+                    if (p.WaitForExit((int)Math.Max(0, deadline - Environment.TickCount64)))
                     {
-                        allGone = false;
+                        continue;
                     }
+
+                    if (killIfStuck)
+                    {
+                        Log.Info($"Ending Dropshelf process {p.Id}: it did not quit when asked");
+                        p.Kill();
+                        if (p.WaitForExit(3000))
+                        {
+                            continue;
+                        }
+                    }
+
+                    allGone = false;
                 }
-                catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
+                catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or NotSupportedException)
                 {
-                    // Already gone.
+                    // Already gone, or not ours to end (then the mutex wait below reports it).
+                    try
+                    {
+                        allGone &= p.HasExited;
+                    }
+                    catch (Exception inner) when (inner is Win32Exception or InvalidOperationException)
+                    {
+                        // Cannot tell; the mutex wait decides.
+                    }
                 }
             }
         }
 
         return allGone;
+    }
+
+    /// <summary>This exe's version, e.g. "1.0.14" (the build number of the GitHub Actions run that built it).</summary>
+    public static string CurrentVersion
+    {
+        get
+        {
+            Version? v = typeof(Installer).Assembly.GetName().Version;
+            return v == null ? "dev" : $"{v.Major}.{v.Minor}.{v.Build}";
+        }
     }
 
     /// <summary>

@@ -42,7 +42,7 @@ internal sealed class TrayService : IDisposable
         _icon = new WinForms.NotifyIcon
         {
             Icon = _ownedIcon ?? Drawing.SystemIcons.Application,
-            Text = "Dropshelf",
+            Text = "Dropshelf " + Installer.CurrentVersion, // hover the tray icon to see which version is running
             ContextMenuStrip = _menu,
             Visible = true,
         };

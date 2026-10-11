@@ -29,6 +29,7 @@ public partial class SettingsWindow : Window
 
         ShowAnimationMode();
         BuildAccentSwatches();
+        VersionText.Text = "Version " + Installer.CurrentVersion;
         UpdateInstallInfo();
         UnitCelsius.IsChecked = !_settings.WeatherFahrenheit;
         UnitFahrenheit.IsChecked = _settings.WeatherFahrenheit;

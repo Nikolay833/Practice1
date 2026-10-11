@@ -525,6 +525,7 @@
                         Margin="-2,4,0,0" Click="OpenFolder_Click"/>
                 <TextBlock Style="{StaticResource TextSecondary}" FontSize="11" TextWrapping="Wrap" Margin="4,6,0,0"
                            Text="Dropshelf is an independent Windows app. It is not affiliated with Apple or any macOS product."/>
+                <TextBlock x:Name="VersionText" Style="{StaticResource TextSecondary}" FontSize="11" Margin="4,2,0,0"/>
             </StackPanel>
         </ScrollViewer>
     </Grid>

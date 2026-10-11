@@ -114,6 +114,18 @@ public partial class App : Application
         {
             _mutex.Dispose();
             _mutex = null;
+
+            // Started by hand while another Dropshelf keeps running (the self-update could not replace it): say so, instead of
+            // vanishing and leaving the user looking at the old version. Automatic starts stay silent.
+            if (!e.Args.Contains(Installer.AutostartArgument, StringComparer.OrdinalIgnoreCase) && !restarted)
+            {
+                MessageBox.Show(
+                    "Another copy of Dropshelf is already running, so this one (version " + Installer.CurrentVersion + ") did not start.\n\n" +
+                    "Quit the running one (right-click the tray icon > Quit, or end Dropshelf.exe in Task Manager). If you installed the " +
+                    "MSIX version, uninstall it in Settings > Apps. Then start this file again.",
+                    "Dropshelf", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+
             Shutdown();
             return;
         }

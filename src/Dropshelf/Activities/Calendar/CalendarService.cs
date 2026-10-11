@@ -189,7 +189,7 @@ internal sealed class CalendarService : IDisposable
         }
 
         DateTimeOffset from = DateTimeOffset.Now, to = from.AddDays(7);
-        int next = await Task.Run(() => events.Sum(e => IcsParser.Occurrences(e, from, to).Count()));
+        int next = await Task.Run(() => events.Sum(e => IcsParser.SafeOccurrences(e, from, to).Count));
         return (events.Count, next, null);
     }
 
@@ -211,16 +211,34 @@ internal sealed class CalendarService : IDisposable
         var urls = _feeds.Keys.ToList();
         List<CalendarEvent> merged = await Task.Run(() =>
         {
-            var all = new List<CalendarEvent>(_windowsEvents.Where(e => e.Start < to && e.End > from));
+            var all = new List<CalendarEvent>();
+            try
+            {
+                all.AddRange(_windowsEvents.Where(e => e.Start < to && e.End > from));
+            }
+            catch (Exception ex)
+            {
+                Log.Error("Calendar: Windows events skipped", ex);
+            }
+
+            List<string> configured = IcsUrls.ToList();
             for (int i = 0; i < feeds.Count; i++)
             {
-                int source = 1 + IcsUrls.ToList().IndexOf(urls[i]);
-                foreach (IcsEvent e in feeds[i])
+                try
                 {
-                    foreach ((DateTimeOffset s, DateTimeOffset en) in IcsParser.Occurrences(e, from, to))
+                    int source = 1 + configured.IndexOf(urls[i]);
+                    foreach (IcsEvent e in feeds[i])
                     {
-                        all.Add(new CalendarEvent(e.Summary, e.Location, s, en, e.AllDay, Math.Max(1, source)));
+                        foreach ((DateTimeOffset s, DateTimeOffset en) in IcsParser.SafeOccurrences(e, from, to))
+                        {
+                            all.Add(new CalendarEvent(e.Summary, e.Location, s, en, e.AllDay, Math.Max(1, source)));
+                        }
                     }
+                }
+                catch (Exception ex)
+                {
+                    // One bad feed must not drop the others.
+                    Log.Error($"Calendar feed {HostOf(urls[i])} skipped while building the list", ex);
                 }
             }
 
@@ -325,12 +343,14 @@ internal sealed class CalendarService : IDisposable
         }
     }
 
-    /// <summary>Downloads and parses one ICS feed (https only; webcal:// is read as https://).</summary>
+    /// <summary>Downloads and parses one ICS feed (https only; webcal:// is read as https://, plain http:// is refused).</summary>
     private static async Task<(List<IcsEvent>? Events, string? Error)> FetchFeedAsync(string url)
     {
         if (!TryNormalize(url, out Uri? uri))
         {
-            return (null, "not an http(s) or webcal URL");
+            return (null, url.TrimStart().StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+                ? "http:// links are not allowed (the link is a secret): use https:// or webcal://"
+                : "not an https or webcal URL");
         }
 
         try
@@ -346,6 +366,11 @@ internal sealed class CalendarService : IDisposable
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
+            if (ex is HttpRequestException && ex.Message.Contains("buffer size", StringComparison.OrdinalIgnoreCase))
+            {
+                return (null, $"feed is larger than {Net.MaxResponseBytes / (1024 * 1024)} MB");
+            }
+
             return (null, ex is TaskCanceledException ? "timed out" : ex.Message);
         }
         catch (Exception ex)
@@ -354,6 +379,7 @@ internal sealed class CalendarService : IDisposable
         }
     }
 
+    /// <summary>The https URI for a stored link (webcal:// and webcals:// become https://); false for anything else, including http://.</summary>
     public static bool TryNormalize(string url, out Uri? uri)
     {
         url = url.Trim();
@@ -366,7 +392,8 @@ internal sealed class CalendarService : IDisposable
             url = "https://" + url["webcals://".Length..];
         }
 
-        if (Uri.TryCreate(url, UriKind.Absolute, out uri) && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp))
+        // https only: the link usually carries a secret token, which must not travel in the clear.
+        if (Uri.TryCreate(url, UriKind.Absolute, out uri) && uri.Scheme == Uri.UriSchemeHttps)
         {
             return true;
         }

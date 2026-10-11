@@ -124,10 +124,10 @@ internal sealed class WeatherService : IDisposable
         }
 
         _refreshing = true;
-        Loading = Data == null;
-        Changed?.Invoke();
         try
         {
+            Loading = Data == null;
+            Changed?.Invoke();
             (double lat, double lon, string name, string cityKey)? place = await ResolveLocationAsync();
             if (place == null)
             {
@@ -165,7 +165,14 @@ internal sealed class WeatherService : IDisposable
         {
             _refreshing = false;
             Loading = false;
-            Changed?.Invoke();
+            try
+            {
+                Changed?.Invoke();
+            }
+            catch (Exception ex)
+            {
+                Log.Error("Weather: change handler failed", ex);
+            }
         }
     }
 

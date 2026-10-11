@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using Dropshelf.Services;
 
 namespace Dropshelf.Activities.Calendar;
 
@@ -68,6 +70,11 @@ internal static class IcsParser
 {
     private const int MaxOccurrences = 20_000;
 
+    // Hard limits per event: every loop step of the expansion counts, yielded or not, so a rule that never matches cannot spin.
+    private const int MaxSteps = 500_000;
+    private const long MaxEventMillis = 1_500;
+    private const long MaxDays = 3_652_059; // 0001-01-01 .. 9999-12-31
+
     private static readonly Dictionary<string, TimeZoneInfo?> Zones = new(StringComparer.OrdinalIgnoreCase);
 
     // ---- Public entry points -----------------------------------------------------------------------
@@ -78,7 +85,7 @@ internal static class IcsParser
         var result = new List<CalendarEvent>();
         foreach (IcsEvent e in Parse(text))
         {
-            foreach ((DateTimeOffset start, DateTimeOffset end) in Occurrences(e, from, to))
+            foreach ((DateTimeOffset start, DateTimeOffset end) in SafeOccurrences(e, from, to))
             {
                 result.Add(new CalendarEvent(e.Summary, e.Location, start, end, e.AllDay, source));
             }
@@ -479,7 +486,7 @@ internal static class IcsParser
             return null;
         }
 
-        int interval = parts.TryGetValue("INTERVAL", out string? iv) && int.TryParse(iv, out int i) && i > 0 ? i : 1;
+        int interval = parts.TryGetValue("INTERVAL", out string? iv) && int.TryParse(iv, out int i) && i > 0 ? Math.Min(i, 10_000) : 1;
         int? count = parts.TryGetValue("COUNT", out string? cv) && int.TryParse(cv, out int c) && c > 0 ? c : null;
 
         IcsTime? until = null;
@@ -507,6 +514,7 @@ internal static class IcsParser
                     continue;
                 }
 
+                ordinal = Math.Clamp(ordinal, -53, 53);
                 DayOfWeek? day = dayCode switch
                 {
                     "MO" => DayOfWeek.Monday, "TU" => DayOfWeek.Tuesday, "WE" => DayOfWeek.Wednesday, "TH" => DayOfWeek.Thursday,
@@ -602,22 +610,55 @@ internal static class IcsParser
 
     // ---- Recurrence ----------------------------------------------------------------------------------
 
+    /// <summary>
+    /// <see cref="Occurrences"/> as a list that never throws: a malformed event (dates out of range...) is skipped and logged,
+    /// so one bad event cannot take the rest of the feed down.
+    /// </summary>
+    public static List<(DateTimeOffset Start, DateTimeOffset End)> SafeOccurrences(IcsEvent e, DateTimeOffset from, DateTimeOffset to)
+    {
+        var list = new List<(DateTimeOffset, DateTimeOffset)>();
+        try
+        {
+            foreach (var occurrence in Occurrences(e, from, to))
+            {
+                list.Add(occurrence);
+            }
+        }
+        catch (Exception ex) when (ex is ArgumentException or OverflowException or InvalidOperationException or FormatException)
+        {
+            Log.Error($"Calendar event skipped (cannot expand \"{e.Summary}\")", ex);
+            list.Clear();
+        }
+
+        return list;
+    }
+
     /// <summary>The instances of <paramref name="e"/> that overlap [<paramref name="from"/>, <paramref name="to"/>).</summary>
     public static IEnumerable<(DateTimeOffset Start, DateTimeOffset End)> Occurrences(IcsEvent e, DateTimeOffset from, DateTimeOffset to)
     {
         DateTimeOffset firstStart = e.Start.ToOffset();
         TimeSpan length = LengthOf(e, firstStart);
         int allDayDays = e.AllDay ? AllDayLength(e) : 0;
+        DateTimeOffset horizon = to > DateTimeOffset.MaxValue.AddDays(-1) ? DateTimeOffset.MaxValue : to.AddDays(1);
 
         // Start and end of the instance whose wall-clock start is `wall` (all-day events end at a local midnight).
-        (DateTimeOffset Start, DateTimeOffset End) Build(DateTime wall)
+        // False when that moment is outside 0001..9999: such an occurrence is skipped.
+        bool TryBuild(DateTime wall, out DateTimeOffset s, out DateTimeOffset en)
         {
-            var at = new IcsTime(wall, e.Start.Zone, e.Start.IsUtc, e.Start.IsDate);
-            DateTimeOffset s = at.ToOffset();
-            DateTimeOffset en = e.AllDay
-                ? new IcsTime(wall.Date.AddDays(allDayDays), null, false, true).ToOffset()
-                : s + length;
-            return (s, en);
+            s = en = default;
+            try
+            {
+                var at = new IcsTime(wall, e.Start.Zone, e.Start.IsUtc, e.Start.IsDate);
+                s = at.ToOffset();
+                en = e.AllDay
+                    ? new IcsTime(wall.Date.AddDays(allDayDays), null, false, true).ToOffset()
+                    : s + length;
+                return true;
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                return false;
+            }
         }
 
         bool Overlaps(DateTimeOffset s, DateTimeOffset en) =>
@@ -625,16 +666,14 @@ internal static class IcsParser
 
         if (e.Rule == null || e.Rule.Freq is not ("DAILY" or "WEEKLY" or "MONTHLY" or "YEARLY"))
         {
-            var (s0, e0) = Build(e.Start.Wall);
-            if (Overlaps(s0, e0) && !IsExcluded(e, s0))
+            if (TryBuild(e.Start.Wall, out var s0, out var e0) && Overlaps(s0, e0) && !IsExcluded(e, s0))
             {
                 yield return (s0, e0);
             }
 
             foreach (IcsTime rdate in e.RDates)
             {
-                var (s1, e1) = Build(rdate.Wall);
-                if (Overlaps(s1, e1) && !IsExcluded(e, s1))
+                if (TryBuild(rdate.Wall, out var s1, out var e1) && Overlaps(s1, e1) && !IsExcluded(e, s1))
                 {
                     yield return (s1, e1);
                 }
@@ -644,22 +683,23 @@ internal static class IcsParser
         }
 
         IcsRule rule = e.Rule;
-        DateTimeOffset? until = rule.Until?.ToOffset();
-        if (until != null && rule.Until!.Value.IsDate)
-        {
-            until = until.Value.AddDays(1).AddTicks(-1); // UNTIL=20250131 includes that whole day
-        }
+        DateTimeOffset? until = UntilOf(rule);
 
+        var budget = new StepBudget();
         int produced = 0;
         int iterations = 0;
-        foreach (DateTime wall in Walls(e, rule, from))
+        foreach (DateTime wall in Walls(e, rule, from, budget))
         {
             if (++iterations > MaxOccurrences)
             {
                 yield break;
             }
 
-            var (start, end) = Build(wall);
+            if (!TryBuild(wall, out var start, out var end))
+            {
+                continue;
+            }
+
             if (until != null && start > until)
             {
                 yield break;
@@ -671,7 +711,7 @@ internal static class IcsParser
                 yield break;
             }
 
-            if (start >= to.AddDays(1))
+            if (start >= horizon)
             {
                 yield break;
             }
@@ -681,6 +721,85 @@ internal static class IcsParser
                 yield return (start, end);
             }
         }
+
+        if (budget.Exhausted)
+        {
+            Log.Error($"Calendar event \"{e.Summary}\": recurrence expansion stopped (too many steps or too slow)");
+        }
+    }
+
+    /// <summary>The last instant a rule may produce. UNTIL as a date includes that whole day (no +1 day at the end of the calendar).</summary>
+    private static DateTimeOffset? UntilOf(IcsRule rule)
+    {
+        if (rule.Until is not { } u)
+        {
+            return null;
+        }
+
+        try
+        {
+            DateTimeOffset until = u.ToOffset();
+            return u.IsDate && u.Wall.Year < 9999 ? until.AddDays(1).AddTicks(-1) : until;
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return DateTimeOffset.MaxValue; // beyond what can be represented: no limit
+        }
+    }
+
+    /// <summary>Counts every step of a recurrence expansion (not only the yielded ones) and the time spent, so a rule can never loop forever.</summary>
+    private sealed class StepBudget
+    {
+        private readonly Stopwatch _clock = Stopwatch.StartNew();
+        private int _steps;
+
+        public bool Exhausted { get; private set; }
+
+        public bool Step()
+        {
+            if (Exhausted)
+            {
+                return false;
+            }
+
+            if (++_steps > MaxSteps || ((_steps & 0xFF) == 0 && _clock.ElapsedMilliseconds > MaxEventMillis))
+            {
+                Exhausted = true;
+                return false;
+            }
+
+            return true;
+        }
+    }
+
+    private static bool TryAddDays(DateTime date, long days, out DateTime result)
+    {
+        result = default;
+        if (days < -MaxDays || days > MaxDays)
+        {
+            return false;
+        }
+
+        long ticks = date.Ticks + days * TimeSpan.TicksPerDay;
+        if (ticks < 0 || ticks > DateTime.MaxValue.Ticks)
+        {
+            return false;
+        }
+
+        result = new DateTime(ticks, date.Kind);
+        return true;
+    }
+
+    private static bool TryAt(DateTime day, TimeSpan timeOfDay, out DateTime result)
+    {
+        result = default;
+        if (day.Ticks > DateTime.MaxValue.Ticks - timeOfDay.Ticks)
+        {
+            return false;
+        }
+
+        result = day + timeOfDay;
+        return true;
     }
 
     /// <summary>Days an all-day event spans (DTEND is exclusive; default one day).</summary>
@@ -717,16 +836,23 @@ internal static class IcsParser
     {
         foreach (IcsTime ex in e.ExDates)
         {
-            if (ex.IsDate)
+            try
             {
-                if (ex.Wall.Date == (e.AllDay ? start.Date : start.ToLocalTime().Date))
+                if (ex.IsDate)
+                {
+                    if (ex.Wall.Date == (e.AllDay ? start.Date : start.ToLocalTime().Date))
+                    {
+                        return true;
+                    }
+                }
+                else if (ex.ToOffset() == start)
                 {
                     return true;
                 }
             }
-            else if (ex.ToOffset() == start)
+            catch (ArgumentOutOfRangeException)
             {
-                return true;
+                // An exclusion outside 0001..9999 matches nothing.
             }
         }
 
@@ -734,11 +860,11 @@ internal static class IcsParser
     }
 
     /// <summary>Wall-clock start times of a series in order, beginning at DTSTART (fast-forwarded for daily / weekly rules without COUNT).</summary>
-    private static IEnumerable<DateTime> Walls(IcsEvent e, IcsRule rule, DateTimeOffset from)
+    private static IEnumerable<DateTime> Walls(IcsEvent e, IcsRule rule, DateTimeOffset from, StepBudget budget)
     {
         DateTime start = e.Start.Wall;
         TimeSpan timeOfDay = e.Start.IsDate ? TimeSpan.Zero : start.TimeOfDay;
-        int interval = Math.Max(1, rule.Interval);
+        int interval = Math.Clamp(rule.Interval, 1, 10_000);
 
         switch (rule.Freq)
         {
@@ -751,16 +877,28 @@ internal static class IcsParser
                     k = Math.Max(0, (long)Math.Floor(days / interval));
                 }
 
-                for (; ; k++)
+                // Every pass counts against the budget: a BYDAY that never matches (INTERVAL=7;BYDAY=MO from a Tuesday) yields nothing.
+                for (; budget.Step(); k++)
                 {
-                    DateTime day = start.Date.AddDays(k * interval);
+                    if (!TryAddDays(start.Date, k * interval, out DateTime day))
+                    {
+                        yield break;
+                    }
+
                     if (rule.ByDay.Count > 0 && !rule.ByDay.Any(b => b.Day == day.DayOfWeek))
                     {
                         continue;
                     }
 
-                    yield return day + timeOfDay;
+                    if (!TryAt(day, timeOfDay, out DateTime wall))
+                    {
+                        yield break;
+                    }
+
+                    yield return wall;
                 }
+
+                yield break;
             }
 
             case "WEEKLY":
@@ -777,34 +915,50 @@ internal static class IcsParser
                     k = Math.Max(0, (long)Math.Floor(weeks / interval));
                 }
 
-                for (; ; k++)
+                for (; budget.Step(); k++)
                 {
-                    DateTime ws = weekStart.AddDays(7L * interval * k);
+                    if (!TryAddDays(weekStart, 7L * interval * k, out DateTime ws))
+                    {
+                        yield break;
+                    }
+
                     foreach (DayOfWeek d in days)
                     {
-                        DateTime day = ws.AddDays(((int)d + 6) % 7);
-                        if (day + timeOfDay < start)
+                        if (!budget.Step())
+                        {
+                            yield break;
+                        }
+
+                        if (!TryAddDays(ws, ((int)d + 6) % 7, out DateTime day) || !TryAt(day, timeOfDay, out DateTime wall))
+                        {
+                            yield break;
+                        }
+
+                        if (wall < start)
                         {
                             continue;
                         }
 
-                        yield return day + timeOfDay;
+                        yield return wall;
                     }
                 }
+
+                yield break;
             }
 
             case "MONTHLY":
             {
-                for (long k = 0; k < 50_000; k++)
+                for (long k = 0; k < 50_000 && budget.Step(); k++)
                 {
-                    int monthIndex = start.Year * 12 + (start.Month - 1) + (int)(k * interval);
-                    int year = monthIndex / 12, month = monthIndex % 12 + 1;
+                    long monthIndex = start.Year * 12L + (start.Month - 1) + k * interval;
+                    long year = monthIndex / 12;
+                    int month = (int)(monthIndex % 12) + 1;
                     if (year > 9998)
                     {
                         yield break;
                     }
 
-                    foreach (DateTime day in MonthlyDays(rule, start, year, month))
+                    foreach (DateTime day in MonthlyDays(rule, start, (int)year, month))
                     {
                         if (day + timeOfDay < start)
                         {
@@ -820,17 +974,17 @@ internal static class IcsParser
 
             default: // YEARLY
             {
-                for (long k = 0; k < 50_000; k++)
+                for (long k = 0; k < 50_000 && budget.Step(); k++)
                 {
-                    int year = start.Year + (int)(k * interval);
+                    long year = start.Year + k * interval;
                     if (year > 9998)
                     {
                         yield break;
                     }
 
-                    if (start.Day <= DateTime.DaysInMonth(year, start.Month))
+                    if (start.Day <= DateTime.DaysInMonth((int)year, start.Month))
                     {
-                        yield return new DateTime(year, start.Month, start.Day) + timeOfDay;
+                        yield return new DateTime((int)year, start.Month, start.Day) + timeOfDay;
                     }
                 }
 

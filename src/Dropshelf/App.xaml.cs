@@ -119,6 +119,8 @@ public partial class App : Application
         }
 
         CrashGuard.Install(this);
+        CrashGuard.BeforeExit = FlushPendingSaves;
+        SessionEnding += (_, _) => FlushPendingSaves(); // log-off / shutdown may kill the process before OnExit runs
         try
         {
             StartQuitListener();
@@ -384,8 +386,7 @@ public partial class App : Application
         TryStep("hotkeys", () => _hotkeys?.Dispose());
         TryStep("clipboard history", () => _clipboard?.Dispose());
         TryStep("tray icon", () => _tray?.Dispose());
-        TryStep("shelf flush", () => _shelf?.Flush());
-        TryStep("settings flush", () => _settings?.Flush());
+        FlushPendingSaves();
         TryStep("message window", () => _messages?.Dispose());
         TryStep("quit listener", () =>
         {
@@ -400,6 +401,26 @@ public partial class App : Application
         }
 
         base.OnExit(e);
+    }
+
+    /// <summary>
+    /// Writes every debounced save that is still pending (notes, clipboard history, shelf, settings). Safe to call any number of times
+    /// and from any thread: each store only writes when it has a pending change, and the work hops to the UI thread. Runs on
+    /// session end (log-off, shutdown), before a crash relaunch and at exit.
+    /// </summary>
+    private void FlushPendingSaves()
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            TryStep("flush on UI thread", () =>
+                Dispatcher.Invoke(FlushPendingSaves, DispatcherPriority.Send, CancellationToken.None, TimeSpan.FromSeconds(2)));
+            return;
+        }
+
+        TryStep("notes flush", () => _notes?.Store.Flush());
+        TryStep("clipboard flush", () => _clipboard?.Flush());
+        TryStep("shelf flush", () => _shelf?.Flush());
+        TryStep("settings flush", () => _settings?.Flush());
     }
 
     private void ReleaseInstanceMutex()

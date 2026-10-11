@@ -425,6 +425,8 @@ public sealed class ClipboardHistoryService : IDisposable
         var saved = JsonFile.LoadProtected<System.Collections.Generic.List<ClipboardEntry>>(AppPaths.ClipboardFile, out bool wasPlain);
         if (saved == null)
         {
+            // The file exists but could not be read (DPAPI failure, empty or truncated): keep it before any save overwrites it.
+            JsonFile.Quarantine(AppPaths.ClipboardFile);
             return;
         }
 

@@ -796,6 +796,10 @@ public partial class ShelfWindow : Window
         Expand();
         AllowActivation();
         notes.FocusEditor();
+
+        // AllowActivation stopped the collapse timer. If the foreground change was refused the editor never gets the keyboard, so
+        // restart it: it keeps the shelf open while the editor is typed in or until _holdUntilTick, then lets it close.
+        ScheduleCollapse();
     }
 
     /// <summary>The expanded tab that accepts dropped content itself (the Notes tab takes text), or null.</summary>

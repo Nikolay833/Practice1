@@ -28,6 +28,9 @@ internal sealed class ToolResult
     public int Failed { get; set; }
     public int Skipped { get; set; }
     public long BytesSaved { get; set; }
+
+    /// <summary>Why a run was stopped on purpose (zip bomb guard, oversized image), shown in the toast instead of the generic "unreadable".</summary>
+    public string? Error { get; set; }
 }
 
 /// <summary>
@@ -117,6 +120,12 @@ internal sealed class ToolsService
                 result.Outputs.Add(output);
                 result.BytesSaved += SizeOf(path) - SizeOf(output);
             }
+            catch (Exception ex) when (ex is ZipSafetyException or ImageTooLargeException)
+            {
+                Log.Error($"{kind} refused for {path}", ex);
+                result.Failed++;
+                result.Error ??= ex.Message;
+            }
             catch (Exception ex)
             {
                 // A file WIC cannot decode (HEIC without the codec, a corrupt file...) must not stop the rest.
@@ -162,14 +171,14 @@ internal sealed class ToolsService
 
         if (ok == 0)
         {
-            string detail = result.Skipped > 0 && result.Failed == 0 ? "already small enough" : "unsupported or unreadable";
+            string detail = result.Error ?? (result.Skipped > 0 && result.Failed == 0 ? "already small enough" : "unsupported or unreadable");
             _toast.Show(new ToastSpec
             {
                 Glyph = "",
-                Tone = "WarnBrush",
+                Tone = result.Error != null ? "DangerBrush" : "WarnBrush",
                 Text = result.Skipped > 0 && result.Failed == 0 ? "Nothing to do" : $"Could not {BaseVerb(kind)} {Plural(requested, "file")}",
                 Detail = detail,
-                Duration = TimeSpan.FromMilliseconds(2600),
+                Duration = TimeSpan.FromMilliseconds(result.Error != null ? 4500 : 2600),
             });
             return;
         }
@@ -189,7 +198,11 @@ internal sealed class ToolsService
         }
 
         string? extra = null;
-        if (result.Failed > 0)
+        if (result.Error != null)
+        {
+            extra = result.Error;
+        }
+        else if (result.Failed > 0)
         {
             extra = $"{result.Failed} failed";
         }

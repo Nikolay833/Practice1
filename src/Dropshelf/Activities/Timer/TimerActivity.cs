@@ -197,9 +197,22 @@ internal sealed class TimerActivity : PillActivityBase, IDisposable
 
     private void OnPowerModeChanged(object? sender, PowerModeChangedEventArgs e)
     {
-        if (e.Mode == PowerModes.Resume && !_disposed)
+        if (_disposed)
         {
-            _dispatcher.BeginInvoke(new Action(OnTick)); // the end may have passed while the computer slept
+            return;
+        }
+
+        if (e.Mode == PowerModes.Suspend)
+        {
+            Engine.SystemSuspended(); // raised on the system events thread; only notes the clocks
+        }
+        else if (e.Mode == PowerModes.Resume)
+        {
+            _dispatcher.BeginInvoke(new Action(() =>
+            {
+                Engine.SystemResumed(); // the end may have passed while the computer slept
+                OnTick();
+            }));
         }
     }
 
@@ -247,6 +260,20 @@ internal sealed class TimerActivity : PillActivityBase, IDisposable
 
     private void OnFinished(TimerFinish finish)
     {
+        if (finish.WhileAsleep)
+        {
+            // Several phases passed while the computer slept: say so, and leave the next phase paused instead of ringing for a stale break.
+            _toast.Show(new ToastSpec
+            {
+                Glyph = "",
+                Tone = "WarnBrush",
+                Text = "Timer finished while asleep",
+                Detail = "press start for the next phase",
+                Duration = TimeSpan.FromMilliseconds(3400),
+            });
+            return;
+        }
+
         string text, detail;
         switch (finish.Finished)
         {

@@ -13,6 +13,9 @@ internal static class Net
 {
     public static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
 
+    /// <summary>Largest response body the client buffers (big ICS feeds can run to tens of MB).</summary>
+    public const long MaxResponseBytes = 64L * 1024 * 1024;
+
     public static HttpClient Client { get; } = Create();
 
     private static HttpClient Create()
@@ -24,7 +27,7 @@ internal static class Net
         })
         {
             Timeout = Timeout,
-            MaxResponseContentBufferSize = 8 * 1024 * 1024,
+            MaxResponseContentBufferSize = MaxResponseBytes,
         };
         client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("Dropshelf", "1.0"));
         return client;

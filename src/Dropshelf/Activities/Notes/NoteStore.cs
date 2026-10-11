@@ -85,6 +85,11 @@ internal sealed class NoteStore
                 ScheduleSave();
             }
         }
+        else
+        {
+            // The file exists but could not be read (DPAPI failure, empty or truncated): keep it before any save overwrites it.
+            JsonFile.Quarantine(AppPaths.NotesFile);
+        }
 
         if (Notes.Count == 0)
         {

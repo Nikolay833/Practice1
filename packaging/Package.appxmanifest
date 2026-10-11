@@ -10,8 +10,9 @@
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
   xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
   xmlns:uap5="http://schemas.microsoft.com/appx/manifest/uap/windows10/5"
+  xmlns:desktop6="http://schemas.microsoft.com/appx/manifest/desktop/windows10/6"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
-  IgnorableNamespaces="uap uap3 uap5 rescap">
+  IgnorableNamespaces="uap uap3 uap5 desktop6 rescap">
 
   <Identity Name="Dropshelf" Publisher="CN=Dropshelf" Version="{{VERSION}}" ProcessorArchitecture="{{ARCH}}" />
 
@@ -19,6 +20,10 @@
     <DisplayName>Dropshelf</DisplayName>
     <PublisherDisplayName>Dropshelf</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
+    <!-- Writes to HKCU and %LOCALAPPDATA% go to the real locations, not into a per-package copy: the portable version's autostart
+         cleanup and the data under %LOCALAPPDATA%\Dropshelf stay shared with the portable version. Needs the unvirtualizedResources capability. -->
+    <desktop6:RegistryWriteVirtualization>disabled</desktop6:RegistryWriteVirtualization>
+    <desktop6:FileSystemWriteVirtualization>disabled</desktop6:FileSystemWriteVirtualization>
   </Properties>
 
   <Dependencies>
@@ -52,6 +57,8 @@
   <Capabilities>
     <!-- A normal desktop app (WPF) running with package identity. -->
     <rescap:Capability Name="runFullTrust" />
+    <!-- Required for turning off the registry / file system write virtualization above. -->
+    <rescap:Capability Name="unvirtualizedResources" />
     <!-- Windows calendars (appointment store), read-only. -->
     <uap:Capability Name="appointments" />
     <!-- Windows notifications shown on the pill. The user still has to allow it in a Windows prompt. -->

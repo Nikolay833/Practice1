@@ -50,14 +50,15 @@ internal sealed class ScreenshotService
                 return;
             }
 
-            BitmapImage image = Decode(png);
+            // Decoding a big capture takes a while: do it (and the thumbnail) off the UI thread. Both come back frozen, so they can cross threads.
+            (BitmapImage image, BitmapImage thumbnail) = await Task.Run(() => (Decode(png), Thumbnail(png)));
             await CopyToClipboardAsync(image);
             _addToShelf(path);
 
             string captured = path;
             _toast.Show(new ToastSpec
             {
-                Image = Thumbnail(png),
+                Image = thumbnail,
                 Text = "Screenshot saved",
                 ButtonText = "Copy text",
                 ButtonClick = () => _ = OcrActions.CopyTextAsync([captured]),

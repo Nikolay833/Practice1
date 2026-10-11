@@ -27,6 +27,9 @@ internal static class CrashGuard
     /// <summary>True once start-up has finished. Before that an ordinary exception must not be swallowed: it would leave a half-started process behind.</summary>
     public static bool StartupComplete { get; private set; }
 
+    /// <summary>Runs before a crash relaunch (or staying down) to write pending saves; set by the app, must be safe to call from any thread.</summary>
+    public static Action? BeforeExit { get; set; }
+
     public static void Install(Application app)
     {
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
@@ -103,6 +106,15 @@ internal static class CrashGuard
 
         try
         {
+            try
+            {
+                BeforeExit?.Invoke();
+            }
+            catch (Exception ex)
+            {
+                Log.Error("Saving pending changes before exit failed", ex);
+            }
+
             string? stayDownReason = null;
             bool packaged = PackageIdentity.IsPackaged;
             string? target = packaged ? null : RelaunchTarget();

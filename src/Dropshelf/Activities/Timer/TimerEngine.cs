@@ -23,8 +23,11 @@ internal enum TimerPhase
 /// <summary>Pomodoro lengths (from the settings).</summary>
 internal readonly record struct PomodoroPlan(TimeSpan Work, TimeSpan Break, TimeSpan LongBreak, int Rounds);
 
-/// <summary>What <see cref="TimerEngine.Poll"/> reports when a phase ended.</summary>
-internal readonly record struct TimerFinish(TimerPhase Finished, TimerPhase Next);
+/// <summary>
+/// What <see cref="TimerEngine.Poll"/> reports when a phase ended. <paramref name="WhileAsleep"/>: the computer slept through so much
+/// that the next phase had already ended too, so the timer stopped (paused, ready to start) instead of starting a stale phase.
+/// </summary>
+internal readonly record struct TimerFinish(TimerPhase Finished, TimerPhase Next, bool WhileAsleep = false);
 
 /// <summary>Everything the timer needs to come back after a restart.</summary>
 internal sealed class TimerSnapshot
@@ -40,20 +43,27 @@ internal sealed class TimerSnapshot
 }
 
 /// <summary>
-/// The timer's state machine, with no UI and no timers of its own. Time is kept as an absolute end timestamp while running
-/// (<c>end = start + length</c>) and the remaining time is always <c>end - now</c>; ticks are never counted. A computer that
-/// sleeps through the end simply finds <c>now &gt;= end</c> when it wakes. Call <see cref="Poll"/> now and then (the activity
-/// does so once per second while running and after resume).
+/// The timer's state machine, with no UI and no timers of its own. Time is kept as an end point on a monotonic clock while
+/// running (<c>end = start + length</c>) and the remaining time is always <c>end - now</c>; ticks are never counted, and a manual
+/// or NTP change of the wall clock does not move the countdown. The monotonic clock may stand still while the computer sleeps,
+/// so <see cref="SystemSuspended"/> / <see cref="SystemResumed"/> add the wall-clock time that passed asleep. A computer that
+/// sleeps through the end finds <c>now &gt;= end</c> when it wakes. Call <see cref="Poll"/> now and then (the activity does so
+/// once per second while running and after resume). The wall clock is only used for the snapshot that survives a restart.
 /// </summary>
 internal sealed class TimerEngine
 {
-    private readonly Func<DateTime> _now;
-    private DateTime _end;
+    private readonly Func<DateTime> _now;           // wall clock: persistence and the time spent asleep only
+    private readonly Func<long> _ticks;             // monotonic milliseconds
+    private readonly object _sleepGate = new();
+    private long _endTick;
     private TimeSpan _remaining;     // while paused / idle
+    private DateTime? _suspendedWall;
+    private long _suspendedTick;
 
-    public TimerEngine(Func<DateTime>? utcNow = null)
+    public TimerEngine(Func<DateTime>? utcNow = null, Func<long>? monotonicMilliseconds = null)
     {
         _now = utcNow ?? (() => DateTime.UtcNow);
+        _ticks = monotonicMilliseconds ?? (() => Environment.TickCount64);
     }
 
     public TimerMode Mode { get; private set; } = TimerMode.Countdown;
@@ -77,8 +87,8 @@ internal sealed class TimerEngine
                 return _remaining;
             }
 
-            TimeSpan left = _end - _now();
-            return left < TimeSpan.Zero ? TimeSpan.Zero : left;
+            long left = _endTick - _ticks();
+            return left <= 0 ? TimeSpan.Zero : TimeSpan.FromMilliseconds(left);
         }
     }
 
@@ -125,7 +135,7 @@ internal sealed class TimerEngine
             return;
         }
 
-        _end = _now() + _remaining;
+        _endTick = EndAfter(_remaining);
         Running = true;
         Changed?.Invoke();
     }
@@ -159,17 +169,53 @@ internal sealed class TimerEngine
         Changed?.Invoke();
     }
 
+    /// <summary>The computer is going to sleep (any thread). Remembers both clocks to tell how long it slept.</summary>
+    public void SystemSuspended()
+    {
+        lock (_sleepGate)
+        {
+            _suspendedWall = _now();
+            _suspendedTick = _ticks();
+        }
+    }
+
+    /// <summary>
+    /// The computer woke up. The wall-clock time that passed while asleep, minus what the monotonic clock counted anyway, is taken
+    /// off the running phase (zero if the monotonic clock already includes sleep, or if the wall clock was set back).
+    /// </summary>
+    public void SystemResumed()
+    {
+        TimeSpan asleep;
+        lock (_sleepGate)
+        {
+            if (_suspendedWall is not { } wall)
+            {
+                return;
+            }
+
+            asleep = _now() - wall - TimeSpan.FromMilliseconds(_ticks() - _suspendedTick);
+            _suspendedWall = null;
+        }
+
+        if (Running && asleep > TimeSpan.Zero)
+        {
+            _endTick -= (long)asleep.TotalMilliseconds;
+        }
+    }
+
     /// <summary>
     /// Checks whether the running phase has ended. A finished countdown goes back to idle; a finished Pomodoro phase starts the
-    /// next one (counting from now, even if the computer slept through the end). Returns null when nothing ended.
+    /// next one (counting from now). If the computer slept so long that the next phase would have ended too, nothing is started:
+    /// the next phase is ready and paused and the result has <see cref="TimerFinish.WhileAsleep"/> set. Returns null when nothing ended.
     /// </summary>
     public TimerFinish? Poll()
     {
-        if (!Running || _now() < _end)
+        if (!Running || _ticks() < _endTick)
         {
             return null;
         }
 
+        TimeSpan overdue = TimeSpan.FromMilliseconds(_ticks() - _endTick);
         TimerPhase finished = Phase;
         if (Mode == TimerMode.Countdown)
         {
@@ -201,7 +247,19 @@ internal sealed class TimerEngine
                 return new TimerFinish(finished, TimerPhase.Idle);
         }
 
-        Begin(next, next switch { TimerPhase.Work => Plan.Work, TimerPhase.Break => Plan.Break, _ => Plan.LongBreak });
+        TimeSpan length = next switch { TimerPhase.Work => Plan.Work, TimerPhase.Break => Plan.Break, _ => Plan.LongBreak };
+        if (overdue >= length)
+        {
+            // Stale: the next phase is already over. Stop at the end of the phase that ended.
+            Phase = next;
+            Total = length;
+            _remaining = length;
+            Running = false;
+            Changed?.Invoke();
+            return new TimerFinish(finished, next, WhileAsleep: true);
+        }
+
+        Begin(next, length);
         return new TimerFinish(finished, next);
     }
 
@@ -215,7 +273,7 @@ internal sealed class TimerEngine
         TotalSeconds = Total.TotalSeconds,
         RemainingSeconds = Remaining.TotalSeconds,
         Running = Running,
-        EndUtc = Running ? _end : null,
+        EndUtc = Running ? _now() + Remaining : null,
         LastCountdownSeconds = LastCountdown.TotalSeconds,
     };
 
@@ -235,7 +293,7 @@ internal sealed class TimerEngine
             if (end > _now())
             {
                 Phase = s.Phase;
-                _end = end;
+                _endTick = EndAfter(end - _now());
                 Running = true;
                 return;
             }
@@ -263,8 +321,11 @@ internal sealed class TimerEngine
         Phase = phase;
         Total = length;
         _remaining = length;
-        _end = _now() + length;
+        _endTick = EndAfter(length);
         Running = true;
         Changed?.Invoke();
     }
+
+    /// <summary>The monotonic reading at which a phase of this length, started now, ends.</summary>
+    private long EndAfter(TimeSpan length) => _ticks() + (long)length.TotalMilliseconds;
 }

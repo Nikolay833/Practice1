@@ -13,6 +13,9 @@ internal enum ImageFormat
     Tiff,
 }
 
+/// <summary>The image is bigger than the decoder is allowed to load (see <see cref="ImageOps.MaxPixels"/>); the message says so in plain words.</summary>
+internal sealed class ImageTooLargeException(string message) : Exception(message);
+
 /// <summary>One image operation: re-encode and/or scale. Everything is optional except the suffix that names the result.</summary>
 internal sealed class ImageJob
 {
@@ -40,6 +43,9 @@ internal static class ImageOps
 {
     private static readonly string[] Extensions =
         [".png", ".jpg", ".jpeg", ".jpe", ".jfif", ".bmp", ".dib", ".gif", ".tif", ".tiff", ".webp", ".heic", ".heif", ".avif"];
+
+    /// <summary>Largest image that is decoded: 100 megapixels (about 400 MB of pixels). Bigger ones are refused before decoding.</summary>
+    public const long MaxPixels = 100_000_000;
 
     public static bool IsImage(string path) =>
         Array.Exists(Extensions, e => e.Equals(Path.GetExtension(path), StringComparison.OrdinalIgnoreCase));
@@ -127,6 +133,17 @@ internal static class ImageOps
     private static BitmapSource LoadOriented(string path)
     {
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+
+        // Dimensions first: with DelayCreation and no cache only the header is read, so a huge image is refused before any pixels are decoded.
+        BitmapDecoder probe = BitmapDecoder.Create(stream, BitmapCreateOptions.PreservePixelFormat | BitmapCreateOptions.DelayCreation, BitmapCacheOption.None);
+        BitmapFrame header = probe.Frames[0];
+        long pixels = (long)header.PixelWidth * header.PixelHeight;
+        if (pixels > MaxPixels)
+        {
+            throw new ImageTooLargeException($"Image too large: {pixels / 1_000_000.0:0} MP (limit {MaxPixels / 1_000_000} MP)");
+        }
+
+        stream.Position = 0;
         BitmapDecoder decoder = BitmapDecoder.Create(stream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
         BitmapFrame frame = decoder.Frames[0];
         int orientation = ReadOrientation(frame);
@@ -183,9 +200,15 @@ internal static class ImageOps
     {
         var bgra = new FormatConvertedBitmap(source, PixelFormats.Bgra32, null, 0);
         int width = bgra.PixelWidth, height = bgra.PixelHeight;
-        int stride = width * 4;
-        var pixels = new byte[stride * height];
-        bgra.CopyPixels(pixels, stride, 0);
+        long stride = width * 4L;
+        long length = stride * height; // long: width * height * 4 overflows an int above ~536 MP
+        if (length > Array.MaxLength)
+        {
+            throw new ImageTooLargeException($"Image too large: {(long)width * height / 1_000_000.0:0} MP (limit {MaxPixels / 1_000_000} MP)");
+        }
+
+        var pixels = new byte[length];
+        bgra.CopyPixels(pixels, (int)stride, 0);
 
         for (int i = 0; i < pixels.Length; i += 4)
         {
@@ -201,7 +224,7 @@ internal static class ImageOps
             pixels[i + 3] = 255;
         }
 
-        BitmapSource flat = BitmapSource.Create(width, height, source.DpiX, source.DpiY, PixelFormats.Bgr32, null, pixels, stride);
+        BitmapSource flat = BitmapSource.Create(width, height, source.DpiX, source.DpiY, PixelFormats.Bgr32, null, pixels, (int)stride);
         flat.Freeze();
         return flat;
     }

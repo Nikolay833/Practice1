@@ -5,7 +5,10 @@ using System.Text.Json;
 
 namespace Dropshelf.Services;
 
-/// <summary>Atomic-ish JSON load/save helpers that swallow IO and parse errors (and log them).</summary>
+/// <summary>
+/// Atomic JSON load/save helpers that swallow IO and parse errors (and log them). A save goes to a temp file that is flushed
+/// to disk and then moved over the target, so a power loss leaves either the old or the new file, never an empty one.
+/// </summary>
 internal static class JsonFile
 {
     public static readonly JsonSerializerOptions Options = new()
@@ -34,22 +37,17 @@ internal static class JsonFile
     }
 
     public static bool Save<T>(string path, T value) =>
-        WriteAtomic(path, tmp =>
-        {
-            using var stream = File.Create(tmp);
-            JsonSerializer.Serialize(stream, value, Options);
-        });
+        WriteAtomic(path, () => JsonSerializer.SerializeToUtf8Bytes(value, Options));
 
     // Extra entropy so the blob is not decryptable by arbitrary other DPAPI callers running as the same user.
     private static readonly byte[] ProtectedEntropy = System.Text.Encoding.UTF8.GetBytes("Dropshelf.JsonFile.v1");
 
     /// <summary>Like <see cref="Save{T}"/> but encrypts the JSON with DPAPI (current user), so it is not readable at rest.</summary>
     public static bool SaveProtected<T>(string path, T value) =>
-        WriteAtomic(path, tmp =>
+        WriteAtomic(path, () =>
         {
             byte[] json = JsonSerializer.SerializeToUtf8Bytes(value, Options);
-            byte[] blob = ProtectedData.Protect(json, ProtectedEntropy, DataProtectionScope.CurrentUser);
-            File.WriteAllBytes(tmp, blob);
+            return ProtectedData.Protect(json, ProtectedEntropy, DataProtectionScope.CurrentUser);
         });
 
     /// <summary>
@@ -87,13 +85,19 @@ internal static class JsonFile
         }
     }
 
-    private static bool WriteAtomic(string path, Action<string> writeTemp)
+    private static bool WriteAtomic(string path, Func<byte[]> produce)
     {
+        string tmp = path + ".tmp";
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            string tmp = path + ".tmp";
-            writeTemp(tmp);
+            byte[] bytes = produce();
+            using (var stream = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                stream.Write(bytes, 0, bytes.Length);
+                stream.Flush(flushToDisk: true); // the data must be on disk before the rename makes it the real file
+            }
+
             File.Move(tmp, path, overwrite: true);
             return true;
         }
@@ -101,7 +105,41 @@ internal static class JsonFile
         {
             // Serialization can fail with more than IO errors (e.g. invalid UTF-16 text); never let a save crash the app.
             Log.Error($"Failed to write {path}", ex);
+            try
+            {
+                File.Delete(tmp);
+            }
+            catch (Exception)
+            {
+                // Best effort: a stale temp file is overwritten by the next save.
+            }
+
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Renames a file that exists but could not be read (DPAPI failure, empty or truncated) to <c>name.bak-yyyyMMddHHmmss</c>, so the
+    /// next save cannot overwrite what might still be recoverable. Returns the backup path, or null when there was nothing to move.
+    /// </summary>
+    public static string? Quarantine(string path)
+    {
+        try
+        {
+            if (!File.Exists(path))
+            {
+                return null;
+            }
+
+            string backup = $"{path}.bak-{DateTime.Now:yyyyMMddHHmmss}";
+            File.Move(path, backup, overwrite: true);
+            Log.Error($"{Path.GetFileName(path)} could not be read; kept as {Path.GetFileName(backup)}");
+            return backup;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Error($"Could not set aside the unreadable {path}", ex);
+            return null;
         }
     }
 

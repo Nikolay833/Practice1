@@ -259,8 +259,11 @@ your own account. Needs Windows 10 version 2004 or later. To do it by hand: trus
 Certificate* > *Local Machine* > *Trusted People*), then double-click `Dropshelf.msixbundle`. Remove it in Settings > Apps.
 
 Switching between the portable and the MSIX version is fine; only one of them runs at a time. Their settings and data are
-both kept under `%LOCALAPPDATA%\Dropshelf`, but Windows may keep a packaged app's writes there private to the package, so do not
-count on the two sharing settings.
+both kept under `%LOCALAPPDATA%\Dropshelf`. The MSIX package turns off Windows' write virtualization (`desktop6` registry and file
+system virtualization plus the `unvirtualizedResources` capability), so the packaged app writes to the real `%LOCALAPPDATA%` and
+`HKCU` instead of a private copy inside the package. That is what lets the two versions share settings and data, and lets the MSIX
+version find and remove the portable version's autostart entry. Data an MSIX copy wrote before this change may still be in the
+package's private store and is not migrated.
 
 #### MSIX signing certificate
 

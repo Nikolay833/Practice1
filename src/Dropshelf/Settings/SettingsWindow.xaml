@@ -432,7 +432,7 @@
                                     HorizontalAlignment="Left" Margin="26,6,0,0" Visibility="Collapsed" Click="CalendarPrivacy_Click"/>
                             <Border Style="{StaticResource Divider}"/>
                             <TextBlock Text="Calendar links (ICS), one per line" Style="{StaticResource TextPrimary}"/>
-                            <TextBlock Text="Stored encrypted. Fetched every 15 minutes. webcal:// links work too." Style="{StaticResource TextSecondary}" FontSize="11" Margin="0,2,0,0"/>
+                            <TextBlock Text="Stored encrypted. Fetched every 15 minutes. https:// and webcal:// links only." Style="{StaticResource TextSecondary}" FontSize="11" Margin="0,2,0,0"/>
                             <TextBox x:Name="IcsUrlsBox" AcceptsReturn="True" TextWrapping="NoWrap" Height="64" Margin="0,8,0,0" FontSize="12"
                                      VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" LostFocus="IcsUrls_LostFocus"/>
                             <StackPanel Orientation="Horizontal" Margin="0,8,0,0">

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Linq;
 using System.Text.Json.Serialization;
 using System.Windows.Threading;
@@ -12,10 +13,22 @@ namespace Dropshelf.Activities.Notes;
 public sealed class Note : NotifyBase
 {
     private string _text = string.Empty;
+    private DateTime _updatedUtc = DateTime.UtcNow;
 
     public Guid Id { get; set; } = Guid.NewGuid();
     public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
-    public DateTime UpdatedUtc { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedUtc
+    {
+        get => _updatedUtc;
+        set
+        {
+            if (SetField(ref _updatedUtc, value))
+            {
+                OnPropertyChanged(nameof(Subtitle));
+                OnPropertyChanged(nameof(Edited));
+            }
+        }
+    }
 
     public string Text
     {
@@ -25,6 +38,7 @@ public sealed class Note : NotifyBase
             if (SetField(ref _text, value ?? string.Empty))
             {
                 OnPropertyChanged(nameof(Title));
+                OnPropertyChanged(nameof(Subtitle));
             }
         }
     }
@@ -44,6 +58,32 @@ public sealed class Note : NotifyBase
             }
 
             return "New note";
+        }
+    }
+
+    /// <summary>List row subtitle like Apple Notes: when it was edited, then the start of the second line ("3:14 PM  Buy milk").</summary>
+    [JsonIgnore]
+    public string Subtitle
+    {
+        get
+        {
+            DateTime local = _updatedUtc.ToLocalTime();
+            string when = local.Date == DateTime.Today ? local.ToString("t", CultureInfo.CurrentCulture)
+                : local.Date == DateTime.Today.AddDays(-1) ? "Yesterday"
+                : local.ToString("d", CultureInfo.CurrentCulture);
+            string? second = _text.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0).Skip(1).FirstOrDefault();
+            return second == null ? when + "  No additional text" : when + "  " + second;
+        }
+    }
+
+    /// <summary>The line above the editor, like Apple Notes: "11 October 2026 at 3:14 PM".</summary>
+    [JsonIgnore]
+    public string Edited
+    {
+        get
+        {
+            DateTime local = _updatedUtc.ToLocalTime();
+            return local.ToString("D", CultureInfo.CurrentCulture) + " at " + local.ToString("t", CultureInfo.CurrentCulture);
         }
     }
 

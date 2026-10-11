@@ -555,9 +555,10 @@ running timer even survives restarting Dropshelf.
 Open the island → **Notes** tab, or press **Ctrl+Shift+N** from anywhere (the island opens with the cursor already in
 the editor).
 
-- A list of notes on the left, a plain-text editor on the right.
-- The **first line** of a note is its title in the list.
-- **Ctrl+N** makes a new note; there is also a delete button.
+- Looks like Apple Notes: a list of notes on the left, a borderless plain-text editor on the right, in Notes' yellow.
+- The **first line** of a note is its title in the list; under it, in grey, when it was last edited and its second line.
+- Above the editor, a small line says when the note was last edited.
+- **Ctrl+N** or the compose button makes a new note; the trash button deletes it (click twice to confirm).
 - **Saves automatically** half a second after you stop typing. You never have to press save.
 - **Drop text** onto the open Notes tab to add it to the current note.
 - Notes are **encrypted** with your Windows account, like the clipboard history.

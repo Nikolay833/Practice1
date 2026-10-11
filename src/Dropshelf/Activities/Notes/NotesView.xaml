@@ -1,45 +1,128 @@
 <UserControl x:Class="Dropshelf.Activities.Notes.NotesView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Apple Notes on the island: a list of notes (bold title, time and second line in grey) and a borderless editor with a
+         small date line, in Notes' yellow. -->
+    <UserControl.Resources>
+        <SolidColorBrush x:Key="NotesYellow" Color="#FFFFD60A"/>
+
+        <Style x:Key="NoteRow" TargetType="ListBoxItem">
+            <Setter Property="Padding" Value="10,6"/>
+            <Setter Property="Margin" Value="0,0,0,2"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Bd" Background="Transparent" CornerRadius="9" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#14FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#2EFFFFFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Plain glyph button: no chrome, dims while pressed. -->
+        <Style x:Key="BareGlyph" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Width" Value="28"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="FontFamily" Value="{StaticResource IconFont}"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="Transparent" CornerRadius="14">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              TextElement.Foreground="{TemplateBinding Foreground}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource HoverBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
     <Grid>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="158"/>
-            <ColumnDefinition Width="10"/>
+            <ColumnDefinition Width="176"/>
+            <ColumnDefinition Width="Auto"/>
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
 
-        <!-- Note list + new / delete -->
+        <!-- ===== The notes ===== -->
         <Grid Grid.Column="0">
             <Grid.RowDefinitions>
-                <RowDefinition Height="*"/>
                 <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
-            <ListBox x:Name="NoteList" Grid.Row="0" SelectionMode="Single" SelectionChanged="NoteList_SelectionChanged">
-                <ListBox.ItemContainerStyle>
-                    <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
-                        <Setter Property="Padding" Value="9,5"/>
-                        <Setter Property="Margin" Value="0,0,0,2"/>
-                    </Style>
-                </ListBox.ItemContainerStyle>
+            <Grid Grid.Row="0" Margin="10,0,0,4">
+                <TextBlock Text="Notes" Style="{StaticResource TextTitle}" FontSize="15" FontWeight="Bold" VerticalAlignment="Center"/>
+                <Button Content="&#xE70F;" Style="{StaticResource BareGlyph}" Foreground="{StaticResource NotesYellow}"
+                        HorizontalAlignment="Right" ToolTip="New note (Ctrl+N)" Click="New_Click"/>
+            </Grid>
+            <ListBox x:Name="NoteList" Grid.Row="1" SelectionMode="Single" ItemContainerStyle="{StaticResource NoteRow}"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled" SelectionChanged="NoteList_SelectionChanged">
                 <ListBox.ItemTemplate>
                     <DataTemplate>
-                        <TextBlock Text="{Binding Title}" Style="{StaticResource TextPrimary}" FontSize="12"
-                                   TextTrimming="CharacterEllipsis"/>
+                        <StackPanel>
+                            <TextBlock Text="{Binding Title}" Style="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold"
+                                       TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Text="{Binding Subtitle}" Style="{StaticResource TextSecondary}" FontSize="11"
+                                       TextTrimming="CharacterEllipsis" Margin="0,1,0,0"/>
+                        </StackPanel>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>
-            <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,4,0,0">
-                <Button Content="&#xE70F;" Style="{StaticResource IconButton}" ToolTip="New note (Ctrl+N)" Click="New_Click"/>
-                <Button x:Name="DeleteButton" Content="&#xE74D;" Style="{StaticResource IconButton}" Margin="2,0,0,0"
-                        ToolTip="Delete note" Click="Delete_Click"/>
-                <TextBlock x:Name="DeleteHint" Style="{StaticResource TextSecondary}" FontSize="11" Margin="6,0,0,0"
-                           VerticalAlignment="Center"/>
-            </StackPanel>
         </Grid>
 
-        <!-- Editor -->
-        <TextBox x:Name="Editor" Grid.Column="2" AcceptsReturn="True" AcceptsTab="False" TextWrapping="Wrap"
-                 VerticalScrollBarVisibility="Auto" FontSize="13" Padding="10,8"
-                 TextChanged="Editor_TextChanged" PreviewKeyDown="Editor_PreviewKeyDown"/>
+        <Border Grid.Column="1" Width="1" Margin="14,2" Background="{StaticResource StrokeBrush}"/>
+
+        <!-- ===== The editor ===== -->
+        <Grid Grid.Column="2">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+            <Grid Grid.Row="0" Height="28" Margin="0,0,0,4">
+                <TextBlock x:Name="EditedText" Style="{StaticResource TextSecondary}" FontSize="11" FontWeight="SemiBold"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <TextBlock x:Name="DeleteHint" Style="{StaticResource TextSecondary}" FontSize="11" VerticalAlignment="Center"
+                               Foreground="{StaticResource DangerBrush}" Margin="0,0,4,0"/>
+                    <Button x:Name="DeleteButton" Content="&#xE74D;" Style="{StaticResource BareGlyph}" FontSize="13"
+                            Foreground="{StaticResource TextSecondaryBrush}" ToolTip="Delete note" Click="Delete_Click"/>
+                </StackPanel>
+            </Grid>
+            <TextBox x:Name="Editor" Grid.Row="1" AcceptsReturn="True" AcceptsTab="False" TextWrapping="Wrap"
+                     VerticalScrollBarVisibility="Auto" FontSize="14" Padding="2,0,4,0"
+                     CaretBrush="{StaticResource NotesYellow}" SelectionBrush="{StaticResource NotesYellow}" SelectionOpacity="0.35"
+                     TextChanged="Editor_TextChanged" PreviewKeyDown="Editor_PreviewKeyDown">
+                <TextBox.Template>
+                    <ControlTemplate TargetType="TextBox">
+                        <ScrollViewer x:Name="PART_ContentHost" Padding="{TemplateBinding Padding}" Focusable="False"
+                                      VerticalScrollBarVisibility="{TemplateBinding VerticalScrollBarVisibility}"
+                                      HorizontalScrollBarVisibility="Disabled"/>
+                    </ControlTemplate>
+                </TextBox.Template>
+            </TextBox>
+            <TextBlock x:Name="Placeholder" Grid.Row="1" Text="Start typing..." Style="{StaticResource TextSecondary}" FontSize="14"
+                       Foreground="{StaticResource TextDisabledBrush}" Margin="4,0,0,0" IsHitTestVisible="False"/>
+        </Grid>
     </Grid>
 </UserControl>

@@ -16,7 +16,7 @@ public enum DropItemKind
 }
 
 /// <summary>
-/// One entry on the shelf or in the basket. Files are referenced by their original path (never copied);
+/// One entry in the basket. Files are referenced by their original path (never copied);
 /// text and URL items are materialised as .txt / .url files in the Items folder.
 /// </summary>
 public sealed class DropItem : NotifyBase

@@ -118,14 +118,14 @@ jobs:
 
           Running the exe installs Dropshelf and starts it at every sign-in. Running a newer exe later updates it.
           EOF
-          # The MSIX version (notifications on the pill, Windows calendar), only when the msix job produced it.
+          # The MSIX version (notifications on the island, Windows calendar), only when the msix job produced it.
           if [ -f dist/Dropshelf.msixbundle ] && [ -f dist/Dropshelf.cer ]; then
             cp tools/Install-Dropshelf-MSIX.ps1 dist/
             cat >> notes.md <<'EOF'
 
           ## MSIX version (optional)
 
-          Adds **notifications on the pill** and **Windows calendar** events. One bundle for x64 and Arm64. It is signed with a self-signed certificate, so Windows must trust `Dropshelf.cer` once:
+          Adds **notifications on the island** and **Windows calendar** events. One bundle for x64 and Arm64. It is signed with a self-signed certificate, so Windows must trust `Dropshelf.cer` once:
 
           ```powershell
           irm https://github.com/Nikolay833/Practice1/releases/latest/download/Install-Dropshelf-MSIX.ps1 | iex

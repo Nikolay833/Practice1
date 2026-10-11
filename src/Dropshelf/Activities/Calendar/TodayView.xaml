@@ -9,7 +9,7 @@
         </Grid.ColumnDefinitions>
 
         <!-- Weather card (filled in code) -->
-        <Border Grid.Column="0" Background="{StaticResource SurfaceBrush}" CornerRadius="12" Padding="12,8">
+        <Border Grid.Column="0" Background="{StaticResource SurfaceBrush}" CornerRadius="16" Padding="14,10">
             <Grid x:Name="WeatherHost"/>
         </Border>
 

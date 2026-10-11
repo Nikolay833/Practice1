@@ -8,7 +8,7 @@ using Dropshelf.Services;
 namespace Dropshelf.Activities;
 
 /// <summary>
-/// Decides what the collapsed pill shows and which tabs the expanded shelf has. A HUD that was requested within the last
+/// Decides what the collapsed pill shows and which tabs the expanded island has. A HUD that was requested within the last
 /// ~1.8 s wins, otherwise the active live activity with the highest priority, otherwise nothing. The two
 /// <see cref="CrossfadeHost"/>s (<see cref="LeftView"/> / <see cref="RightView"/>) crossfade between activities; the
 /// island window springs the pill to <see cref="Content"/>'s size whenever <see cref="CompactChanged"/> is raised.

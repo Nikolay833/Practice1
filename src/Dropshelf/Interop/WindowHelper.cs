@@ -87,7 +87,7 @@ internal static class WindowHelper
     }
 
     /// <summary>
-    /// Turns WS_EX_NOACTIVATE on or off. The shelf is a no-activate window so it never steals focus; it is allowed to activate
+    /// Turns WS_EX_NOACTIVATE on or off. The island is a no-activate window so it never steals focus; it is allowed to activate
     /// only while a text box in it needs the keyboard.
     /// </summary>
     public static void SetNoActivate(IntPtr hwnd, bool noActivate)

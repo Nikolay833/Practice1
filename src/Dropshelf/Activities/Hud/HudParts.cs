@@ -82,7 +82,7 @@ internal sealed class HudBar : Grid
             VerticalAlignment = VerticalAlignment.Center,
             Width = 0,
         };
-        _fill.SetResourceReference(Border.BackgroundProperty, "AccentBrush");
+        _fill.SetResourceReference(Border.BackgroundProperty, "TextBrush");
         SetColumn(_fill, 0);
         Children.Add(_fill);
 
@@ -93,8 +93,8 @@ internal sealed class HudBar : Grid
         Children.Add(_label);
     }
 
-    /// <summary>Sets the fill (0..1), the text, and which theme brush colours the fill ("AccentBrush", "DangerBrush", ...).</summary>
-    public void Set(double value, string label, string fillBrushKey = "AccentBrush", bool animate = true)
+    /// <summary>Sets the fill (0..1), the text, and which theme brush colours the fill ("TextBrush", "DangerBrush", ...).</summary>
+    public void Set(double value, string label, string fillBrushKey = "TextBrush", bool animate = true)
     {
         value = Math.Clamp(value, 0, 1);
         _label.Text = label;

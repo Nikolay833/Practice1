@@ -65,7 +65,7 @@ internal sealed class VolumeActivity : PillActivityBase
         }
 
         _glyph.Text = GlyphFor(volume, muted);
-        _bar.Set(muted ? 0 : volume, muted ? "Muted" : Percent(volume), muted ? "TextDisabledBrush" : "AccentBrush");
+        _bar.Set(muted ? 0 : volume, muted ? "Muted" : Percent(volume), muted ? "TextDisabledBrush" : "TextBrush");
         if (_settings.Current.ReplaceWindowsOsd)
         {
             _osd.Suppress(this);

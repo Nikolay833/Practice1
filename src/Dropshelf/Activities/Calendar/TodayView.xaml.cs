@@ -164,7 +164,7 @@ public partial class TodayView : UserControl
         now.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         var icon = new WeatherIcon(36) { Kind = WeatherCodes.IconFor(data.Code, data.IsDay), VerticalAlignment = VerticalAlignment.Center };
         now.Children.Add(icon);
-        TextBlock temp = Text(weather.FormatTemp(data.TempC), 30, "TextBrush", FontWeights.SemiBold);
+        TextBlock temp = Text(weather.FormatTemp(data.TempC), 34, "TextBrush", FontWeights.Light);
         temp.Margin = new Thickness(8, 0, 10, 0);
         temp.VerticalAlignment = VerticalAlignment.Center;
         Grid.SetColumn(temp, 1);
@@ -329,7 +329,7 @@ public partial class TodayView : UserControl
         row.Children.Add(bar);
 
         string time = e.AllDay ? "All day" : e.Start.ToLocalTime().ToString("t");
-        TextBlock timeText = Text(time, 12, current ? "AccentBrush" : "TextSecondaryBrush", current ? FontWeights.SemiBold : FontWeights.Normal);
+        TextBlock timeText = Text(time, 12, current ? "DangerBrush" : "TextSecondaryBrush", current ? FontWeights.SemiBold : FontWeights.Normal);
         timeText.Margin = new Thickness(8, 0, 0, 0);
         Grid.SetColumn(timeText, 1);
         row.Children.Add(timeText);
@@ -354,12 +354,12 @@ public partial class TodayView : UserControl
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         var dot = new Ellipse { Width = 7, Height = 7, Margin = new Thickness(0, 0, 6, 0) };
-        dot.SetResourceReference(Shape.FillProperty, "AccentBrush");
+        dot.SetResourceReference(Shape.FillProperty, "DangerBrush");
         grid.Children.Add(dot);
 
         var line = new Rectangle { Height = 1, VerticalAlignment = VerticalAlignment.Center };
-        line.SetResourceReference(Shape.FillProperty, "AccentBrush");
-        var label = Text("Now " + now.ToLocalTime().ToString("t"), 10, "AccentBrush", FontWeights.SemiBold);
+        line.SetResourceReference(Shape.FillProperty, "DangerBrush");
+        var label = Text("Now " + now.ToLocalTime().ToString("t"), 10, "DangerBrush", FontWeights.SemiBold);
         label.Margin = new Thickness(0, 0, 8, 0);
         var lineHost = new DockPanel();
         DockPanel.SetDock(label, Dock.Left);

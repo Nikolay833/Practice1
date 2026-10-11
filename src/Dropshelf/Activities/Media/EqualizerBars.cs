@@ -9,18 +9,19 @@ using Dropshelf.Services;
 namespace Dropshelf.Activities.Media;
 
 /// <summary>
-/// Four accent-coloured bars that dance while music plays. Each bar is a spring chasing a target height; the targets are
-/// re-rolled about 11 times a second. With a working Core Audio peak meter the bar heights follow the real output level
+/// The Dynamic Island's music waveform: five rounded bars that grow from their middle while music plays, tinted with a colour
+/// from the artwork (white without one). Each bar is a spring chasing a target height; the targets are re-rolled about 11
+/// times a second, and the loop ticks at 30 fps at most (see <see cref="FrameLoop"/>). With a working Core Audio peak meter the bar heights follow the real output level
 /// (each bar with its own random spread); without one, or when the meter reads silence for a few seconds while the player
 /// says "playing", the targets are pseudo-random. Frames are only produced while visible and playing (or settling).
 /// </summary>
 internal sealed class EqualizerBars : Canvas
 {
-    private const int BarCount = 4;
-    private const double BarWidth = 3, BarGap = 2.5, BarHeight = 14, RetargetSeconds = 0.09, SilenceFallbackSeconds = 3;
+    private const int BarCount = 5;
+    private const double BarWidth = 3, BarGap = 2, BarHeight = 16, RetargetSeconds = 0.09, SilenceFallbackSeconds = 3;
 
     private static readonly Random Rng = new();
-    private static readonly double[] StaticHeights = { 0.55, 0.95, 0.7, 0.4 };
+    private static readonly double[] StaticHeights = { 0.4, 0.75, 1.0, 0.65, 0.35 };
 
     private readonly AudioEndpointService? _audio;
     private readonly Rectangle[] _bars = new Rectangle[BarCount];
@@ -50,9 +51,9 @@ internal sealed class EqualizerBars : Canvas
                 RadiusX = BarWidth / 2,
                 RadiusY = BarWidth / 2,
                 RenderTransform = _scales[i],
-                RenderTransformOrigin = new Point(0.5, 1),
+                RenderTransformOrigin = new Point(0.5, 0.5),
+                Fill = Brushes.White,
             };
-            bar.SetResourceReference(Shape.FillProperty, "AccentBrush");
             SetLeft(bar, i * (BarWidth + BarGap));
             SetTop(bar, 0);
             _bars[i] = bar;
@@ -60,6 +61,23 @@ internal sealed class EqualizerBars : Canvas
         }
 
         IsVisibleChanged += (_, _) => Refresh();
+    }
+
+    /// <summary>Colours the bars (a colour taken from the artwork); null = white.</summary>
+    public void SetTint(Color? tint)
+    {
+        Brush brush = Brushes.White;
+        if (tint is { } color)
+        {
+            var solid = new SolidColorBrush(color);
+            solid.Freeze();
+            brush = solid;
+        }
+
+        foreach (Rectangle bar in _bars)
+        {
+            bar.Fill = brush;
+        }
     }
 
     public bool Playing

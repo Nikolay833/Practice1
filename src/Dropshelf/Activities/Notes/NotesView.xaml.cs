@@ -8,7 +8,7 @@ namespace Dropshelf.Activities.Notes;
 
 /// <summary>
 /// The "Notes" tab. The editor is a plain TextBox; every change goes to the note at once and the store writes the file 500 ms
-/// after the last keystroke. The shelf window lets itself be activated when the editor is clicked (it is a no-activate window
+/// after the last keystroke. The island window lets itself be activated when the editor is clicked (it is a no-activate window
 /// otherwise) and stays open while the editor has the keyboard.
 /// </summary>
 public partial class NotesView : UserControl
@@ -32,7 +32,7 @@ public partial class NotesView : UserControl
         OnCurrentChanged();
     }
 
-    /// <summary>Esc in the editor: give the keyboard back and let the shelf close.</summary>
+    /// <summary>Esc in the editor: give the keyboard back and let the island close.</summary>
     internal event Action? ReleaseRequested;
 
     public void FocusEditor()

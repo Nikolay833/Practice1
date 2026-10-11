@@ -42,6 +42,9 @@ internal sealed class MediaSessionService : IDisposable
     public ImageSource? Art { get; private set; }
     public ImageSource? ArtTiny { get; private set; }
 
+    /// <summary>A bright colour taken from the artwork for the waveform (like the Dynamic Island), or null for none.</summary>
+    public Color? ArtTint { get; private set; }
+
     public bool CanPlayPause { get; private set; }
     public bool CanNext { get; private set; }
     public bool CanPrevious { get; private set; }
@@ -285,6 +288,7 @@ internal sealed class MediaSessionService : IDisposable
         Title = Artist = Album = SourceApp = string.Empty;
         Status = GlobalSystemMediaTransportControlsSessionPlaybackStatus.Closed;
         Art = ArtTiny = null;
+        ArtTint = null;
         CanPlayPause = CanNext = CanPrevious = CanSeek = false;
         Duration = TimeSpan.Zero;
         _anchorPosition = TimeSpan.Zero;
@@ -356,12 +360,17 @@ internal sealed class MediaSessionService : IDisposable
             string album = props.AlbumTitle ?? string.Empty;
 
             ImageSource? art = null, tiny = null;
+            Color? tint = null;
             if (props.Thumbnail != null)
             {
                 byte[]? bytes = await ReadBytesAsync(props.Thumbnail);
                 if (bytes is { Length: > 0 })
                 {
-                    (art, tiny) = await Task.Run(() => (Decode(bytes, 300), Decode(bytes, 24)));
+                    (art, tiny, tint) = await Task.Run(() =>
+                    {
+                        ImageSource? small = Decode(bytes, 24);
+                        return (Decode(bytes, 300), small, TintOf(small as BitmapSource));
+                    });
                 }
             }
 
@@ -376,6 +385,7 @@ internal sealed class MediaSessionService : IDisposable
             Album = album;
             Art = art;
             ArtTiny = tiny;
+            ArtTint = tint;
             ReadPlayback();
             ReadTimeline();
             Changed?.Invoke();
@@ -426,6 +436,52 @@ internal sealed class MediaSessionService : IDisposable
         catch (Exception)
         {
             return null; // not an image WPF can decode
+        }
+    }
+
+    /// <summary>
+    /// The artwork's dominant vivid colour: pixels are averaged weighted by their saturation, then lifted so the colour reads on
+    /// black. Greyscale artwork gives null (the waveform is white then). Runs on a worker thread; the bitmap is frozen.
+    /// </summary>
+    internal static Color? TintOf(BitmapSource? source)
+    {
+        if (source == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var bgra = new FormatConvertedBitmap(source, PixelFormats.Bgra32, null, 0);
+            int w = bgra.PixelWidth, h = bgra.PixelHeight;
+            var pixels = new byte[w * h * 4];
+            bgra.CopyPixels(pixels, w * 4, 0);
+
+            double r = 0, g = 0, b = 0, weight = 0;
+            for (int i = 0; i < pixels.Length; i += 4)
+            {
+                double pb = pixels[i] / 255.0, pg = pixels[i + 1] / 255.0, pr = pixels[i + 2] / 255.0;
+                double max = Math.Max(pr, Math.Max(pg, pb)), min = Math.Min(pr, Math.Min(pg, pb));
+                double saturation = max <= 0 ? 0 : (max - min) / max;
+                double wgt = saturation * saturation * max + 0.0001;
+                r += pr * wgt;
+                g += pg * wgt;
+                b += pb * wgt;
+                weight += wgt;
+            }
+
+            var mean = Color.FromRgb((byte)(255 * r / weight), (byte)(255 * g / weight), (byte)(255 * b / weight));
+            Themes.ColorUtil.ToHsv(mean, out double hue, out double sat, out _);
+            if (sat < 0.18)
+            {
+                return null;
+            }
+
+            return Themes.ColorUtil.FromHsv(hue, Math.Min(0.75, sat * 1.15), 1);
+        }
+        catch (Exception)
+        {
+            return null;
         }
     }
 

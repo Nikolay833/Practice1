@@ -12,11 +12,14 @@ namespace Dropshelf.Services;
 /// background thread with its own message loop: Windows silently removes a low-level hook whose thread does not
 /// answer within LowLevelHooksTimeout, which a busy UI thread easily would cause.
 /// The callback does almost no work: it queues left-button and move events, which are then raised on the UI thread
-/// through the dispatcher, so listeners never need their own locking.
+/// through the dispatcher, so listeners never need their own locking. Moves are only forwarded while the left button is
+/// held (the only time a listener needs them) and at most every <see cref="MoveIntervalMs"/> ms, so ordinary mouse movement,
+/// even from a 1000 Hz mouse, never wakes the UI thread.
 /// </summary>
 internal sealed class MouseHook : IDisposable
 {
     private const int MaxQueued = 2048; // moves are dropped beyond this while the UI thread is stalled
+    private const uint MoveIntervalMs = 8; // forward at most ~125 moves a second
 
     private readonly record struct MouseEvent(int Msg, int X, int Y, int Delta = 0);
 
@@ -37,6 +40,8 @@ internal sealed class MouseHook : IDisposable
     private int _drainPending;
     private volatile bool _installed;
     private volatile WheelRegion? _wheelRegion;
+    private bool _leftDown;          // hook thread only
+    private uint _lastMoveTime;      // hook thread only: event time of the last forwarded move
 
     public MouseHook()
     {
@@ -186,12 +191,28 @@ internal sealed class MouseHook : IDisposable
                         return (IntPtr)1; // swallow: the window under the pill must not scroll as well
                     }
                 }
-                else if (msg is NativeMethods.WM_MOUSEMOVE or NativeMethods.WM_LBUTTONDOWN or NativeMethods.WM_LBUTTONUP)
+                else if (msg is NativeMethods.WM_LBUTTONDOWN or NativeMethods.WM_LBUTTONUP
+                         || (msg == NativeMethods.WM_MOUSEMOVE && _leftDown && Volatile.Read(ref _queued) < MaxQueued && Move != null))
                 {
-                    // Always keep button events (their order matters); only moves are shed when the UI is far behind.
-                    if (msg != NativeMethods.WM_MOUSEMOVE || Volatile.Read(ref _queued) < MaxQueued)
+                    // Button events are always kept (their order matters); moves only while the button is held, throttled.
+                    var data = Marshal.PtrToStructure<NativeMethods.MSLLHOOKSTRUCT>(lParam);
+                    bool forward = true;
+                    if (msg == NativeMethods.WM_MOUSEMOVE)
                     {
-                        var data = Marshal.PtrToStructure<NativeMethods.MSLLHOOKSTRUCT>(lParam);
+                        forward = unchecked(data.time - _lastMoveTime) >= MoveIntervalMs;
+                    }
+                    else
+                    {
+                        _leftDown = msg == NativeMethods.WM_LBUTTONDOWN;
+                    }
+
+                    if (forward)
+                    {
+                        if (msg == NativeMethods.WM_MOUSEMOVE)
+                        {
+                            _lastMoveTime = data.time;
+                        }
+
                         _queue.Enqueue(new MouseEvent(msg, data.pt.X, data.pt.Y));
                         Interlocked.Increment(ref _queued);
                         if (Interlocked.Exchange(ref _drainPending, 1) == 0)

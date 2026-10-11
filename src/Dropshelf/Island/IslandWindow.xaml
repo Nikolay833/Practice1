@@ -37,7 +37,7 @@
 
                 <!-- Expanded panel (fixed size; the island clips it while animating). -->
                 <Grid x:Name="ExpandedPanel" Width="640" Height="188" VerticalAlignment="Top" HorizontalAlignment="Center"
-                      Opacity="0" IsHitTestVisible="False" RenderTransformOrigin="0.5,0">
+                      Opacity="0" Visibility="Hidden" IsHitTestVisible="False" RenderTransformOrigin="0.5,0">
                     <Grid.RenderTransform>
                         <ScaleTransform x:Name="ExpandedScale"/>
                     </Grid.RenderTransform>

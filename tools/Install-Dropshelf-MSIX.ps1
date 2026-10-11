@@ -1,5 +1,5 @@
 # Installs the MSIX version of Dropshelf from the latest GitHub release (one package for x64 and Arm64 PCs).
-# The MSIX version adds notifications on the pill and the Windows calendar.
+# The MSIX version adds notifications on the island and the Windows calendar.
 #
 #   irm https://github.com/Nikolay833/Practice1/releases/latest/download/Install-Dropshelf-MSIX.ps1 | iex
 #
@@ -68,4 +68,4 @@ if ($PSVersionTable.PSEdition -eq 'Core') {
 
 Write-Host 'Installing...'
 Add-AppxPackage -Path $bundle -ForceApplicationShutdown
-Write-Host 'Done. Look for the pill at the top of your screen. In Settings, turn on notifications if you want them on the pill.'
+Write-Host 'Done. Look for the island at the top of your screen. In Settings, turn on notifications if you want them on the island.'

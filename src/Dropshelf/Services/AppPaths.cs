@@ -9,13 +9,14 @@ internal static class AppPaths
     public static string Root { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Dropshelf");
 
-    /// <summary>Text / URL shelf items are materialised as files here so they can be dragged out.</summary>
+    /// <summary>Text / URL basket items are materialised as files here so they can be dragged out.</summary>
     public static string ItemsDir { get; } = Path.Combine(Root, "Items");
 
     /// <summary>PNG files of captured clipboard images.</summary>
     public static string ClipboardDir { get; } = Path.Combine(Root, "Clipboard");
 
     public static string SettingsFile { get; } = Path.Combine(Root, "settings.json");
+    /// <summary>Saved list of the removed shelf feature; deleted at start-up if an older version left it behind.</summary>
     public static string ShelfFile { get; } = Path.Combine(Root, "shelf.json");
     public static string ClipboardFile { get; } = Path.Combine(Root, "clipboard.json");
     public static string NotesFile { get; } = Path.Combine(Root, "notes.json");

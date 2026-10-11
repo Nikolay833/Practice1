@@ -170,7 +170,8 @@ public partial class IslandWindow : Window
             Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
             {
                 _monitor = MonitorInfo.Primary();
-                _winX = int.MinValue; // force a placement
+                _winX = int.MinValue; // force a placement and a resize: Windows may have resized the window itself
+                _winW = 0;
                 ApplyLayout(settled: !_loop.IsRunning);
             }));
         }
@@ -215,6 +216,7 @@ public partial class IslandWindow : Window
         string? pick = tab ?? (_activities.Current is { } live && _activities.TabActivities.Contains(live) ? live.Id : _tab);
         SelectTab(pick, instant: true);
 
+        ExpandedPanel.Visibility = Visibility.Visible; // now, not on the next frame: Ctrl+Shift+N focuses the editor right away
         ExpandedPanel.IsHitTestVisible = true;
         AnimateTo(1);
     }
@@ -417,13 +419,18 @@ public partial class IslandWindow : Window
             Body.CornerRadius = new CornerRadius(0, 0, r, r);
         }
 
+        // A layer that cannot be seen is hidden, not just transparent: its views (the waveform, the Now Playing scrubber)
+        // stop their timers when they are not visible, so nothing repaints the window for content nobody can see.
         double compact = Math.Clamp(_compact.Value, 0, 1);
         double opening = Math.Clamp(p / 0.3, 0, 1);
-        CompactLayer.Opacity = (1 - opening) * compact;
+        double compactOpacity = (1 - opening) * compact;
+        CompactLayer.Opacity = compactOpacity;
+        CompactLayer.Visibility = compactOpacity > 0.001 ? Visibility.Visible : Visibility.Hidden;
         CompactLayer.Width = Math.Max(1, cw);
         CompactLayer.Height = Math.Max(1, ch);
         double panel = Math.Clamp((p - 0.35) / 0.5, 0, 1);
         ExpandedPanel.Opacity = panel;
+        ExpandedPanel.Visibility = _expanded || panel > 0.001 ? Visibility.Visible : Visibility.Hidden;
         double zoom = Lerp(0.92, 1, Math.Clamp(p, 0, 1));
         ExpandedScale.ScaleX = zoom;
         ExpandedScale.ScaleY = zoom;
@@ -692,6 +699,7 @@ public partial class IslandWindow : Window
         {
             _hiddenNative = true;
             NativeMethods.ShowWindow(_hwnd, NativeMethods.SW_HIDE); // off-screen is not enough with a monitor above
+            Island.Visibility = Visibility.Hidden;                // and WPF would keep animating what it thinks is visible
         }
     }
 
@@ -763,6 +771,7 @@ public partial class IslandWindow : Window
         if (!away && _hiddenNative)
         {
             _hiddenNative = false;
+            Island.Visibility = Visibility.Visible;
             NativeMethods.ShowWindow(_hwnd, NativeMethods.SW_SHOWNOACTIVATE);
         }
 

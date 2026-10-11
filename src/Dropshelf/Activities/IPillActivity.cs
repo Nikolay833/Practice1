@@ -14,7 +14,7 @@ internal enum PillActivityKind
 }
 
 /// <summary>
-/// What an activity shows around the mascot while the pill is collapsed: one element left of it, one right of it.
+/// What an activity shows while the island is collapsed: a leading element and a trailing element, like the Dynamic Island.
 /// The pill springs to a width that fits the wider side. The same element instances may be handed out again by later
 /// <see cref="IPillActivity.CreateCompact"/> calls (so a live view can keep updating); the host then does not crossfade.
 /// </summary>
@@ -40,7 +40,7 @@ internal sealed class CompactContent
 
     /// <summary>
     /// True when the elements contain buttons. The pill then receives mouse input while this is shown (it is click-through
-    /// otherwise), does not expand on hover and a click on a button does not open the shelf.
+    /// otherwise), does not expand on hover and a click on a button does not open the island.
     /// </summary>
     public bool Interactive { get; }
 
@@ -81,15 +81,15 @@ internal interface IPillActivity
     /// <summary>For live activities: does it want the pill right now? Always false for HUDs.</summary>
     bool IsActive { get; }
 
-    /// <summary>Title of the tab in the expanded shelf, or null when the activity has no expanded view.</summary>
+    /// <summary>Title of the tab in the expanded island, or null when the activity has no expanded view.</summary>
     string? TabTitle { get; }
 
-    /// <summary>Position of the tab after "Shelf" (ascending). Defaults to <c>-Priority</c>.</summary>
+    /// <summary>Position of the tab (ascending). Defaults to <c>-Priority</c>.</summary>
     int TabOrder { get; }
 
     /// <summary>
-    /// HUDs only: a request that arrives while the expanded shelf covers the pill is kept (for up to 15 s) and shown when the
-    /// shelf closes, instead of being dropped. For results the user is waiting for ("Converted 3 files"), not for volume changes.
+    /// HUDs only: a request that arrives while the expanded island covers it is kept (for up to 15 s) and shown when the
+    /// island closes, instead of being dropped. For results the user is waiting for ("Converted 3 files"), not for volume changes.
     /// </summary>
     bool QueueHudWhileExpanded { get; }
 

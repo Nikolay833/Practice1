@@ -38,7 +38,7 @@
     <Application Id="App" Executable="Dropshelf.exe" EntryPoint="Windows.FullTrustApplication">
       <uap:VisualElements
         DisplayName="Dropshelf"
-        Description="A drag-and-drop shelf, basket and clipboard history in a pill at the top of your screen."
+        Description="An Apple-style island at the top of your screen with live activities, a drop basket and clipboard history."
         BackgroundColor="transparent"
         Square150x150Logo="Assets\Square150x150Logo.png"
         Square44x44Logo="Assets\Square44x44Logo.png">
@@ -61,7 +61,7 @@
     <rescap:Capability Name="unvirtualizedResources" />
     <!-- Windows calendars (appointment store), read-only. -->
     <uap:Capability Name="appointments" />
-    <!-- Windows notifications shown on the pill. The user still has to allow it in a Windows prompt. -->
+    <!-- Windows notifications shown on the island. The user still has to allow it in a Windows prompt. -->
     <uap3:Capability Name="userNotificationListener" />
   </Capabilities>
 </Package>

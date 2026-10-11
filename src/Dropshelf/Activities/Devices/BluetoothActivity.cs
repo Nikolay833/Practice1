@@ -53,7 +53,7 @@ internal sealed class BluetoothActivity : PillActivityBase, IDisposable
     public BluetoothActivity(SettingsService settings)
     {
         _settings = settings;
-        _glyph = HudParts.Glyph("", "AccentBrush", 16);
+        _glyph = HudParts.Glyph("", "TextBrush", 16);
         _left = HudParts.Cell(_glyph, 24);
         _name = HudParts.Label(string.Empty, 12, "TextBrush", FontWeights.SemiBold);
         _name.MaxWidth = 150;
@@ -192,7 +192,7 @@ internal sealed class BluetoothActivity : PillActivityBase, IDisposable
     {
         _shownId = id;
         _glyph.Text = GlyphFor(device);
-        _glyph.SetResourceReference(TextBlock.ForegroundProperty, device.Connected ? "AccentBrush" : "TextSecondaryBrush");
+        _glyph.SetResourceReference(TextBlock.ForegroundProperty, device.Connected ? "TextBrush" : "TextSecondaryBrush");
         _name.Text = string.IsNullOrWhiteSpace(device.Name) ? "Bluetooth device" : device.Name;
         string state = device.Connected ? "Connected" : "Disconnected";
         _detail.Text = device.Connected && device.Battery >= 0 ? $"{state} · {device.Battery}%" : state;

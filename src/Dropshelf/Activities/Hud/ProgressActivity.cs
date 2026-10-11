@@ -8,7 +8,7 @@ using Dropshelf.Services;
 namespace Dropshelf.Activities.Hud;
 
 /// <summary>
-/// The pill while a long job runs (converting, zipping...): a progress ring left of the mascot and a short label right of it.
+/// The pill while a long job runs (converting, zipping...): a progress ring at the leading edge and a short label at the trailing edge.
 /// A job that finishes within <see cref="ShowDelay"/> never shows up, so quick jobs do not make the pill flicker (they
 /// end with a toast instead). Jobs report from worker threads; everything is marshalled to the UI thread.
 /// </summary>

@@ -20,8 +20,9 @@ namespace Dropshelf.Activities.Timer;
 /// </summary>
 internal sealed class TimerActivity : PillActivityBase, IDisposable
 {
-    private static readonly Color Orange = Color.FromRgb(0xF9, 0x73, 0x16);
-    private static readonly Color Green = Color.FromRgb(0x22, 0xC5, 0x5E);
+    // Apple's timer colours: systemOrange while counting down (as in the Clock app and its Live Activity), systemGreen on breaks.
+    private static readonly Color Orange = Color.FromRgb(0xFF, 0x9F, 0x0A);
+    private static readonly Color Green = Color.FromRgb(0x30, 0xD1, 0x58);
 
     private readonly SettingsService _settings;
     private readonly ToastActivity _toast;
@@ -55,7 +56,8 @@ internal sealed class TimerActivity : PillActivityBase, IDisposable
 
         _ring = new ProgressRing(24, 2.5, "", 10);
         _left = HudParts.Cell(_ring, 26);
-        _time = HudParts.Label("00:00", 14, "TextBrush", FontWeights.SemiBold);
+        _time = HudParts.Label("00:00", 14, "WarnBrush", FontWeights.SemiBold);
+        _time.SetResourceReference(TextBlock.FontFamilyProperty, "RoundedFont");
         Typography.SetNumeralAlignment(_time, FontNumeralAlignment.Tabular);
         _time.TextTrimming = TextTrimming.None;
         _right = HudParts.Cell(_time, 50);
@@ -129,21 +131,8 @@ internal sealed class TimerActivity : PillActivityBase, IDisposable
         Updated?.Invoke();
     }
 
-    /// <summary>The ring colour for the current state, or null to follow the accent.</summary>
-    public Color? RingTint
-    {
-        get
-        {
-            Color baseColor = Engine.Phase is TimerPhase.Break or TimerPhase.LongBreak ? Green : (ThemeService.Current?.Accent ?? ThemeService.DefaultAccent);
-            double remaining = Engine.Remaining.TotalSeconds;
-            if (Engine.Running && remaining <= 60)
-            {
-                return ColorUtil.Mix(baseColor, Orange, Math.Clamp(1 - remaining / 60, 0, 1));
-            }
-
-            return Engine.Phase is TimerPhase.Break or TimerPhase.LongBreak ? Green : null;
-        }
-    }
+    /// <summary>The ring and countdown colour: orange, green on breaks.</summary>
+    public Color? RingTint => Engine.Phase is TimerPhase.Break or TimerPhase.LongBreak ? Green : Orange;
 
     // ---- Ticking ----------------------------------------------------------------------------------
 
@@ -224,7 +213,8 @@ internal sealed class TimerActivity : PillActivityBase, IDisposable
         _time.Text = Format(seconds, hours);
         _ring.SetProgress(Engine.Elapsed);
         _ring.Glyph = Engine.IsPaused ? "" : "";
-        _time.SetResourceReference(TextBlock.ForegroundProperty, Engine.IsPaused ? "TextSecondaryBrush" : "TextBrush");
+        _time.SetResourceReference(TextBlock.ForegroundProperty,
+            Engine.IsPaused ? "TextSecondaryBrush" : Engine.Phase is TimerPhase.Break or TimerPhase.LongBreak ? "SuccessBrush" : "WarnBrush");
 
         Color? tint = RingTint;
         if (tint is { } color)

@@ -8,8 +8,8 @@ using Dropshelf.Services;
 namespace Dropshelf.Activities.Media;
 
 /// <summary>
-/// Now playing. On the collapsed pill: rounded album art left of the mascot and dancing equalizer bars right of it, shown
-/// while something plays and for ten seconds after it is paused. In the expanded shelf: the "Now Playing" tab, available for
+/// Now playing. On the collapsed island, like the Dynamic Island: rounded album art at the leading edge and the waveform at
+/// the trailing edge, shown while something plays and for ten seconds after it is paused. In the expanded island: the "Now Playing" tab, available for
 /// as long as there is a media session. Turned off by the "Show now playing" setting.
 /// </summary>
 internal sealed class NowPlayingActivity : PillActivityBase, IDisposable
@@ -38,16 +38,17 @@ internal sealed class NowPlayingActivity : PillActivityBase, IDisposable
         var glyph = new TextBlock { Text = "", FontSize = 12 };
         glyph.SetResourceReference(FrameworkElement.StyleProperty, "Glyph");
         glyph.SetResourceReference(TextBlock.ForegroundProperty, "TextDisabledBrush");
-        var frame = new Border { Width = 24, Height = 24, CornerRadius = new CornerRadius(6), ClipToBounds = true };
-        frame.SetResourceReference(Border.BackgroundProperty, "SurfaceBrush");
-        _artHost = new Grid { Width = 24, Height = 24 };
+        var frame = new Border { Width = 22, Height = 22, CornerRadius = new CornerRadius(6), ClipToBounds = true };
+        frame.SetResourceReference(Border.BackgroundProperty, "FillBrush");
+        _art.Clip = new RectangleGeometry(new Rect(0, 0, 22, 22), 6, 6);
+        _artHost = new Grid { Width = 22, Height = 24 };
         frame.Child = new Grid { Children = { glyph, _art } };
         _artHost.Children.Add(frame);
 
         _bars = new EqualizerBars(audio) { VerticalAlignment = VerticalAlignment.Center };
-        _barsHost = new Grid { Width = 24, Height = 24 };
+        _barsHost = new Grid { Width = 23, Height = 24 };
         _barsHost.Children.Add(_bars);
-        _bars.HorizontalAlignment = HorizontalAlignment.Left;
+        _bars.HorizontalAlignment = HorizontalAlignment.Right;
 
         _lingerTimer = new DispatcherTimer { Interval = PausedLinger };
         _lingerTimer.Tick += (_, _) =>
@@ -76,6 +77,7 @@ internal sealed class NowPlayingActivity : PillActivityBase, IDisposable
     private void OnMediaChanged()
     {
         _art.Source = _media.Art;
+        _bars.SetTint(_media.ArtTint);
         _bars.Playing = _media.IsPlaying;
 
         if (_media.IsPlaying)

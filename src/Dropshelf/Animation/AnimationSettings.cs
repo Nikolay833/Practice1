@@ -6,10 +6,10 @@ namespace Dropshelf.Animation;
 /// <summary>How much motion the app uses. Chosen in Settings; Windows' "Animation effects" switch can lower the default.</summary>
 public enum AnimationMode
 {
-    /// <summary>Everything: mascot look-around and tilts, 3D tile flips, overshooting springs.</summary>
+    /// <summary>Everything: fluid, slightly bouncy springs like the Dynamic Island.</summary>
     Full,
 
-    /// <summary>Short, critically damped motion; no mascot look-around, no tilts or flips.</summary>
+    /// <summary>Short, critically damped motion without bounce (like Reduce Motion).</summary>
     Subtle,
 
     /// <summary>No animation at all; everything jumps to its final state.</summary>

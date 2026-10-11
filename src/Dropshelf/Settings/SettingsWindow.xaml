@@ -128,7 +128,7 @@
                                        Visibility="Hidden"/>
                         </Grid>
                         <ControlTemplate.Triggers>
-                            <DataTrigger Binding="{Binding IsMouseOver, ElementName=Lights}" Value="True">
+                            <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=StackPanel}}" Value="True">
                                 <Setter TargetName="Symbol" Property="Visibility" Value="Visible"/>
                             </DataTrigger>
                             <Trigger Property="IsPressed" Value="True">

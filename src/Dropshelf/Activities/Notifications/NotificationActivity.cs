@@ -12,7 +12,7 @@ using Dropshelf.Services;
 namespace Dropshelf.Activities.Notifications;
 
 /// <summary>
-/// A Windows notification as a short HUD on the pill: the app's logo left of the mascot, "App · Title" over a one-line body right
+/// A Windows notification as a short HUD on the island: the app's logo at the leading edge, "App · Title" over a one-line body at the trailing
 /// of it, a "+2" badge when more are waiting. Each one stays about 4 seconds; several that arrive together are shown one after the
 /// other. Clicking the HUD opens the sending app (best effort) and dismisses everything that was queued. While a fullscreen app is
 /// in front, "do not disturb" drops new notifications instead of queueing them (Windows still shows its own banner).
@@ -53,7 +53,7 @@ internal sealed class NotificationActivity : PillActivityBase, IDisposable
     public override PillActivityKind Kind => PillActivityKind.Hud;
     public override TimeSpan HudDuration => ShowFor;
 
-    /// <summary>A notification that arrives while the shelf is open is shown when it closes.</summary>
+    /// <summary>A notification that arrives while the island is open is shown when it closes.</summary>
     public override bool QueueHudWhileExpanded => true;
 
     /// <summary>The user decides in Settings; this only matters while "Hide in fullscreen apps" detects fullscreen.</summary>
@@ -197,7 +197,7 @@ internal sealed class NotificationActivity : PillActivityBase, IDisposable
             VerticalAlignment = VerticalAlignment.Center,
             Visibility = Visibility.Hidden,
         };
-        _badge.SetResourceReference(Border.BackgroundProperty, "AccentBrush");
+        _badge.SetResourceReference(Border.BackgroundProperty, "DangerBrush");
 
         var row = new Grid { Width = TextWidth + BadgeWidth, Height = BodyRowHeight };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(TextWidth) });
@@ -212,7 +212,7 @@ internal sealed class NotificationActivity : PillActivityBase, IDisposable
     }
 
     /// <summary>
-    /// A button with no chrome. It has to be a button: a click on any other part of the pill opens the shelf, a click on a
+    /// A button with no chrome. It has to be a button: a click on any other part of the island opens it, a click on a
     /// <see cref="System.Windows.Controls.Primitives.ButtonBase"/> does not.
     /// </summary>
     private static Button FlatButton(FrameworkElement content, Action click)

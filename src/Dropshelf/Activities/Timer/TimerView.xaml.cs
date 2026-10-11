@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using Dropshelf.Activities.Hud;
 
 namespace Dropshelf.Activities.Timer;
@@ -11,6 +12,9 @@ namespace Dropshelf.Activities.Timer;
 public partial class TimerView : UserControl
 {
     private readonly TimerActivity _activity;
+    private static readonly Brush StartFill = Frozen(Color.FromArgb(0x40, 0x30, 0xD1, 0x58));
+    private static readonly Brush PauseFill = Frozen(Color.FromArgb(0x40, 0xFF, 0x9F, 0x0A));
+
     private readonly ProgressRing _ring = new(104, 5);
     private bool _loading = true;
     private TimeSpan _selected = TimeSpan.FromMinutes(25);
@@ -86,6 +90,8 @@ public partial class TimerView : UserControl
         };
 
         StartButton.Content = e.Running ? "Pause" : e.IsPaused ? "Resume" : "Start";
+        StartButton.Background = e.Running ? PauseFill : StartFill; // green Start / Resume, orange Pause, like the Clock app
+        StartButton.SetResourceReference(ForegroundProperty, e.Running ? "WarnBrush" : "SuccessBrush");
         ResetButton.IsEnabled = e.Phase != TimerPhase.Idle || e.Remaining != e.Total;
         bool idle = e.Phase == TimerPhase.Idle;
         Presets.IsEnabled = idle;
@@ -208,5 +214,12 @@ public partial class TimerView : UserControl
 
         value = TimeSpan.FromSeconds(seconds);
         return true;
+    }
+
+    private static Brush Frozen(Color color)
+    {
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+        return brush;
     }
 }

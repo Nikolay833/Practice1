@@ -27,4 +27,4 @@ Unblock-File -Path $exe
 
 Write-Host 'Installing...'
 Start-Process -FilePath $exe
-Write-Host 'Done. Look for the pill at the top of your screen.'
+Write-Host 'Done. Look for the island at the top of your screen.'

@@ -10,7 +10,7 @@ using Dropshelf.Services;
 
 namespace Dropshelf.Items;
 
-/// <summary>An observable list of <see cref="DropItem"/>s with the add/remove rules shared by shelf and basket.</summary>
+/// <summary>An observable list of <see cref="DropItem"/>s with the add/remove rules used by the basket.</summary>
 public class ItemStore
 {
     private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher; // stores are created on the UI thread
@@ -103,7 +103,7 @@ public class ItemStore
         return item;
     }
 
-    /// <summary>Moves already-built items into this store (used for basket to shelf transfers).</summary>
+    /// <summary>Moves already-built items into this store.</summary>
     public void AddRange(IEnumerable<DropItem> items)
     {
         foreach (var item in items)

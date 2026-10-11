@@ -49,7 +49,7 @@ internal sealed class BatteryActivity : PillActivityBase, IDisposable
         _glyph = HudParts.Glyph("");
         _left = HudParts.Cell(_glyph, 22);
 
-        _bolt = HudParts.Glyph("", "AccentBrush", 12);
+        _bolt = HudParts.Glyph("", "SuccessBrush", 12);
         _bolt.RenderTransform = _boltScale;
         _bolt.RenderTransformOrigin = new Point(0.5, 0.5);
         _percent = HudParts.Label(string.Empty, 13, "TextBrush", FontWeights.SemiBold);
@@ -176,7 +176,7 @@ internal sealed class BatteryActivity : PillActivityBase, IDisposable
         _mood = mood;
         int level = Math.Min(10, percent / 10);
         _glyph.Text = level >= 10 ? "" : ((char)(0xE850 + level)).ToString();
-        string tone = mood is Mood.Low or Mood.Critical ? "DangerBrush" : mood == Mood.Full ? "AccentBrush" : "TextBrush";
+        string tone = mood is Mood.Low or Mood.Critical ? "DangerBrush" : mood == Mood.Full ? "SuccessBrush" : "TextBrush";
         _glyph.SetResourceReference(TextBlock.ForegroundProperty, tone);
         _bolt.Visibility = plugged ? Visibility.Visible : Visibility.Collapsed;
         _percent.Text = $"{percent}%";

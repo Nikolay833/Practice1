@@ -83,7 +83,6 @@ public partial class NowPlayingView : UserControl
         ArtistText.Text = string.IsNullOrEmpty(_media.Artist) ? _media.Album : _media.Artist;
         SourceText.Text = _media.SourceApp;
         ArtImage.Source = _media.Art;
-        GlowImage.Source = _media.ArtTiny ?? _media.Art;
 
         PlayPauseButton.Content = _media.IsPlaying ? PauseGlyph : PlayGlyph;
         PlayPauseButton.IsEnabled = _media.CanPlayPause;

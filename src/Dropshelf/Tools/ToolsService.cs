@@ -21,7 +21,7 @@ internal enum ToolKind
     Unzip,
 }
 
-/// <summary>What a run produced. <see cref="Outputs"/> are new files / folders to put on the shelf.</summary>
+/// <summary>What a run produced. <see cref="Outputs"/> are new files / folders to put in the basket.</summary>
 internal sealed class ToolResult
 {
     public List<string> Outputs { get; } = new();
@@ -36,7 +36,7 @@ internal sealed class ToolResult
 /// <summary>
 /// Runs the convert / resize / compress / zip tools off the UI thread. A long run shows a progress ring on the pill
 /// (<see cref="ProgressActivity"/>); the end of every run raises a toast ("Converted 3 files"). The caller puts the outputs on
-/// the shelf. Originals are never touched: every result is a new, uniquely named file.
+/// the basket. Originals are never touched: every result is a new, uniquely named file.
 /// </summary>
 internal sealed class ToolsService
 {

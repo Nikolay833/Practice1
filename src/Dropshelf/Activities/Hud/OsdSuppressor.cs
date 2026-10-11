@@ -21,7 +21,7 @@ namespace Dropshelf.Activities.Hud;
 /// </summary>
 internal sealed class OsdSuppressor
 {
-    private const int TickMs = 25, Ticks = 40;
+    private const int TickMs = 40, Ticks = 30; // look for about 1.2 s; every pass enumerates all top-level windows
 
     private readonly DispatcherTimer _timer;
     private int _ticksLeft;
@@ -41,7 +41,7 @@ internal sealed class OsdSuppressor
     }
 
     /// <summary>
-    /// Decides whether the HUD of an activity will really appear (not while the shelf is open or a fullscreen app hides the
+    /// Decides whether the HUD of an activity will really appear (not while the island is open or a fullscreen app hides the
     /// pill). The native popup is only hidden when it does, so the user never ends up with no feedback at all.
     /// </summary>
     public Func<IPillActivity, bool>? Gate { get; set; }

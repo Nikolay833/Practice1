@@ -503,6 +503,28 @@ internal sealed class MediaSessionService : IDisposable
     }
 
     /// <summary>"Spotify.exe" gives "Spotify", "Microsoft.ZuneMusic_8wekyb3d8bbwe!Microsoft.ZuneMusic" the app's display name.</summary>
+    /// <summary>DisplayName registered for an app ID under HKCU / HKLM <c>Software\Classes\AppUserModelId</c>, or null.</summary>
+    private static string? RegisteredDisplayName(string aumid)
+    {
+        foreach (Microsoft.Win32.RegistryKey root in new[] { Microsoft.Win32.Registry.CurrentUser, Microsoft.Win32.Registry.LocalMachine })
+        {
+            try
+            {
+                using Microsoft.Win32.RegistryKey? key = root.OpenSubKey(@"Software\Classes\AppUserModelId\" + aumid);
+                if (key?.GetValue("DisplayName") is string name && name.Length > 0 && !name.StartsWith('@'))
+                {
+                    return name; // "@..." is an indirect resource string; skip it
+                }
+            }
+            catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or System.IO.IOException or ArgumentException)
+            {
+                // Not readable: try the next place.
+            }
+        }
+
+        return null;
+    }
+
     private static string FriendlyAppName(string aumid)
     {
         if (string.IsNullOrWhiteSpace(aumid))
@@ -526,6 +548,13 @@ internal sealed class MediaSessionService : IDisposable
             // Not a packaged app, or no access: derive a name below.
         }
 
+        // Desktop apps that show notifications register their app ID with a display name (Firefox-based browsers such as Zen
+        // use a hash of their install folder as the ID, e.g. "F0DC299D809B9700").
+        if (RegisteredDisplayName(aumid) is { } registered)
+        {
+            return registered;
+        }
+
         string raw = aumid;
         int bang = raw.IndexOf('!');
         if (bang >= 0)
@@ -542,6 +571,11 @@ internal sealed class MediaSessionService : IDisposable
         if (dot >= 0 && dot < raw.Length - 1)
         {
             raw = raw[(dot + 1)..];
+        }
+
+        if (raw.Length >= 12 && raw.All(Uri.IsHexDigit))
+        {
+            return "Browser"; // an unregistered hash ID: in practice a Firefox-based browser
         }
 
         return raw.ToLowerInvariant() switch

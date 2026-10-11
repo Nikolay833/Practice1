@@ -18,6 +18,13 @@ internal static class DropHelper
         data.GetDataPresent(UrlFormatW);
 
     /// <summary>
+    /// Effect to report for a drag that started in one of our own stores: Move when the source allows it, otherwise
+    /// Copy (file and folder items are offered as copy-only). Accept transfers the items either way.
+    /// </summary>
+    public static DragDropEffects InternalEffect(DragEventArgs e) =>
+        e.AllowedEffects.HasFlag(DragDropEffects.Move) ? DragDropEffects.Move : DragDropEffects.Copy;
+
+    /// <summary>
     /// Adds whatever is in <paramref name="data"/> to <paramref name="target"/>.
     /// Drags that started in another Dropshelf store are transferred (moved); drags from the same store are ignored.
     /// </summary>
@@ -80,7 +87,10 @@ internal static class DropHelper
             if (data.GetData(UrlFormatW) is MemoryStream ms)
             {
                 string s = System.Text.Encoding.Unicode.GetString(ms.ToArray()).TrimEnd('\0').Trim();
-                return Uri.TryCreate(s, UriKind.Absolute, out _) ? s : null;
+                // Saved links are shell-launched on double-click, so only web links are accepted.
+                return Uri.TryCreate(s, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
+                    ? s
+                    : null;
             }
         }
         catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or IOException)

@@ -263,8 +263,14 @@ public partial class ClipboardWindow : Window
                 await System.Threading.Tasks.Task.Delay(20);
             }
 
+            if (NativeMethods.GetForegroundWindow() != target)
+            {
+                Log.Error("Paste skipped: previous window did not regain focus");
+                return; // never send Ctrl+V to whatever else has focus; the entry is on the clipboard already
+            }
+
             await System.Threading.Tasks.Task.Delay(40);
-            KeyboardInput.SendCtrlV();
+            await KeyboardInput.SendCtrlVAsync();
         }
         catch (Exception ex)
         {

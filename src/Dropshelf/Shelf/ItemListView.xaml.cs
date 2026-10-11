@@ -187,19 +187,24 @@ public partial class ItemListView : UserControl
         var existing = items.Where(i => i.Exists).ToList();
         if (existing.Count == 0)
         {
-            _store.PruneMissing();
+            _ = _store.PruneMissingAsync();
             return;
         }
 
         var data = new DataObject();
         data.SetData(DataFormats.FileDrop, existing.Select(i => i.Path).ToArray());
 
+        // File and folder items are references to the user's originals, so a drop must never move them (Explorer
+        // moves on same-volume drops). Only the text/link files we created ourselves may be moved out.
+        bool ownedOnly = existing.All(i => i.Kind is ShelfItemKind.Text or ShelfItemKind.Url);
+        DragDropEffects allowed = ownedOnly ? DragDropEffects.Copy | DragDropEffects.Move : DragDropEffects.Copy;
+
         DragDropEffects result = DragDropEffects.None;
         DragState.Begin(_store, existing);
         SetBusy(dragging: true);
         try
         {
-            result = DragDrop.DoDragDrop(List, data, DragDropEffects.Copy | DragDropEffects.Move);
+            result = DragDrop.DoDragDrop(List, data, allowed);
         }
         catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException)
         {
@@ -212,10 +217,12 @@ public partial class ItemListView : UserControl
         }
 
         // Move: the files left their folder, so the references are stale. (Items are also removed when the
-        // drop landed in another Dropshelf store; Remove is a no-op then.)
+        // drop landed in another Dropshelf store; Remove is a no-op then, so a transferred item's text/link file is
+        // never deleted.) Basket items that were dropped (copied) elsewhere are gone for good, so their own
+        // .txt/.url files are deleted too instead of leaking in the Items folder.
         if (result.HasFlag(DragDropEffects.Move) || (RemoveOnAnyDrop && result != DragDropEffects.None))
         {
-            _store.Remove(existing, deleteOwnedFiles: false);
+            _store.Remove(existing, deleteOwnedFiles: true);
         }
     }
 
@@ -282,7 +289,7 @@ public partial class ItemListView : UserControl
         }
     }
 
-    private void Copy_Click(object sender, RoutedEventArgs e)
+    private async void Copy_Click(object sender, RoutedEventArgs e)
     {
         var paths = SelectedItems().Where(i => i.Exists).Select(i => i.Path).ToArray();
         if (paths.Length == 0)
@@ -295,7 +302,7 @@ public partial class ItemListView : UserControl
         var data = new DataObject();
         data.SetFileDropList(files);
         data.SetData("Preferred DropEffect", new MemoryStream(BitConverter.GetBytes((int)DragDropEffects.Copy)));
-        ClipboardAccess.TrySetDataObject(data);
+        await ClipboardAccess.TrySetDataObjectAsync(data);
     }
 
     private void Remove_Click(object sender, RoutedEventArgs e) => _store?.Remove(SelectedItems());
@@ -306,7 +313,7 @@ public partial class ItemListView : UserControl
         {
             if (!item.Exists)
             {
-                _store?.PruneMissing();
+                _ = _store?.PruneMissingAsync();
                 continue;
             }
 

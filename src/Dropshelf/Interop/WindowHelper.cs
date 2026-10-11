@@ -63,6 +63,17 @@ internal static class WindowHelper
         NativeMethods.SetWindowLong(hwnd, NativeMethods.GWL_EXSTYLE, ex | style);
     }
 
+    /// <summary>Turns WS_EX_TRANSPARENT on or off so mouse input passes through (or is received by) the window.</summary>
+    public static void SetClickThrough(IntPtr hwnd, bool clickThrough)
+    {
+        int ex = NativeMethods.GetWindowLong(hwnd, NativeMethods.GWL_EXSTYLE);
+        int updated = clickThrough ? ex | NativeMethods.WS_EX_TRANSPARENT : ex & ~NativeMethods.WS_EX_TRANSPARENT;
+        if (updated != ex)
+        {
+            NativeMethods.SetWindowLong(hwnd, NativeMethods.GWL_EXSTYLE, updated);
+        }
+    }
+
     /// <summary>Hides a window from Alt+Tab and (optionally) stops it from taking focus when clicked.</summary>
     public static void MakeToolWindow(IntPtr hwnd, bool noActivate)
     {

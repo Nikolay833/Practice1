@@ -25,6 +25,9 @@ public sealed class ClipboardHistoryService : IDisposable
     private static readonly uint ViewerIgnoreFormat = NativeMethods.RegisterClipboardFormat("Clipboard Viewer Ignore");
     private static readonly uint CanIncludeFormat = NativeMethods.RegisterClipboardFormat("CanIncludeInClipboardHistory");
 
+    // Larger text is not recorded: it would bloat the in-memory list and the encrypted history file.
+    private const int MaxTextChars = 1_000_000;
+
     private readonly MessageWindow _window;
     private readonly SettingsService _settings;
     private readonly DispatcherTimer _saveTimer;
@@ -112,7 +115,7 @@ public sealed class ClipboardHistoryService : IDisposable
 
     private async Task CaptureAsync()
     {
-        if (ClipboardAccess.IsSelfChange || IsOwnedByThisProcess() || IsMarkedPrivate())
+        if (ClipboardAccess.IsSelfChange || IsOwnedByThisProcess() || await IsMarkedPrivateAsync())
         {
             return;
         }
@@ -178,8 +181,15 @@ public sealed class ClipboardHistoryService : IDisposable
         if (System.Windows.Clipboard.ContainsText(TextDataFormat.UnicodeText))
         {
             string text = System.Windows.Clipboard.GetText(TextDataFormat.UnicodeText);
+            if (text.Length > MaxTextChars)
+            {
+                Log.Info($"Clipboard text of {text.Length} chars is over the {MaxTextChars} limit; not recorded");
+                return null;
+            }
+
             if (!string.IsNullOrWhiteSpace(text))
             {
+                text = ReplaceLoneSurrogates(text);
                 return new ClipboardEntry { Kind = ClipboardEntryKind.Text, Text = text, Hash = HashOf(text) };
             }
         }
@@ -210,6 +220,32 @@ public sealed class ClipboardHistoryService : IDisposable
         return (bytes, Convert.ToHexString(SHA256.HashData(bytes)));
     }
 
+    /// <summary>
+    /// Replaces unpaired UTF-16 surrogates with U+FFFD. They cannot be serialized to JSON (the save would throw)
+    /// and would be silently rewritten by UTF-8 hashing anyway. One cheap scan; the string is only copied when needed.
+    /// </summary>
+    private static string ReplaceLoneSurrogates(string text)
+    {
+        char[]? fixedChars = null;
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (char.IsHighSurrogate(c) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1]))
+            {
+                i++; // valid pair
+                continue;
+            }
+
+            if (char.IsSurrogate(c))
+            {
+                fixedChars ??= text.ToCharArray();
+                fixedChars[i] = '\uFFFD';
+            }
+        }
+
+        return fixedChars == null ? text : new string(fixedChars);
+    }
+
     private static string HashOf(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
 
     private bool IsDuplicateOfNewest(ClipboardEntry entry)
@@ -225,7 +261,7 @@ public sealed class ClipboardHistoryService : IDisposable
     /// Honours the clipboard-history opt-out formats set by password managers and similar tools:
     /// ExcludeClipboardContentFromMonitorProcessing, "Clipboard Viewer Ignore" and CanIncludeInClipboardHistory = 0.
     /// </summary>
-    private bool IsMarkedPrivate()
+    private async Task<bool> IsMarkedPrivateAsync()
     {
         if (NativeMethods.IsClipboardFormatAvailable(ExcludeFormat) || NativeMethods.IsClipboardFormatAvailable(ViewerIgnoreFormat))
         {
@@ -271,7 +307,7 @@ public sealed class ClipboardHistoryService : IDisposable
                 }
             }
 
-            System.Threading.Thread.Sleep(15);
+            await Task.Delay(15);
         }
 
         return true;
@@ -386,7 +422,7 @@ public sealed class ClipboardHistoryService : IDisposable
 
     private void Load()
     {
-        var saved = JsonFile.Load<System.Collections.Generic.List<ClipboardEntry>>(AppPaths.ClipboardFile);
+        var saved = JsonFile.LoadProtected<System.Collections.Generic.List<ClipboardEntry>>(AppPaths.ClipboardFile, out bool wasPlain);
         if (saved == null)
         {
             return;
@@ -401,6 +437,11 @@ public sealed class ClipboardHistoryService : IDisposable
 
             Entries.Add(entry);
         }
+
+        if (wasPlain)
+        {
+            ScheduleSave(); // rewrite the legacy plain-text file encrypted
+        }
     }
 
     private void OnEntriesChanged(object? sender, NotifyCollectionChangedEventArgs e) => ScheduleSave();
@@ -411,7 +452,8 @@ public sealed class ClipboardHistoryService : IDisposable
         _saveTimer.Start();
     }
 
-    public void Save() => JsonFile.Save(AppPaths.ClipboardFile, Entries.ToList());
+    /// <summary>The history holds copied text, so the file is encrypted with DPAPI (current user).</summary>
+    public void Save() => JsonFile.SaveProtected(AppPaths.ClipboardFile, Entries.ToList());
 
     /// <summary>Writes pending changes immediately (called on exit).</summary>
     public void Flush()

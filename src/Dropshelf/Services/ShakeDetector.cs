@@ -9,7 +9,8 @@ namespace Dropshelf.Services;
 /// Detects a left-right "shake" while the left mouse button is held (i.e. while dragging something).
 /// A shake is <see cref="RequiredReversals"/> horizontal direction reversals of at least
 /// <see cref="MinTravelPx"/> each within <see cref="WindowMs"/> ms, after the cursor has moved
-/// more than <see cref="DragThresholdPx"/> from the press point.
+/// more than <see cref="DragThresholdPx"/> from the press point. Mouse events arrive on the UI thread, so this
+/// class and <see cref="DragState"/> need no locking.
 /// </summary>
 internal sealed class ShakeDetector : IDisposable
 {
@@ -38,7 +39,7 @@ internal sealed class ShakeDetector : IDisposable
         _hook.Move += OnMove;
     }
 
-    /// <summary>Raised from inside the hook callback; handlers must defer real work (e.g. Dispatcher.BeginInvoke).</summary>
+    /// <summary>Raised on the UI thread (the mouse hook marshals its events there), like all of this class's state.</summary>
     public event Action? Shaken;
 
     private void OnDown(int x, int y)

@@ -24,29 +24,7 @@ internal static class ClipboardAccess
     private static void MarkSelfChange() =>
         Interlocked.Exchange(ref _selfChangeUntil, Environment.TickCount64 + SelfChangeWindowMs);
 
-    /// <summary>Synchronous set with a few short retries. Returns false when the clipboard stayed locked.</summary>
-    public static bool TrySetDataObject(IDataObject data)
-    {
-        for (int i = 0; i < Attempts; i++)
-        {
-            MarkSelfChange();
-            try
-            {
-                System.Windows.Clipboard.SetDataObject(data, copy: true);
-                MarkSelfChange(); // cover notifications that arrive after the call returns
-                return true;
-            }
-            catch (ExternalException)
-            {
-                Thread.Sleep(30);
-            }
-        }
-
-        Log.Error("Clipboard stayed locked; could not set data");
-        return false;
-    }
-
-    /// <summary>Async set (does not block the UI thread between retries).</summary>
+    /// <summary>Sets the clipboard, retrying while it is locked without blocking the UI thread between attempts.</summary>
     public static async Task<bool> TrySetDataObjectAsync(IDataObject data)
     {
         for (int i = 0; i < Attempts; i++)

@@ -72,14 +72,14 @@ public partial class App : Application
 
         _mouseHook = new MouseHook();
         _shake = new ShakeDetector(_mouseHook);
-        // The hook callback must return quickly, so the basket is opened from a normal dispatcher turn.
-        _shake.Shaken += () => Dispatcher.BeginInvoke(new Action(() =>
+        // The mouse hook runs on its own thread and forwards events to the UI thread, so this runs on the UI thread.
+        _shake.Shaken += () =>
         {
             if (_settings.Current.ShakeToOpenBasket)
             {
                 ShowBasketAtCursor();
             }
-        }));
+        };
 
         _shelfWindow = new ShelfWindow(_shelf, _settings, ShowSettings);
         _shelfWindow.Show();
@@ -109,31 +109,46 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
-        // Tear down in reverse order; every step tolerates a half-started app (second instance).
-        _mouseHook?.Dispose();
-        _shake?.Dispose();
-        _hotkeys?.Dispose();
-        _clipboard?.Dispose();
-        _tray?.Dispose();
-        _shelf?.Flush();
-        _settings?.Flush();
-        _messages?.Dispose();
-
-        if (_mutex != null)
+        // Tear down in reverse order; every step tolerates a half-started app (second instance) and a failing
+        // step never stops the later ones (tray icon, settings flush and mutex release must always run).
+        TryStep("mouse hook", () => _mouseHook?.Dispose());
+        TryStep("shake detector", () => _shake?.Dispose());
+        TryStep("hotkeys", () => _hotkeys?.Dispose());
+        TryStep("clipboard history", () => _clipboard?.Dispose());
+        TryStep("tray icon", () => _tray?.Dispose());
+        TryStep("shelf flush", () => _shelf?.Flush());
+        TryStep("settings flush", () => _settings?.Flush());
+        TryStep("message window", () => _messages?.Dispose());
+        TryStep("single-instance mutex", () =>
         {
-            try
+            if (_mutex != null)
             {
-                _mutex.ReleaseMutex();
-            }
-            catch (ApplicationException)
-            {
-                // Not owned by this thread; nothing to release.
-            }
+                try
+                {
+                    _mutex.ReleaseMutex();
+                }
+                catch (ApplicationException)
+                {
+                    // Not owned by this thread; nothing to release.
+                }
 
-            _mutex.Dispose();
-        }
+                _mutex.Dispose();
+            }
+        });
 
         base.OnExit(e);
+    }
+
+    private static void TryStep(string name, Action step)
+    {
+        try
+        {
+            step();
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"Shutdown step '{name}' failed", ex);
+        }
     }
 
     // ---- Settings -> behaviour --------------------------------------------------------------------
@@ -157,8 +172,12 @@ public partial class App : Application
                 ApplyShakeSetting();
                 break;
             case nameof(AppSettings.ClipboardHistoryEnabled):
-            case nameof(AppSettings.ClipboardHistorySize):
+                // Only a real on/off toggle (re)tries the hotkey registration, so a taken hotkey is not retried
+                // (and re-announced) on every size change.
                 ApplyClipboardSetting();
+                break;
+            case nameof(AppSettings.ClipboardHistorySize):
+                _clipboard!.ApplySettings();
                 break;
         }
     }

@@ -4,6 +4,8 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
+using System.Windows.Threading;
 using Dropshelf.Services;
 
 namespace Dropshelf.Shelf;
@@ -11,6 +13,9 @@ namespace Dropshelf.Shelf;
 /// <summary>An observable list of <see cref="ShelfItem"/>s with the add/remove rules shared by shelf and basket.</summary>
 public class ItemStore
 {
+    private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher; // stores are created on the UI thread
+    private volatile bool _pruning;
+
     public ObservableCollection<ShelfItem> Items { get; } = new();
 
     public int Count => Items.Count;
@@ -123,13 +128,90 @@ public class ItemStore
 
     public void Clear(bool deleteOwnedFiles = true) => Remove(Items.ToList(), deleteOwnedFiles);
 
-    /// <summary>Drops items whose file vanished from disk. Returns how many were removed.</summary>
-    public int PruneMissing()
+    /// <summary>
+    /// Drops items whose file vanished from disk and returns how many were removed. The file checks run on a worker
+    /// thread (they can stall on slow or offline volumes); the removal happens on the UI thread. Items on a volume
+    /// that is not available right now (unplugged USB drive, offline network share) are kept.
+    /// </summary>
+    public async Task<int> PruneMissingAsync()
     {
-        var missing = Items.Where(i => !i.Exists).ToList();
-        Remove(missing, deleteOwnedFiles: false);
-        return missing.Count;
+        if (_pruning)
+        {
+            return 0;
+        }
+
+        _pruning = true;
+        try
+        {
+            var snapshot = Items.ToList();
+            var missing = await Task.Run(() => FindMissing(snapshot));
+            if (missing.Count == 0)
+            {
+                return 0;
+            }
+
+            // Back on the dispatcher thread whatever context the caller had.
+            return await _dispatcher.InvokeAsync(() =>
+            {
+                var stillListed = missing.Where(Items.Contains).ToList();
+                Remove(stillListed, deleteOwnedFiles: false);
+                return stillListed.Count;
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Pruning missing items failed", ex);
+            return 0;
+        }
+        finally
+        {
+            _pruning = false;
+        }
     }
+
+    private static List<ShelfItem> FindMissing(List<ShelfItem> items)
+    {
+        var volumes = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        var missing = new List<ShelfItem>();
+        foreach (var item in items)
+        {
+            string? root = VolumeRoot(item.Path);
+            if (root == null)
+            {
+                continue; // UNC or unusable path: never prune
+            }
+
+            if (!volumes.TryGetValue(root, out bool available))
+            {
+                available = Directory.Exists(root);
+                volumes[root] = available;
+            }
+
+            if (available && !item.Exists)
+            {
+                missing.Add(item);
+            }
+        }
+
+        return missing;
+    }
+
+    /// <summary>Root of a local drive path, or null for UNC / unparsable paths (those are never pruned).</summary>
+    private static string? VolumeRoot(string path)
+    {
+        try
+        {
+            string? root = Path.GetPathRoot(path);
+            bool unc = root is { Length: >= 2 } && IsSeparator(root[0]) && IsSeparator(root[1]);
+            return string.IsNullOrEmpty(root) || unc ? null : root;
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+    }
+
+    private static bool IsSeparator(char c) => c == Path.DirectorySeparatorChar || c == Path.AltDirectorySeparatorChar;
 
     private static void DeleteOwnedFile(ShelfItem item)
     {

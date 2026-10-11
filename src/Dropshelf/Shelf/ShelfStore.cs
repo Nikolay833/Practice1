@@ -65,7 +65,7 @@ public sealed class ShelfStore : ItemStore
             Items.Add(item);
         }
 
-        PruneMissing();
+        _ = PruneMissingAsync(); // off the UI thread; drops files that vanished while the app was closed
     }
 
     public void Save()

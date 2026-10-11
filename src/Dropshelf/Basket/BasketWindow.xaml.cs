@@ -108,7 +108,7 @@ public partial class BasketWindow : Window
     {
         bool fromBasket = DragState.IsActive && ReferenceEquals(DragState.Origin, _basket);
         bool accept = !fromBasket && DropHelper.CanAccept(e.Data);
-        e.Effects = !accept ? DragDropEffects.None : DragState.IsActive ? DragDropEffects.Move : DragDropEffects.Copy;
+        e.Effects = !accept ? DragDropEffects.None : DragState.IsActive ? DropHelper.InternalEffect(e) : DragDropEffects.Copy;
         DropHighlight.Visibility = accept ? Visibility.Visible : Visibility.Collapsed;
         e.Handled = true;
     }
@@ -118,7 +118,7 @@ public partial class BasketWindow : Window
         DropHighlight.Visibility = Visibility.Collapsed;
         bool internalDrag = DragState.IsActive;
         int added = DropHelper.Accept(e.Data, _basket);
-        e.Effects = added > 0 ? (internalDrag ? DragDropEffects.Move : DragDropEffects.Copy) : DragDropEffects.None;
+        e.Effects = added > 0 ? (internalDrag ? DropHelper.InternalEffect(e) : DragDropEffects.Copy) : DragDropEffects.None;
         e.Handled = true;
     }
 

@@ -13,18 +13,24 @@ namespace Dropshelf.Shelf;
 /// <summary>
 /// The notch pill. Collapsed it is a small black tab flush with the top edge of the primary screen; on hover or
 /// when something is dragged over it, it animates open into the shelf panel. The window itself is resized each
-/// frame, so the transparent area around the pill never blocks clicks.
+/// frame, so the transparent area around the pill never blocks clicks. While collapsed the pill itself is click-through
+/// (WS_EX_TRANSPARENT) so it does not swallow clicks on tab strips and title bars at the top centre of other apps;
+/// a timer polls the cursor to expand on hover and to make the pill solid again where it must receive drags or clicks.
 /// </summary>
 public partial class ShelfWindow : Window
 {
     private const double CollapsedWidth = 200, CollapsedHeight = 32, CollapsedRadius = 14;
     private const double ExpandedWidth = 640, ExpandedHeight = 180, ExpandedRadius = 24;
     private const double AnimationMs = 250;
+    private const int HoverPollMs = 60;
+    private const int HoverDelayMs = 150;
+    private const double DragMarginDip = 16;     // the pill becomes solid this close to the cursor while dragging
+    private const int DragStartPx = 8;
 
     private readonly ShelfStore _store;
     private readonly SettingsService _settings;
     private readonly Action _openSettings;
-    private readonly DispatcherTimer _expandTimer;
+    private readonly DispatcherTimer _hoverTimer;
     private readonly DispatcherTimer _collapseTimer;
 
     private IntPtr _hwnd;
@@ -35,6 +41,10 @@ public partial class ShelfWindow : Window
     private long _animStart;
     private bool _rendering;
     private long _holdUntilTick;       // keeps a tray-triggered expansion open for a moment
+    private long _hoverSince;          // tick when the cursor started resting on the collapsed pill, 0 = not hovering
+    private bool _leftWasDown;
+    private bool _leftDragging;        // left button held and moved since it went down
+    private NativeMethods.POINT _leftPress;
 
     public ShelfWindow(ShelfStore store, SettingsService settings, Action openSettings)
     {
@@ -54,33 +64,15 @@ public partial class ShelfWindow : Window
         store.Items.CollectionChanged += (_, _) => UpdateCounts();
         UpdateCounts();
 
-        _expandTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
-        _expandTimer.Tick += (_, _) =>
-        {
-            _expandTimer.Stop();
-            if (WindowHelper.ContainsCursor(_hwnd))
-            {
-                Expand();
-            }
-        };
+        _hoverTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(HoverPollMs) };
+        _hoverTimer.Tick += OnHoverTick;
 
         _collapseTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
         _collapseTimer.Tick += OnCollapseTick;
 
-        MouseEnter += (_, _) =>
-        {
-            _collapseTimer.Stop();
-            if (!_expanded && _settings.Current.ExpandShelfOnHover)
-            {
-                _expandTimer.Stop();
-                _expandTimer.Start();
-            }
-        };
-        MouseLeave += (_, _) =>
-        {
-            _expandTimer.Stop();
-            ScheduleCollapse();
-        };
+        // Hover-expand is done by OnHoverTick: the collapsed pill is click-through and gets no mouse events.
+        MouseEnter += (_, _) => _collapseTimer.Stop();
+        MouseLeave += (_, _) => ScheduleCollapse();
 
         // Click on the collapsed pill expands it (the only way in when hover-expand is off).
         PreviewMouseLeftButtonDown += (_, _) =>
@@ -106,13 +98,15 @@ public partial class ShelfWindow : Window
         base.OnSourceInitialized(e);
         _hwnd = new WindowInteropHelper(this).Handle;
         WindowHelper.MakeToolWindow(_hwnd, noActivate: true);
+        WindowHelper.SetClickThrough(_hwnd, true);
         HwndSource.FromHwnd(_hwnd)?.AddHook(WndProc);
         ApplyLayout();
+        _hoverTimer.Start();
     }
 
     protected override void OnClosed(EventArgs e)
     {
-        _expandTimer.Stop();
+        _hoverTimer.Stop();
         _collapseTimer.Stop();
         if (_rendering)
         {
@@ -151,7 +145,8 @@ public partial class ShelfWindow : Window
 
     private void Expand()
     {
-        _expandTimer.Stop();
+        _hoverTimer.Stop();
+        _hoverSince = 0;
         _collapseTimer.Stop();
         if (_expanded)
         {
@@ -160,19 +155,24 @@ public partial class ShelfWindow : Window
 
         _expanded = true;
         _monitor = MonitorInfo.Primary();
-        int pruned = _store.PruneMissing(); // drop files that vanished while the shelf was closed
-        if (pruned > 0)
-        {
-            Log.Info($"Pruned {pruned} missing shelf item(s)");
-        }
+        WindowHelper.SetClickThrough(_hwnd, false);
+        _ = PruneMissingAsync(); // drop files that vanished while the shelf was closed, without blocking the UI
 
         ExpandedPanel.IsHitTestVisible = true;
         AnimateTo(1);
     }
 
+    private async System.Threading.Tasks.Task PruneMissingAsync()
+    {
+        int pruned = await _store.PruneMissingAsync();
+        if (pruned > 0)
+        {
+            Log.Info($"Pruned {pruned} missing shelf item(s)");
+        }
+    }
+
     private void Collapse()
     {
-        _expandTimer.Stop();
         _collapseTimer.Stop();
         if (!_expanded)
         {
@@ -183,6 +183,77 @@ public partial class ShelfWindow : Window
         ExpandedPanel.IsHitTestVisible = false;
         DropHighlight.Visibility = Visibility.Collapsed;
         AnimateTo(0);
+
+        // Back to the click-through pill; OnHoverTick makes it solid again where needed.
+        WindowHelper.SetClickThrough(_hwnd, true);
+        _hoverSince = 0;
+        _leftWasDown = false;
+        _leftDragging = false;
+        _hoverTimer.Start();
+    }
+
+    /// <summary>
+    /// Runs while the shelf is collapsed. The pill is click-through unless (a) something is being dragged near it, so
+    /// OLE drag-over/drop reaches the window, or (b) hover-expand is off and the cursor is over it, so it can be
+    /// clicked. With hover-expand on, resting the cursor on it for a moment expands it.
+    /// </summary>
+    private void OnHoverTick(object? sender, EventArgs e)
+    {
+        if (_expanded)
+        {
+            _hoverTimer.Stop();
+            return;
+        }
+
+        bool leftDown = (NativeMethods.GetAsyncKeyState(NativeMethods.VK_LBUTTON) & 0x8000) != 0;
+        TrackLeftDrag(leftDown);
+
+        bool dragging = DragState.IsActive || _leftDragging;
+        bool hoverExpand = _settings.Current.ExpandShelfOnHover;
+        bool onPill = WindowHelper.ContainsCursor(_hwnd);
+        int dragMargin = (int)Math.Round(DragMarginDip * _monitor.Scale);
+
+        bool solid = (dragging && WindowHelper.ContainsCursor(_hwnd, dragMargin)) || (!hoverExpand && onPill);
+        WindowHelper.SetClickThrough(_hwnd, !solid);
+
+        if (hoverExpand && onPill && !leftDown)
+        {
+            long now = Environment.TickCount64;
+            if (_hoverSince == 0)
+            {
+                _hoverSince = now;
+            }
+            else if (now - _hoverSince >= HoverDelayMs)
+            {
+                Expand();
+            }
+        }
+        else
+        {
+            _hoverSince = 0;
+        }
+    }
+
+    /// <summary>True drag = left button held and the cursor moved a few pixels since the press (a plain click is not one).</summary>
+    private void TrackLeftDrag(bool leftDown)
+    {
+        if (!leftDown || !NativeMethods.GetCursorPos(out var p))
+        {
+            _leftWasDown = false;
+            _leftDragging = false;
+            return;
+        }
+
+        if (!_leftWasDown)
+        {
+            _leftWasDown = true;
+            _leftDragging = false;
+            _leftPress = p;
+        }
+        else if (!_leftDragging && (Math.Abs(p.X - _leftPress.X) > DragStartPx || Math.Abs(p.Y - _leftPress.Y) > DragStartPx))
+        {
+            _leftDragging = true;
+        }
     }
 
     private void ScheduleCollapse()
@@ -283,7 +354,7 @@ public partial class ShelfWindow : Window
         bool fromThisShelf = DragState.IsActive && ReferenceEquals(DragState.Origin, _store);
         bool accept = !fromThisShelf && DropHelper.CanAccept(e.Data);
 
-        e.Effects = !accept ? DragDropEffects.None : DragState.IsActive ? DragDropEffects.Move : DragDropEffects.Copy;
+        e.Effects = !accept ? DragDropEffects.None : DragState.IsActive ? DropHelper.InternalEffect(e) : DragDropEffects.Copy;
         e.Handled = true;
 
         if (accept)
@@ -298,7 +369,7 @@ public partial class ShelfWindow : Window
         DropHighlight.Visibility = Visibility.Collapsed;
         bool internalDrag = DragState.IsActive;
         int added = DropHelper.Accept(e.Data, _store);
-        e.Effects = added > 0 ? (internalDrag ? DragDropEffects.Move : DragDropEffects.Copy) : DragDropEffects.None;
+        e.Effects = added > 0 ? (internalDrag ? DropHelper.InternalEffect(e) : DragDropEffects.Copy) : DragDropEffects.None;
         e.Handled = true;
         ScheduleCollapse();
     }

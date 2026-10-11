@@ -5,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
+using Dropshelf.Animation;
 using Dropshelf.Interop;
 using Dropshelf.Services;
 
@@ -21,7 +22,8 @@ public partial class ShelfWindow : Window
 {
     private const double CollapsedWidth = 200, CollapsedHeight = 32, CollapsedRadius = 14;
     private const double ExpandedWidth = 640, ExpandedHeight = 180, ExpandedRadius = 24;
-    private const double AnimationMs = 250;
+    private const double MagnetRangeDip = 170;   // drag magnet and glow start this far from the pill
+    private const double MagnetStretchW = 10, MagnetStretchH = 8, MagnetShift = 6;
     private const int HoverPollMs = 60;
     private const int HoverDelayMs = 150;
     private const double DragMarginDip = 16;     // the pill becomes solid this close to the cursor while dragging
@@ -36,10 +38,20 @@ public partial class ShelfWindow : Window
     private IntPtr _hwnd;
     private MonitorInfo _monitor = MonitorInfo.Primary();
     private bool _expanded;
-    private double _progress;          // 0 = collapsed pill, 1 = fully expanded
-    private double _animFrom, _animTo, _animDurationMs;
-    private long _animStart;
-    private bool _rendering;
+
+    // Spring-driven state. _progress: 0 = collapsed pill, 1 = fully expanded (overshoots about 4 % when opening).
+    private readonly Spring _progress = new(0, 600, 0.7156);
+    private readonly Spring _stretchW = new(0, 420, 0.8);   // drag magnet: extra width, height and sideways shift (DIPs)
+    private readonly Spring _stretchH = new(0, 420, 0.8);
+    private readonly Spring _shiftX = new(0, 420, 0.8);
+    private readonly Spring _glow = new(0, 140, 0.9);       // 0..1 brightness of the blue bloom / rim
+    private readonly FrameLoop _loop;
+    private readonly ScaleTransform _mascotScale = new(0.5, 0.5);
+    private readonly TranslateTransform _mascotMove = new(16, 5);
+    private double _nearness;          // 0..1, how close a drag is to the pill
+    private bool _dragOver;            // something droppable is over the pill right now
+    private bool _excited;
+    private long _lastOpenAnimTick;
     private long _holdUntilTick;       // keeps a tray-triggered expansion open for a moment
     private long _hoverSince;          // tick when the cursor started resting on the collapsed pill, 0 = not hovering
     private bool _leftWasDown;
@@ -52,6 +64,12 @@ public partial class ShelfWindow : Window
         _store = store;
         _settings = settings;
         _openSettings = openSettings;
+        _loop = new FrameLoop(OnFrame);
+
+        var mascotTransform = new TransformGroup();
+        mascotTransform.Children.Add(_mascotScale);
+        mascotTransform.Children.Add(_mascotMove);
+        Mascot.RenderTransform = mascotTransform;
 
         ItemsView.Store = store;
         ItemsView.BusyChanged += (_, _) =>
@@ -61,7 +79,14 @@ public partial class ShelfWindow : Window
                 ScheduleCollapse();
             }
         };
-        store.Items.CollectionChanged += (_, _) => UpdateCounts();
+        store.Items.CollectionChanged += (_, e) =>
+        {
+            UpdateCounts();
+            if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Add)
+            {
+                Mascot.Gulp();
+            }
+        };
         UpdateCounts();
 
         _hoverTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(HoverPollMs) };
@@ -88,6 +113,7 @@ public partial class ShelfWindow : Window
         DragLeave += (_, _) =>
         {
             DropHighlight.Visibility = Visibility.Collapsed;
+            SetDragOver(false);
             ScheduleCollapse();
         };
         Drop += OnDrop;
@@ -108,11 +134,7 @@ public partial class ShelfWindow : Window
     {
         _hoverTimer.Stop();
         _collapseTimer.Stop();
-        if (_rendering)
-        {
-            CompositionTarget.Rendering -= OnRendering;
-            _rendering = false;
-        }
+        _loop.Stop();
 
         base.OnClosed(e);
     }
@@ -159,7 +181,24 @@ public partial class ShelfWindow : Window
         _ = PruneMissingAsync(); // drop files that vanished while the shelf was closed, without blocking the UI
 
         ExpandedPanel.IsHitTestVisible = true;
+        _nearness = 0;
+        SetMagnet(0, 0);
+        UpdateGlowTarget();
+        PlayOpenAnimation();
         AnimateTo(1);
+    }
+
+    /// <summary>Tiles flip in one after the other (30 ms apart) each time the shelf opens, but not on every quick re-open.</summary>
+    private void PlayOpenAnimation()
+    {
+        long now = Environment.TickCount64;
+        if (now - _lastOpenAnimTick < 1200)
+        {
+            return;
+        }
+
+        _lastOpenAnimTick = now;
+        ItemsView.PlayOpenAnimation();
     }
 
     private async System.Threading.Tasks.Task PruneMissingAsync()
@@ -182,6 +221,8 @@ public partial class ShelfWindow : Window
         _expanded = false;
         ExpandedPanel.IsHitTestVisible = false;
         DropHighlight.Visibility = Visibility.Collapsed;
+        _dragOver = false;
+        UpdateGlowTarget();
         AnimateTo(0);
 
         // Back to the click-through pill; OnHoverTick makes it solid again where needed.
@@ -215,6 +256,7 @@ public partial class ShelfWindow : Window
 
         bool solid = (dragging && WindowHelper.ContainsCursor(_hwnd, dragMargin)) || (!hoverExpand && onPill);
         WindowHelper.SetClickThrough(_hwnd, !solid);
+        UpdateMagnet(dragging);
 
         if (hoverExpand && onPill && !leftDown)
         {
@@ -285,41 +327,53 @@ public partial class ShelfWindow : Window
 
     // ---- Animation ------------------------------------------------------------------------------
 
+    /// <summary>
+    /// Springs the pill open or closed. Opening uses an under-damped spring (damping ratio 0.7156 = about 4 % overshoot);
+    /// closing is faster and critically damped (no overshoot). Width, height and corner radius all follow the same value.
+    /// </summary>
     private void AnimateTo(double target)
     {
-        if (Math.Abs(target - _progress) < 0.001)
+        if (AnimationSettings.IsOff)
         {
+            _progress.Snap(target);
+            ApplyLayout();
             return;
         }
 
-        _animFrom = _progress;
-        _animTo = target;
-        _animDurationMs = Math.Max(60, AnimationMs * Math.Abs(target - _progress));
-        _animStart = Stopwatch.GetTimestamp();
-
-        if (!_rendering)
+        if (target > 0.5)
         {
-            CompositionTarget.Rendering += OnRendering;
-            _rendering = true;
+            AnimationSettings.Configure(_progress, 600, 0.7156);
         }
+        else
+        {
+            AnimationSettings.Configure(_progress, 900, 1.0);
+        }
+
+        _progress.Target = target;
+        _loop.Start();
     }
 
-    private void OnRendering(object? sender, EventArgs e)
+    private bool OnFrame(double dt)
     {
-        double elapsedMs = (Stopwatch.GetTimestamp() - _animStart) * 1000.0 / Stopwatch.Frequency;
-        double t = Math.Min(1.0, elapsedMs / _animDurationMs);
-        double eased = 1 - Math.Pow(1 - t, 3); // ease-out cubic
-        _progress = _animFrom + (_animTo - _animFrom) * eased;
+        _progress.Step(dt);
+        _stretchW.Step(dt);
+        _stretchH.Step(dt);
+        _shiftX.Step(dt);
+        _glow.Step(dt);
         ApplyLayout();
 
-        if (t >= 1.0)
+        bool settled = _progress.SettleIfClose(0.0005, 0.01) & _stretchW.SettleIfClose(0.02, 0.2)
+                       & _stretchH.SettleIfClose(0.02, 0.2) & _shiftX.SettleIfClose(0.02, 0.2) & _glow.SettleIfClose(0.002, 0.02);
+        if (settled)
         {
-            CompositionTarget.Rendering -= OnRendering;
-            _rendering = false;
+            ApplyLayout();
+            return false;
         }
+
+        return true;
     }
 
-    /// <summary>Sizes/positions the window for the current animation progress and updates the pill visuals.</summary>
+    /// <summary>Sizes/positions the window for the current spring state and updates the pill visuals.</summary>
     private void ApplyLayout()
     {
         if (_hwnd == IntPtr.Zero)
@@ -327,23 +381,143 @@ public partial class ShelfWindow : Window
             return;
         }
 
-        double p = _progress;
-        double w = Lerp(CollapsedWidth, ExpandedWidth, p);
-        double h = Lerp(CollapsedHeight, ExpandedHeight, p);
-        double r = Lerp(CollapsedRadius, ExpandedRadius, p);
+        double p = Math.Clamp(_progress.Value, 0, 1.2);
+        double w = Lerp(CollapsedWidth, ExpandedWidth, p) + _stretchW.Value;
+        double h = Lerp(CollapsedHeight, ExpandedHeight, p) + _stretchH.Value;
+        double r = Math.Max(0, Lerp(CollapsedRadius, ExpandedRadius, p));
 
         int pxW = (int)Math.Round(w * _monitor.Scale);
         int pxH = (int)Math.Round(h * _monitor.Scale);
-        int x = _monitor.Left + (_monitor.Width - pxW) / 2;
+        int x = _monitor.Left + (_monitor.Width - pxW) / 2 + (int)Math.Round(_shiftX.Value * _monitor.Scale);
         int y = _monitor.Top; // flush with the top edge of the screen
         WindowHelper.SetBoundsTopmost(_hwnd, x, y, pxW, pxH);
 
-        Pill.CornerRadius = new CornerRadius(0, 0, r, r);
+        var radius = new CornerRadius(0, 0, r, r);
+        Pill.CornerRadius = radius;
+        GlowRim.CornerRadius = radius;
         ExpandedPanel.Opacity = Math.Clamp((p - 0.45) / 0.55, 0, 1);
         CollapsedLayer.Opacity = 1 - Math.Clamp(p / 0.35, 0, 1);
+
+        double glow = Math.Clamp(_glow.Value, 0, 1);
+        GlowRim.Opacity = glow;
+        GlowBloom.Opacity = glow * 0.85;
+
+        // The mascot grows from 22 px (collapsed) to about 40 px (expanded) and moves with the pill.
+        double m = Math.Clamp(p, 0, 1.06);
+        double scale = Lerp(0.5, 0.9, m);
+        _mascotScale.ScaleX = scale;
+        _mascotScale.ScaleY = scale;
+        _mascotMove.X = Lerp(16, 14, m);
+        _mascotMove.Y = Lerp(5, 8, m);
     }
 
     private static double Lerp(double a, double b, double t) => a + (b - a) * t;
+
+    /// <summary>The animation setting changed: refresh the mascot and jump to the final state when animations are off.</summary>
+    public void OnAnimationModeChanged()
+    {
+        Mascot.Refresh();
+        if (AnimationSettings.IsOff)
+        {
+            _progress.Snap(_expanded ? 1 : 0);
+            SetMagnet(0, 0);
+            _stretchW.Snap(0);
+            _stretchH.Snap(0);
+            _shiftX.Snap(0);
+            _glow.Snap(_glow.Target);
+            ApplyLayout();
+        }
+        else
+        {
+            UpdateGlowTarget();
+        }
+    }
+
+    // ---- Drag magnet and glow -----------------------------------------------------------------------
+
+    /// <summary>
+    /// While something is being dragged toward the collapsed pill it stretches a few pixels toward the cursor (wider,
+    /// taller, shifted sideways) and glows brighter the closer the cursor is. Only the glow in Subtle; nothing in Off.
+    /// </summary>
+    private void UpdateMagnet(bool dragging)
+    {
+        double nearness = 0;
+        double shift = 0;
+        if (dragging && !AnimationSettings.IsOff && NativeMethods.GetCursorPos(out var p) && NativeMethods.GetWindowRect(_hwnd, out var r))
+        {
+            double scale = _monitor.Scale;
+            double dx = Math.Max(Math.Max(r.Left - p.X, 0), p.X - r.Right);
+            double dy = Math.Max(Math.Max(r.Top - p.Y, 0), p.Y - r.Bottom);
+            double distance = Math.Sqrt(dx * dx + dy * dy) / scale;
+            nearness = Math.Clamp(1 - distance / MagnetRangeDip, 0, 1);
+            double centerX = (r.Left + r.Right) / 2.0;
+            shift = Math.Clamp((p.X - centerX) / (MagnetRangeDip * scale), -1, 1) * MagnetShift * nearness;
+        }
+
+        bool changed = Math.Abs(nearness - _nearness) > 0.01;
+        _nearness = nearness;
+        if (AnimationSettings.IsFull)
+        {
+            SetMagnet(MagnetStretchW * nearness, MagnetStretchH * nearness, shift);
+        }
+        else
+        {
+            SetMagnet(0, 0);
+        }
+
+        if (changed)
+        {
+            UpdateGlowTarget();
+        }
+    }
+
+    private void SetMagnet(double stretchW, double stretchH, double shiftX = 0)
+    {
+        if (Math.Abs(_stretchW.Target - stretchW) < 0.02 && Math.Abs(_stretchH.Target - stretchH) < 0.02
+            && Math.Abs(_shiftX.Target - shiftX) < 0.02)
+        {
+            return;
+        }
+
+        _stretchW.Target = stretchW;
+        _stretchH.Target = stretchH;
+        _shiftX.Target = shiftX;
+        _loop.Start();
+    }
+
+    private void SetDragOver(bool value)
+    {
+        if (_dragOver != value)
+        {
+            _dragOver = value;
+            UpdateGlowTarget();
+        }
+    }
+
+    /// <summary>Glow target: dim while open, full while a drag hovers, scaled by how near a drag is. Also wakes the mascot.</summary>
+    private void UpdateGlowTarget()
+    {
+        double target = Math.Max(_expanded ? 0.5 : 0, Math.Max(_dragOver ? 1 : 0, _nearness));
+        if (AnimationSettings.IsOff)
+        {
+            _glow.Snap(target);
+            ApplyLayout();
+        }
+        else if (Math.Abs(_glow.Target - target) > 0.005)
+        {
+            AnimationSettings.Configure(_glow, 140, 0.9);
+            _glow.Target = target;
+            _loop.Start();
+        }
+
+        // Hysteresis so the mascot does not flicker between excited and calm at the edge of the range.
+        bool excited = _dragOver || _nearness > (_excited ? 0.1 : 0.25);
+        if (excited != _excited)
+        {
+            _excited = excited;
+            Mascot.SetExcited(excited);
+        }
+    }
 
     // ---- Drag and drop onto the shelf -------------------------------------------------------------
 
@@ -357,6 +531,7 @@ public partial class ShelfWindow : Window
         e.Effects = !accept ? DragDropEffects.None : DragState.IsActive ? DropHelper.InternalEffect(e) : DragDropEffects.Copy;
         e.Handled = true;
 
+        SetDragOver(accept);
         if (accept)
         {
             DropHighlight.Visibility = _expanded ? Visibility.Visible : Visibility.Collapsed;
@@ -367,6 +542,8 @@ public partial class ShelfWindow : Window
     private void OnDrop(object sender, DragEventArgs e)
     {
         DropHighlight.Visibility = Visibility.Collapsed;
+        SetDragOver(false);
+        ItemsView.NoteDropPoint(e.GetPosition(this), this); // new tiles fly in from where they were dropped
         bool internalDrag = DragState.IsActive;
         int added = DropHelper.Accept(e.Data, _store);
         e.Effects = added > 0 ? (internalDrag ? DropHelper.InternalEffect(e) : DragDropEffects.Copy) : DragDropEffects.None;

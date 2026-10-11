@@ -18,6 +18,12 @@ public class ItemStore
 
     public ObservableCollection<ShelfItem> Items { get; } = new();
 
+    /// <summary>
+    /// Raised just before items leave <see cref="Items"/>, while their tiles still exist, so the UI can animate the removal
+    /// (shrink + fade a snapshot of the tile).
+    /// </summary>
+    public event Action<IReadOnlyList<ShelfItem>>? Removing;
+
     public int Count => Items.Count;
 
     /// <summary>Adds files/folders by reference. Missing paths and duplicates are skipped. Returns the number added.</summary>
@@ -117,7 +123,14 @@ public class ItemStore
     /// </summary>
     public void Remove(IEnumerable<ShelfItem> items, bool deleteOwnedFiles = true)
     {
-        foreach (var item in items.ToList())
+        var list = items.ToList();
+        var present = list.Where(Items.Contains).ToList();
+        if (present.Count > 0)
+        {
+            Removing?.Invoke(present);
+        }
+
+        foreach (var item in list)
         {
             if (Items.Remove(item) && deleteOwnedFiles)
             {

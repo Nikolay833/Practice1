@@ -7,6 +7,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
+using Dropshelf.Animation;
 using Dropshelf.Interop;
 using Dropshelf.Services;
 
@@ -26,10 +27,33 @@ public partial class ClipboardWindow : Window
     private bool _styled;
     private bool _busy; // true while pasting so deactivation does not interfere
 
+    // Open animation: one spring from 0.94 to 1 drives scale, fade and the 8 px slide-up.
+    private const double OpenFrom = 0.94;
+    private readonly Spring _open = new(1, 520, 0.6);
+    private readonly FrameLoop _openLoop;
+
+    // Selection highlight: springs for the bar's top and height.
+    private readonly Spring _glideY = new(0, 520, 0.8);
+    private readonly Spring _glideH = new(0, 520, 0.8);
+    private readonly FrameLoop _glideLoop;
+    private bool _glideQueued;
+    private bool _glideSnapQueued;
+    private bool _glideVisible;
+
     public ClipboardWindow(ClipboardHistoryService history)
     {
         InitializeComponent();
         _history = history;
+        _openLoop = new FrameLoop(OnOpenFrame);
+        _glideLoop = new FrameLoop(OnGlideFrame);
+        EntryList.SelectionChanged += (_, _) => QueueGlide(snap: false);
+        EntryList.AddHandler(ScrollViewer.ScrollChangedEvent, new ScrollChangedEventHandler((_, e) =>
+        {
+            if (e.VerticalChange != 0)
+            {
+                QueueGlide(snap: true); // the bar must stay glued to its row while the list scrolls
+            }
+        }));
 
         // Pinned first, then newest first. Live sorting keeps the order right when a pin is toggled.
         _view = new ListCollectionView(history.Entries);
@@ -80,6 +104,7 @@ public partial class ClipboardWindow : Window
             : MonitorInfo.UnderCursor();
         WindowHelper.CenterOnMonitor(this, monitor, Width, Height);
 
+        StartOpenAnimation();
         Show();
         WindowHelper.CenterOnMonitor(this, monitor, Width, Height);
         WindowHelper.ForceForeground(hwnd);
@@ -87,12 +112,162 @@ public partial class ClipboardWindow : Window
         SearchBox.Focus();
         Keyboard.Focus(SearchBox);
         _refreshTimer.Start();
+
+        // Once the rows exist: stagger them in and put the highlight on the first one.
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+        {
+            AnimateRows();
+            QueueGlide(snap: true);
+        }));
     }
 
     private void HidePopup()
     {
         _refreshTimer.Stop();
+        _openLoop.Stop();
+        _glideLoop.Stop();
         Hide();
+    }
+
+    // ---- Animations -----------------------------------------------------------------------------
+
+    /// <summary>Spring scale 0.94 to 1 with a fade and an 8 px slide up.</summary>
+    private void StartOpenAnimation()
+    {
+        if (AnimationSettings.IsOff)
+        {
+            _open.Snap(1);
+            ApplyOpen();
+            return;
+        }
+
+        AnimationSettings.Configure(_open, 520, 0.6);
+        _open.Target = 1;
+        _open.Displace(OpenFrom);
+        ApplyOpen();
+        _openLoop.Start();
+    }
+
+    private bool OnOpenFrame(double dt)
+    {
+        _open.Step(dt);
+        ApplyOpen();
+        if (_open.SettleIfClose(0.0004, 0.01))
+        {
+            ApplyOpen();
+            return false;
+        }
+
+        return true;
+    }
+
+    private void ApplyOpen()
+    {
+        double v = _open.Value;
+        double u = Math.Clamp((v - OpenFrom) / (1 - OpenFrom), 0, 1); // 0..1 progress, without the overshoot
+        PanelScale.ScaleX = v;
+        PanelScale.ScaleY = v;
+        PanelShift.Y = 8 * (1 - u);
+        Panel.Opacity = Math.Clamp(u * 1.8, 0, 1);
+    }
+
+    /// <summary>List rows fade and slide in one after the other (a few ms apart).</summary>
+    private void AnimateRows()
+    {
+        if (AnimationSettings.IsOff)
+        {
+            return;
+        }
+
+        int count = Math.Min(_view.Count, 12);
+        for (int i = 0; i < count; i++)
+        {
+            if (EntryList.ItemContainerGenerator.ContainerFromIndex(i) is FrameworkElement row)
+            {
+                TileAnimator.SlideFadeIn(row, i * 28);
+            }
+        }
+    }
+
+    /// <summary>Moves the highlight bar to the selected row after layout has run (coalesces repeated requests).</summary>
+    private void QueueGlide(bool snap)
+    {
+        _glideSnapQueued |= snap;
+        if (_glideQueued)
+        {
+            return;
+        }
+
+        _glideQueued = true;
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+        {
+            _glideQueued = false;
+            bool snapNow = _glideSnapQueued;
+            _glideSnapQueued = false;
+            UpdateGlide(snapNow);
+        }));
+    }
+
+    private void UpdateGlide(bool snap)
+    {
+        if (!IsVisible || EntryList.SelectedItem == null
+            || EntryList.ItemContainerGenerator.ContainerFromItem(EntryList.SelectedItem) is not FrameworkElement row
+            || row.ActualHeight < 1)
+        {
+            GlideBar.Visibility = Visibility.Collapsed;
+            _glideVisible = false;
+            _glideLoop.Stop();
+            return;
+        }
+
+        double top;
+        try
+        {
+            top = row.TranslatePoint(new Point(0, 0), ListHost).Y;
+        }
+        catch (InvalidOperationException)
+        {
+            return; // row not connected yet; the next layout pass will ask again
+        }
+
+        GlideBar.Visibility = Visibility.Visible;
+        if (snap || !_glideVisible || AnimationSettings.IsOff)
+        {
+            _glideY.Snap(top);
+            _glideH.Snap(row.ActualHeight);
+            _glideLoop.Stop();
+            ApplyGlide();
+        }
+        else
+        {
+            AnimationSettings.Configure(_glideY, 520, 0.8);
+            AnimationSettings.Configure(_glideH, 520, 0.8);
+            _glideY.Target = top;
+            _glideH.Target = row.ActualHeight;
+            _glideLoop.Start();
+        }
+
+        _glideVisible = true;
+    }
+
+    private bool OnGlideFrame(double dt)
+    {
+        _glideY.Step(dt);
+        _glideH.Step(dt);
+        ApplyGlide();
+        if (_glideY.SettleIfClose(0.05, 0.5) & _glideH.SettleIfClose(0.05, 0.5))
+        {
+            ApplyGlide();
+            return false;
+        }
+
+        return true;
+    }
+
+    private void ApplyGlide()
+    {
+        GlideShift.Y = _glideY.Value;
+        GlideBar.Height = Math.Max(0, _glideH.Value);
     }
 
     private void RefreshTimes()
@@ -198,6 +373,7 @@ public partial class ClipboardWindow : Window
         entry.IsPinned = !entry.IsPinned;
         _history.NotifyPinChanged();
         EntryList.ScrollIntoView(entry);
+        QueueGlide(snap: false); // pinned rows move; the highlight follows the entry
     }
 
     // ---- Mouse ----------------------------------------------------------------------------------

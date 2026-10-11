@@ -2,18 +2,20 @@ using System;
 using System.ComponentModel;
 using System.Text.Json.Serialization;
 using System.Windows.Threading;
+using Dropshelf.Animation;
 
 namespace Dropshelf.Services;
 
 /// <summary>User-configurable options. Bound directly by the settings window.</summary>
 public sealed class AppSettings : NotifyBase
 {
-    private bool _launchAtStartup;
+    private bool _launchAtStartup = true; // on by default: Dropshelf is meant to be always running
     private bool _rememberShelf = true;
     private bool _shakeToOpenBasket = true;
     private bool _clipboardHistoryEnabled = true;
     private int _clipboardHistorySize = 50;
     private bool _expandShelfOnHover = true;
+    private AnimationMode? _animations;
 
     public bool LaunchAtStartup { get => _launchAtStartup; set => SetField(ref _launchAtStartup, value); }
     public bool RememberShelf { get => _rememberShelf; set => SetField(ref _rememberShelf, value); }
@@ -27,6 +29,13 @@ public sealed class AppSettings : NotifyBase
     }
 
     public bool ExpandShelfOnHover { get => _expandShelfOnHover; set => SetField(ref _expandShelfOnHover, value); }
+
+    /// <summary>
+    /// Animation level chosen by the user. Null (never chosen) means Full, unless Windows' "Animation effects" is off,
+    /// in which case it means Subtle; see <see cref="AnimationSettings"/>.
+    /// </summary>
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public AnimationMode? Animations { get => _animations; set => SetField(ref _animations, value); }
 
     [JsonIgnore] public static int MinHistorySize => 10;
     [JsonIgnore] public static int MaxHistorySize => 500;

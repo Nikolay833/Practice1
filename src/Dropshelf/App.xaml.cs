@@ -1,7 +1,9 @@
 using System;
+using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Windows;
-using System.Windows.Threading;
+using Dropshelf.Animation;
 using Dropshelf.Basket;
 using Dropshelf.Clipboard;
 using Dropshelf.Interop;
@@ -13,13 +15,15 @@ namespace Dropshelf;
 
 /// <summary>
 /// Composition root: owns the services and the (mostly hidden) windows, enforces a single instance and wires
-/// settings changes to live behaviour.
+/// settings changes to live behaviour. It also keeps the app always running: self-install, autostart, crash relaunch.
 /// </summary>
 public partial class App : Application
 {
-    private const string MutexName = @"Local\Dropshelf.SingleInstance";
-
     private Mutex? _mutex;
+    private EventWaitHandle? _quitEvent;
+    private RegisteredWaitHandle? _quitWait;
+    private bool _uninstalling;
+    private bool _deleteDataOnUninstall;
     private SettingsService? _settings;
     private ShelfStore? _shelf;
     private ItemStore? _basketStore;
@@ -39,9 +43,30 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
-        // Single instance: a second launch just exits.
-        _mutex = new Mutex(initiallyOwned: true, MutexName, out bool createdNew);
-        if (!createdNew)
+        // First run or update: copy the exe to %LOCALAPPDATA%\Programs\Dropshelf and continue from there. A running
+        // instance is asked to quit first, so launching a newer exe replaces the installed one.
+        if (Installer.TryInstallAndRelaunch(e.Args))
+        {
+            Shutdown();
+            return;
+        }
+
+        bool restarted = e.Args.Contains(Installer.RestartedArgument, StringComparer.OrdinalIgnoreCase);
+
+        // Single instance: a second launch just exits. A relaunch after a crash, update or Windows restart may start
+        // before the old process has let go of the mutex, so those wait a few seconds for it.
+        _mutex = new Mutex(false, Installer.InstanceMutexName);
+        bool owned;
+        try
+        {
+            owned = _mutex.WaitOne(restarted ? 5000 : 0);
+        }
+        catch (AbandonedMutexException)
+        {
+            owned = true; // the previous instance died holding it
+        }
+
+        if (!owned)
         {
             _mutex.Dispose();
             _mutex = null;
@@ -49,20 +74,12 @@ public partial class App : Application
             return;
         }
 
-        DispatcherUnhandledException += (_, args) =>
-        {
-            Log.Error("Unhandled UI exception", args.Exception);
-            args.Handled = true;
-        };
-        AppDomain.CurrentDomain.UnhandledException += (_, args) => Log.Error("Unhandled exception", args.ExceptionObject as Exception);
-        System.Threading.Tasks.TaskScheduler.UnobservedTaskException += (_, args) =>
-        {
-            Log.Error("Unobserved task exception", args.Exception);
-            args.SetObserved();
-        };
+        CrashGuard.Install(this);
+        StartQuitListener();
 
         AppPaths.EnsureDirectories();
         _settings = new SettingsService();
+        AnimationSettings.Attach(_settings.Current);
         _shelf = new ShelfStore(_settings);
         _basketStore = new ItemStore();
 
@@ -89,6 +106,7 @@ public partial class App : Application
             openBasket: ShowBasketAtCursor,
             openClipboard: () => ShowClipboard(fromHotkey: false),
             openSettings: ShowSettings,
+            uninstall: Uninstall,
             quit: () => Shutdown());
 
         if (!_hotkeys.Register(HotkeyService.BasketId, NativeMethods.MOD_CONTROL | NativeMethods.MOD_SHIFT, NativeMethods.VK_B, ShowBasketAtCursor))
@@ -96,10 +114,23 @@ public partial class App : Application
             _tray.ShowBalloon("Dropshelf", "Ctrl+Shift+B is already used by another app, so the basket hotkey is unavailable.");
         }
 
-        // Keep the registry entry pointing at the current exe, then apply everything else.
+        // Keep the registry entry pointing at the installed exe (this also writes it on the first run after install),
+        // make sure the Start Menu shortcut exists, and ask Windows to bring the app back after update reboots.
         if (_settings.Current.LaunchAtStartup)
         {
             StartupRegistration.Set(true);
+        }
+
+        TryStep("Start Menu shortcut", Installer.EnsureStartMenuShortcut);
+        if (!System.Diagnostics.Debugger.IsAttached)
+        {
+            TryStep("application restart registration", () => NativeMethods.RegisterApplicationRestart(
+                Installer.RestartedArgument, NativeMethods.RESTART_NO_CRASH | NativeMethods.RESTART_NO_HANG));
+        }
+
+        if (restarted)
+        {
+            _tray.ShowBalloon("Dropshelf", "Dropshelf is running again.");
         }
 
         _settings.Changed += OnSettingChanged;
@@ -119,6 +150,11 @@ public partial class App : Application
         TryStep("shelf flush", () => _shelf?.Flush());
         TryStep("settings flush", () => _settings?.Flush());
         TryStep("message window", () => _messages?.Dispose());
+        TryStep("quit listener", () =>
+        {
+            _quitWait?.Unregister(null);
+            _quitEvent?.Dispose();
+        });
         TryStep("single-instance mutex", () =>
         {
             if (_mutex != null)
@@ -135,6 +171,11 @@ public partial class App : Application
                 _mutex.Dispose();
             }
         });
+
+        if (_uninstalling)
+        {
+            Installer.ScheduleCleanup(_deleteDataOnUninstall);
+        }
 
         base.OnExit(e);
     }
@@ -170,6 +211,9 @@ public partial class App : Application
                 break;
             case nameof(AppSettings.ShakeToOpenBasket):
                 ApplyShakeSetting();
+                break;
+            case nameof(AppSettings.Animations):
+                _shelfWindow?.OnAnimationModeChanged();
                 break;
             case nameof(AppSettings.ClipboardHistoryEnabled):
                 // Only a real on/off toggle (re)tries the hotkey registration, so a taken hotkey is not retried
@@ -236,13 +280,58 @@ public partial class App : Application
     {
         if (_settingsWindow == null)
         {
-            // Reflect the real registry state in case it was changed outside the app.
-            _settings!.Current.LaunchAtStartup = StartupRegistration.IsEnabled();
-            _settingsWindow = new SettingsWindow(_settings);
+            // Reflect the real registry state in case it was changed outside the app (not in dev runs, where nothing is registered).
+            if (Installer.AutostartTarget() != null)
+            {
+                _settings!.Current.LaunchAtStartup = StartupRegistration.IsEnabled();
+            }
+
+            _settingsWindow = new SettingsWindow(_settings!);
             _settingsWindow.Closed += (_, _) => _settingsWindow = null;
             _settingsWindow.Show();
         }
 
         _settingsWindow.Activate();
+    }
+
+    // ---- Always-on plumbing -----------------------------------------------------------------------
+
+    /// <summary>
+    /// Lets a newer exe launched from elsewhere ask this instance to quit (named event), so it can overwrite the installed
+    /// copy. The wait runs on a thread-pool thread and hops to the UI thread to shut down cleanly.
+    /// </summary>
+    private void StartQuitListener()
+    {
+        try
+        {
+            _quitEvent = new EventWaitHandle(false, EventResetMode.ManualReset, Installer.QuitEventName);
+            _quitWait = ThreadPool.RegisterWaitForSingleObject(_quitEvent, (_, timedOut) =>
+            {
+                if (!timedOut)
+                {
+                    Log.Info("Quit requested by a newer Dropshelf launch");
+                    Dispatcher.BeginInvoke(new Action(() => Shutdown()));
+                }
+            }, null, Timeout.Infinite, executeOnlyOnce: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or WaitHandleCannotBeOpenedException or ArgumentException)
+        {
+            Log.Error("Could not create the quit event", ex);
+        }
+    }
+
+    /// <summary>Tray "Uninstall...": confirm, remove autostart + shortcut, quit, then a hidden cmd deletes the exe (and optionally the data).</summary>
+    private void Uninstall()
+    {
+        var dialog = new UninstallWindow();
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        _uninstalling = true;
+        _deleteDataOnUninstall = dialog.DeleteData;
+        Installer.RemoveIntegration();
+        Shutdown();
     }
 }

@@ -88,6 +88,13 @@ internal static class NativeMethods
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool PostThreadMessage(uint idThread, uint msg, UIntPtr wParam, IntPtr lParam);
 
+    // ---- Application restart (Windows Update reboots, "restart apps after signing in") -------------
+    public const int RESTART_NO_CRASH = 1;
+    public const int RESTART_NO_HANG = 2;
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+    public static extern int RegisterApplicationRestart(string? commandLine, int flags);
+
     // ---- Hotkeys / clipboard listener --------------------------------------------------------
     public const uint MOD_ALT = 0x0001;
     public const uint MOD_CONTROL = 0x0002;

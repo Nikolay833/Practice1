@@ -9,6 +9,30 @@
         FontFamily="{StaticResource UiFont}" Foreground="{StaticResource TextBrush}"
         PreviewKeyDown="Window_PreviewKeyDown" Deactivated="Window_Deactivated">
     <Window.Resources>
+        <!-- Rows draw no selection of their own: the GlideBar behind the list moves between them instead. -->
+        <Style x:Key="EntryRow" TargetType="ListBoxItem">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="Padding" Value="8,6"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Bd" Background="Transparent" CornerRadius="12" BorderThickness="1"
+                                BorderBrush="Transparent" Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#14FFFFFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <DataTemplate x:Key="EntryTemplate" DataType="{x:Type local:ClipboardEntry}">
             <Grid MinHeight="46">
                 <Grid.ColumnDefinitions>
@@ -64,7 +88,14 @@
     </Window.Resources>
 
     <!-- Outer margin leaves room for the drop shadow inside the transparent window. -->
-    <Border Margin="16" CornerRadius="16" Background="#FF141414" BorderBrush="#FF2A2A2A" BorderThickness="1">
+    <Border x:Name="Panel" Margin="16" CornerRadius="16" Background="#FF141414" BorderBrush="#FF2A2A2A" BorderThickness="1"
+            RenderTransformOrigin="0.5,0.5">
+        <Border.RenderTransform>
+            <TransformGroup>
+                <ScaleTransform x:Name="PanelScale"/>
+                <TranslateTransform x:Name="PanelShift"/>
+            </TransformGroup>
+        </Border.RenderTransform>
         <Border.Effect>
             <DropShadowEffect BlurRadius="24" ShadowDepth="4" Opacity="0.55" Color="Black"/>
         </Border.Effect>
@@ -83,8 +114,17 @@
             </Grid>
 
             <!-- Entries -->
-            <Grid Grid.Row="1" Margin="0,10,0,6">
+            <Grid x:Name="ListHost" Grid.Row="1" Margin="0,10,0,6" ClipToBounds="True">
+                <!-- Highlight bar that glides between rows (position and height are springs, see code-behind) -->
+                <Border x:Name="GlideBar" VerticalAlignment="Top" Height="0" Visibility="Collapsed" IsHitTestVisible="False"
+                        CornerRadius="12" Background="{StaticResource AccentSoftBrush}"
+                        BorderBrush="{StaticResource AccentStrokeBrush}" BorderThickness="1">
+                    <Border.RenderTransform>
+                        <TranslateTransform x:Name="GlideShift"/>
+                    </Border.RenderTransform>
+                </Border>
                 <ListBox x:Name="EntryList" SelectionMode="Single" ItemTemplate="{StaticResource EntryTemplate}"
+                         ItemContainerStyle="{StaticResource EntryRow}"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                          ScrollViewer.VerticalScrollBarVisibility="Auto"
                          MouseDoubleClick="EntryList_MouseDoubleClick"/>

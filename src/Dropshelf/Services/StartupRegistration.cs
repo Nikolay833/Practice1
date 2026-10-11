@@ -23,6 +23,10 @@ internal static class StartupRegistration
         }
     }
 
+    /// <summary>
+    /// Writes (or removes) the Run value: the quoted path of the installed exe plus <c>--autostart</c>. Re-running it keeps
+    /// the value in sync if the exe path changed. Does nothing when there is no sensible exe to register (debug builds).
+    /// </summary>
     public static void Set(bool enabled)
     {
         try
@@ -31,10 +35,14 @@ internal static class StartupRegistration
                             ?? Registry.CurrentUser.CreateSubKey(RunKey, writable: true);
             if (enabled)
             {
-                string? exe = Environment.ProcessPath;
+                string? exe = Installer.AutostartTarget();
                 if (!string.IsNullOrEmpty(exe))
                 {
-                    key.SetValue(ValueName, $"\"{exe}\"", RegistryValueKind.String);
+                    string command = $"\"{exe}\" {Installer.AutostartArgument}";
+                    if (!string.Equals(key.GetValue(ValueName) as string, command, StringComparison.Ordinal))
+                    {
+                        key.SetValue(ValueName, command, RegistryValueKind.String);
+                    }
                 }
             }
             else

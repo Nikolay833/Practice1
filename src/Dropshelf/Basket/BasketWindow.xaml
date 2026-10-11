@@ -7,8 +7,10 @@
         ResizeMode="NoResize" ShowInTaskbar="False" ShowActivated="False" Topmost="True"
         WindowStartupLocation="Manual" AllowDrop="True" UseLayoutRounding="True"
         FontFamily="{StaticResource UiFont}" Foreground="{StaticResource TextBrush}">
-    <!-- Background is the dark glass tint; it is cleared when real acrylic blur is active (see code-behind). -->
-    <Border x:Name="Chrome" Background="{StaticResource PanelGlassBrush}" BorderBrush="#26FFFFFF" BorderThickness="1">
+    <!-- The Viewbox scales the fixed-size content with the window while it springs open / closed (see code-behind).
+         Background is the dark glass tint; it is cleared when real acrylic blur is active. -->
+    <Viewbox x:Name="ScaleHost" Stretch="Fill">
+    <Border x:Name="Chrome" Width="260" Height="260" Background="{StaticResource PanelGlassBrush}" BorderBrush="#26FFFFFF" BorderThickness="1">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
@@ -46,4 +48,5 @@
                     Margin="12,0,12,12" Padding="12,8" Click="MoveAll_Click"/>
         </Grid>
     </Border>
+    </Viewbox>
 </Window>

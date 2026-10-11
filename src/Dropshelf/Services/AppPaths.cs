@@ -18,6 +18,7 @@ internal static class AppPaths
     public static string SettingsFile { get; } = Path.Combine(Root, "settings.json");
     public static string ShelfFile { get; } = Path.Combine(Root, "shelf.json");
     public static string ClipboardFile { get; } = Path.Combine(Root, "clipboard.json");
+    public static string RestartsFile { get; } = Path.Combine(Root, "restarts.json");
     public static string LogFile { get; } = Path.Combine(Root, "dropshelf.log");
 
     public static void EnsureDirectories()

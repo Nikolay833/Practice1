@@ -20,7 +20,9 @@
         </Style>
 
         <DataTemplate x:Key="TileTemplate" DataType="{x:Type local:ShelfItem}">
-            <StackPanel Width="{Binding TileWidth, RelativeSource={RelativeSource AncestorType={x:Type local:ItemListView}}}">
+            <StackPanel Width="{Binding TileWidth, RelativeSource={RelativeSource AncestorType={x:Type local:ItemListView}}}"
+                        Background="Transparent" Loaded="Tile_Loaded"
+                        MouseEnter="Tile_MouseEnter" MouseMove="Tile_MouseMove" MouseLeave="Tile_MouseLeave">
                 <Border Width="64" Height="52" CornerRadius="10" HorizontalAlignment="Center"
                         Background="{StaticResource SurfaceBrush}">
                     <Grid>
@@ -62,12 +64,16 @@
         </DataTemplate>
     </UserControl.Resources>
 
-    <ListBox x:Name="List" SelectionMode="Extended"
-             ItemContainerStyle="{StaticResource TileContainer}"
-             ItemTemplate="{StaticResource TileTemplate}"
-             PreviewMouseLeftButtonDown="List_PreviewMouseLeftButtonDown"
-             PreviewMouseLeftButtonUp="List_PreviewMouseLeftButtonUp"
-             PreviewMouseMove="List_PreviewMouseMove"
-             PreviewMouseRightButtonDown="List_PreviewMouseRightButtonDown"
-             PreviewMouseWheel="List_PreviewMouseWheel"/>
+    <Grid>
+        <ListBox x:Name="List" SelectionMode="Extended"
+                 ItemContainerStyle="{StaticResource TileContainer}"
+                 ItemTemplate="{StaticResource TileTemplate}"
+                 PreviewMouseLeftButtonDown="List_PreviewMouseLeftButtonDown"
+                 PreviewMouseLeftButtonUp="List_PreviewMouseLeftButtonUp"
+                 PreviewMouseMove="List_PreviewMouseMove"
+                 PreviewMouseRightButtonDown="List_PreviewMouseRightButtonDown"
+                 PreviewMouseWheel="List_PreviewMouseWheel"/>
+        <!-- Snapshots of removed tiles shrink and fade out here -->
+        <Canvas x:Name="Ghosts" IsHitTestVisible="False" ClipToBounds="True"/>
+    </Grid>
 </UserControl>

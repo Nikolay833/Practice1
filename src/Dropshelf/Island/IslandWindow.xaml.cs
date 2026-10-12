@@ -48,7 +48,7 @@ public partial class IslandWindow : Window
     private const double DragMarginDip = 16;      // while something is dragged, the notch takes drops this close to it
     private const int DragStartPx = 8;            // the left button must move this far before a press counts as a drag
     private const double BubbleWidth = 44;        // the split-island bubble: 32 wide plus its two 6 px shoulders
-    private const double BubbleGap = 4;           // between the island's shoulder and the bubble's
+    private const double BubbleGap = -3;          // the shoulders overlap a little: 9 px between island and bubble, bridged by the neck
     private const double DotSpace = 12;           // room the privacy dot takes at the island's right end
 
     private readonly SettingsService _settings;
@@ -580,6 +580,7 @@ public partial class IslandWindow : Window
         Bubble.Height = Math.Max(1, ch);
         Bubble.Opacity = bubbleOpacity;
         Bubble.Visibility = bubbleOpacity > 0.001 ? Visibility.Visible : Visibility.Hidden;
+        UpdateBridge(w, shoulder, ch, bubbleOpacity);
 
         // Window: exactly the island when settled; while animating, big enough for where the springs are heading.
         double scale = _monitor.Scale;
@@ -634,6 +635,42 @@ public partial class IslandWindow : Window
     }
 
     private static double Lerp(double a, double b, double t) => a + (b - a) * t;
+
+    /// <summary>
+    /// The neck between the island and the split-off bubble: black from the top edge down to a soft concave waist at about half
+    /// the height, overlapping both shapes a little so the three read as one liquid form. It stretches while the bubble springs
+    /// out and is gone while the bubble is still under the island.
+    /// </summary>
+    private void UpdateBridge(double w, double shoulder, double ch, double opacity)
+    {
+        const double Overlap = 9;
+        double islandRight = w + shoulder;                                            // island body's right edge (island coordinates)
+        double bubbleLeft = (w + 2 * shoulder) / 2 + BubbleShift.X - BubbleWidth / 2 + 6;   // bubble body's left edge
+        if (opacity < 0.001 || bubbleLeft <= islandRight + 0.5)
+        {
+            Bridge.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        double x0 = islandRight - Overlap, x1 = bubbleLeft + Overlap;
+        double gap = bubbleLeft - islandRight;
+        double edge = ch * 0.82;                                         // where the neck meets the two bodies
+        double waist = ch * Math.Clamp(0.62 - gap / 60, 0.3, 0.6);         // the narrower the gap, the fuller the neck
+        double control = 2 * waist - edge;                               // a quadratic curve whose middle sits at the waist
+        var geometry = new StreamGeometry();
+        using (StreamGeometryContext ctx = geometry.Open())
+        {
+            ctx.BeginFigure(new Point(x0, 0), true, true);
+            ctx.LineTo(new Point(x1, 0), false, false);
+            ctx.LineTo(new Point(x1, edge), false, false);
+            ctx.QuadraticBezierTo(new Point((x0 + x1) / 2, control), new Point(x0, edge), false, true);
+        }
+
+        geometry.Freeze();
+        Bridge.Data = geometry;
+        Bridge.Opacity = opacity;
+        Bridge.Visibility = Visibility.Visible;
+    }
 
     /// <summary>The island's bounds on screen in physical pixels (the notch body, without the shoulders).</summary>
     private NativeMethods.RECT IslandRect()

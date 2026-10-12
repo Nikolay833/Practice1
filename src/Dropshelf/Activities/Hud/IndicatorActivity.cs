@@ -44,7 +44,7 @@ internal sealed class IndicatorActivity : PillActivityBase, IDisposable
     {
         _settings = settings;
         _loop = new FrameLoop(OnFrame);
-        _capsTimer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(150) };
+        _capsTimer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(100) };
         _capsTimer.Tick += (_, _) => PollCaps();
         _dndTimer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromSeconds(2) };
         _dndTimer.Tick += (_, _) => PollDnd();
@@ -86,11 +86,29 @@ internal sealed class IndicatorActivity : PillActivityBase, IDisposable
         }
     }
 
+    private long _capsChangedAt;
+
+    /// <summary>
+    /// Reads Caps Lock right now (a maker's Caps Lock popup just appeared) and says whether it changed in the last moment, so the
+    /// popup can be hidden and the island's pill shown at the same time.
+    /// </summary>
+    public bool CapsJustChanged()
+    {
+        if (!_settings.Current.ShowCapsLockHud)
+        {
+            return false;
+        }
+
+        PollCaps();
+        return Environment.TickCount64 - _capsChangedAt < 800;
+    }
+
     private void PollCaps()
     {
         bool on = (NativeMethods.GetKeyState(NativeMethods.VK_CAPITAL) & 1) != 0;
         if (_caps is { } was && was != on)
         {
+            _capsChangedAt = Environment.TickCount64;
             if (_settings.Current.ReplaceWindowsOsd)
             {
                 Osd?.Suppress(this); // a laptop maker's Caps Lock popup, if there is one

@@ -24,6 +24,12 @@
                 <ColumnDefinition x:Name="RightShoulderColumn" Width="6"/>
             </Grid.ColumnDefinitions>
 
+            <!-- Split island: a liquid neck that joins the island to the bubble beside it, so the two read as one shape that is
+                 pinching apart (drawn in island coordinates, reaching past its right edge; a Canvas never clips it). -->
+            <Canvas Grid.Column="0" Grid.ColumnSpan="3" IsHitTestVisible="False">
+                <Path x:Name="Bridge" Fill="{StaticResource BlackBrush}" Visibility="Collapsed"/>
+            </Canvas>
+
             <!-- The concave "shoulders" where the notch flows into the top edge of the screen. They are drawn at 1 x 1 and
                  stretched, so the island can widen them as it opens (small on the closed notch, sweeping when open). -->
             <Path x:Name="LeftShoulder" Grid.Column="0" VerticalAlignment="Top" Width="6" Height="6" Stretch="Fill"

@@ -386,9 +386,10 @@ Even while closed, the island can show live information, like the iPhone's Dynam
   meeting, a download, the temperature. The island smoothly widens and the information appears at its two ends (a
   picture or icon on the left, details on the right).
 - **Split island:** when two are live at once (for example music and a timer), the more important one keeps the island
-  and the other **splits off into a small round bubble** to its right, like the iPhone: the timer's ring, the stopwatch,
-  the album art, a download ring or the terminal icon. The bubble springs out from under the island and slides back
-  when it is no longer needed. Rest the cursor on the bubble to open the island on that activity's tab.
+  and the other **splits off into a small bubble** to its right, like the iPhone: the timer's ring, the stopwatch, the
+  album art, a download ring or the terminal icon. The two stay **joined by a liquid neck** (black from the top edge down
+  to a soft waist), so they read as one shape pinching apart rather than two separate things. The bubble springs out
+  from under the island, stretching the neck, and slides back when it is no longer needed. Rest the cursor on the bubble to open the island on that activity's tab.
 - **HUDs** are short pop-ups that take over the island for about 1.8 seconds and then hand it back: volume, brightness,
   battery, Bluetooth, notifications, "Converted 3 files", screenshot taken, timer finished.
 
@@ -437,13 +438,16 @@ Setting: *Now Playing* (on by default).
   (muted / low / medium / high), a white bar and the percentage.
 - **Brightness:** the same for a laptop screen's brightness (desktop monitors usually do not report brightness to
   Windows, so then nothing is shown).
-- **Hides Windows' own pop-ups:** by default Dropshelf hides Windows' built-in volume / brightness / media box (it is
-  looked for every 16 ms for a moment after each change, so it is gone before it really shows), also while the island is
-  open. Many laptops add their own pop-ups for volume, brightness and **Caps Lock** (HP, ASUS, Lenovo...); those are hidden
-  too when their program's name says it is an on-screen display ("OSD") or a hotkey helper. So all of this only shows on
-  the island. In fullscreen apps, where the island is hidden, Windows' pop-up is left alone so you still see something.
-  This uses a workaround (finding and hiding the pop-up windows); a future Windows update could break it, in which case
-  you would simply see both. Turn it off with *Hide the Windows popups*.
+- **Hides Windows' own pop-ups:** by default Dropshelf hides Windows' built-in volume / brightness / media box, also while
+  the island is open. Windows tells Dropshelf the moment any window appears (an accessibility "window shown" event, nothing
+  is injected into other programs), and the pop-up is hidden in that same instant, before it is really drawn. On Windows
+  11 the box is then gone for good while Dropshelf runs; it comes back when the island goes away (fullscreen app, setting
+  off, quitting). Many laptops add their own pop-ups for volume, brightness and **Caps Lock**, for example Lenovo's
+  *FnHotkey* helper; those are hidden the same way when their program's name says it is an on-screen display ("OSD") or
+  a hotkey helper, and only right after a change the island shows (so a keyboard-light or Fn-lock pop-up stays). If a
+  pop-up still gets through, the first windows that appeared after a change are written to `dropshelf.log`, which shows
+  what it is. This is a workaround; a future Windows update could break it, in which case you would simply see both.
+  Turn it off with *Hide the Windows popups*.
 - **Scroll to change volume:** roll the mouse wheel over the closed island to turn the volume up or down. The wheel works
   normally everywhere else.
 - Changing your default speakers is handled silently (no pop-up).

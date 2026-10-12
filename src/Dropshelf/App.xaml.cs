@@ -201,9 +201,11 @@ public partial class App : Application
         {
             _activityHost.SetFullscreen(fullscreen);
             _island.SetFullscreen(fullscreen);
+            _osd?.SetIslandVisible(!fullscreen); // the island is hidden: give Windows' own volume popup back meanwhile
         };
         if (_fullscreen.IsFullscreen)
         {
+            _osd?.SetIslandVisible(false);
             _activityHost.SetFullscreen(true); // a fullscreen app was already in front at start-up
             _island.SetFullscreen(true);
         }
@@ -297,10 +299,12 @@ public partial class App : Application
     private void StartActivities()
     {
         _osd = new OsdSuppressor { Gate = hud => _activityHost!.IslandVisibleFor(hud) };
+        _osd.Enabled = _settings!.Current.ReplaceWindowsOsd;
 
         TryStep("indicators", () =>
         {
             _indicator = new IndicatorActivity(_settings!) { Osd = _osd };
+            _osd.CapsLockJustChanged = _indicator.CapsJustChanged;
             _activityHost!.Register(_indicator);
         });
 
@@ -437,6 +441,7 @@ public partial class App : Application
         TryStep("timer", () => _timer?.Dispose());
         TryStep("Bluetooth HUD", () => _bluetooth?.Dispose());
         TryStep("indicators", () => _indicator?.Dispose());
+        TryStep("popup hider", () => _osd?.Dispose());
         TryStep("battery HUD", () => _battery?.Dispose());
         TryStep("brightness HUD", () => _brightness?.Dispose());
         TryStep("now playing", () =>
@@ -538,6 +543,13 @@ public partial class App : Application
                 break;
             case nameof(AppSettings.ShelfEnabled):
                 _shelf?.ApplySettings();
+                break;
+            case nameof(AppSettings.ReplaceWindowsOsd):
+                if (_osd != null)
+                {
+                    _osd.Enabled = _settings.Current.ReplaceWindowsOsd;
+                }
+
                 break;
             case nameof(AppSettings.ShowCapsLockHud):
             case nameof(AppSettings.ShowFocusHud):

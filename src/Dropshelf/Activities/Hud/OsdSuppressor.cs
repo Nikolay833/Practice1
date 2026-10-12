@@ -35,6 +35,9 @@ internal sealed class OsdSuppressor : IDisposable
     private const int TickMs = 16, Ticks = 70;
     private const uint EVENT_OBJECT_SHOW = 0x8002;
     private const uint EVENT_OBJECT_UNCLOAKED = 0x8018;
+    private const uint EVENT_OBJECT_LOCATIONCHANGE = 0x800B;
+    private const int WS_EX_LAYERED = 0x00080000;
+    private const uint LWA_ALPHA = 0x2;
     private const uint WINEVENT_OUTOFCONTEXT = 0x0000;
     private const uint WINEVENT_SKIPOWNPROCESS = 0x0002;
     private const int DWMWA_CLOAKED = 14;
@@ -53,6 +56,10 @@ internal sealed class OsdSuppressor : IDisposable
     private readonly object _gate = new();          // the hook thread and the UI thread both judge windows
     private Thread? _hookThread;
     private uint _hookThreadId;
+    private int _hookManagedId;
+    private readonly List<IntPtr> _processHooks = new();                     // per-process hooks; hook thread only
+    private readonly HashSet<uint> _watchedPids = new();
+    private readonly Dictionary<IntPtr, (int ExStyle, NativeMethods.RECT At)> _neutralized = new();   // maker popups made invisible
     private readonly List<(IntPtr Hwnd, long At)> _recent = new();   // windows shown in the last moment, for a late burst
     private int _ticksLeft;
     private uint _shellPid;
@@ -170,6 +177,7 @@ internal sealed class OsdSuppressor : IDisposable
         var thread = new Thread(() =>
         {
             _hookThreadId = NativeMethods.GetCurrentThreadId();
+            _hookManagedId = Environment.CurrentManagedThreadId;
             var hooks = new List<IntPtr>();
             foreach (uint evt in new[] { EVENT_OBJECT_SHOW, EVENT_OBJECT_UNCLOAKED })
             {
@@ -185,6 +193,7 @@ internal sealed class OsdSuppressor : IDisposable
             }
 
             ready.Set();
+            SweepLockKeyPopups();
             while (NativeMethods.GetMessage(out NativeMethods.MSG msg, IntPtr.Zero, 0, 0) > 0)
             {
                 // Only WinEvent callbacks arrive here; nothing to translate.
@@ -193,6 +202,17 @@ internal sealed class OsdSuppressor : IDisposable
             foreach (IntPtr hook in hooks)
             {
                 UnhookWinEvent(hook);
+            }
+
+            lock (_gate)
+            {
+                foreach (IntPtr hook in _processHooks)
+                {
+                    UnhookWinEvent(hook);
+                }
+
+                _processHooks.Clear();
+                _watchedPids.Clear();
             }
         })
         {
@@ -222,6 +242,20 @@ internal sealed class OsdSuppressor : IDisposable
     {
         if (idObject != 0 || idChild != 0 || hwnd == IntPtr.Zero || !_enabled || !_islandVisible)
         {
+            return;
+        }
+
+        if (evt == EVENT_OBJECT_LOCATIONCHANGE)
+        {
+            // A maker popup we made invisible was moved back on screen (it is about to show): send it away again at once.
+            lock (_gate)
+            {
+                if (_neutralized.ContainsKey(hwnd))
+                {
+                    KeepAway(hwnd);
+                }
+            }
+
             return;
         }
 
@@ -358,7 +392,15 @@ internal sealed class OsdSuppressor : IDisposable
             bool related = inBurst || caps || VolumeKeyDown();
             if (related && Size(hwnd, out _, out _))
             {
-                NativeMethods.ShowWindow(hwnd, NativeMethods.SW_HIDE);
+                if (lockKeysOsd)
+                {
+                    Neutralize(hwnd, pid); // only ever a Caps Lock / Num Lock popup: make it invisible for good
+                }
+                else
+                {
+                    NativeMethods.ShowWindow(hwnd, NativeMethods.SW_HIDE);
+                }
+
                 if (caps)
                 {
                     CapsPopupSeen?.Invoke();
@@ -490,6 +532,76 @@ internal sealed class OsdSuppressor : IDisposable
 
     private readonly HashSet<uint> _lockKeyOsd = new();
 
+    /// <summary>
+    /// Makes a Caps Lock / Num Lock popup invisible for good, not just hidden: such a popup is often shown again by fading it
+    /// in, which Windows does not announce. It is hidden, made fully transparent and click-through, and parked far off
+    /// screen; a hook on its program then sends it away again the moment it is moved back. Undone in <see cref="RestoreShell"/>.
+    /// </summary>
+    private void Neutralize(IntPtr hwnd, uint pid)
+    {
+        if (!_neutralized.ContainsKey(hwnd) && NativeMethods.GetWindowRect(hwnd, out var at))
+        {
+            int ex = NativeMethods.GetWindowLong(hwnd, NativeMethods.GWL_EXSTYLE);
+            _neutralized[hwnd] = (ex, at);
+            if ((ex & WS_EX_LAYERED) == 0)
+            {
+                NativeMethods.SetWindowLong(hwnd, NativeMethods.GWL_EXSTYLE, ex | WS_EX_LAYERED | NativeMethods.WS_EX_TRANSPARENT);
+                SetLayeredWindowAttributes(hwnd, 0, 0, LWA_ALPHA);
+            }
+        }
+
+        KeepAway(hwnd);
+
+        // Hooks are delivered to the thread that installs them, and must be removed there: only from the hook thread.
+        if (Environment.CurrentManagedThreadId == _hookManagedId && _watchedPids.Add(pid))
+        {
+            IntPtr hook = SetWinEventHook(EVENT_OBJECT_LOCATIONCHANGE, EVENT_OBJECT_LOCATIONCHANGE, IntPtr.Zero, _callback, pid, 0, WINEVENT_OUTOFCONTEXT);
+            if (hook != IntPtr.Zero)
+            {
+                _processHooks.Add(hook);
+            }
+        }
+    }
+
+    /// <summary>
+    /// At start: a maker's Caps Lock / Num Lock popup usually already exists (hidden) before the first key press, so it is made
+    /// invisible right away instead of after it has flashed once. Runs on the hook thread.
+    /// </summary>
+    private void SweepLockKeyPopups()
+    {
+        try
+        {
+            NativeMethods.EnumWindows((hwnd, _) =>
+            {
+                NativeMethods.GetWindowThreadProcessId(hwnd, out uint pid);
+                lock (_gate)
+                {
+                    if (pid != 0 && pid != (uint)Environment.ProcessId && IsVendorOsd(pid, out bool lockKeys) && lockKeys
+                        && Size(hwnd, out _, out _))
+                    {
+                        Neutralize(hwnd, pid);
+                    }
+                }
+
+                return true;
+            }, IntPtr.Zero);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Looking for Caps Lock popups failed", ex);
+        }
+    }
+
+    private static void KeepAway(IntPtr hwnd)
+    {
+        NativeMethods.ShowWindow(hwnd, NativeMethods.SW_HIDE);
+        if (NativeMethods.GetWindowRect(hwnd, out var r) && r.Left > -30000)
+        {
+            NativeMethods.SetWindowPos(hwnd, IntPtr.Zero, -32000, -32000, 0, 0,
+                NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE | SWP_NOZORDER | SWP_ASYNCWINDOWPOS);
+        }
+    }
+
     private static bool CapsKeyDown() => (NativeMethods.GetAsyncKeyState(NativeMethods.VK_CAPITAL) & 0x8000) != 0;
 
     private static string ProcessName(uint pid)
@@ -520,6 +632,18 @@ internal sealed class OsdSuppressor : IDisposable
             }
 
             _movedHosts.Clear();
+
+            foreach ((IntPtr popup, (int exStyle, NativeMethods.RECT at)) in _neutralized)
+            {
+                if (NativeMethods.IsWindow(popup))
+                {
+                    NativeMethods.SetWindowLong(popup, NativeMethods.GWL_EXSTYLE, exStyle);
+                    NativeMethods.SetWindowPos(popup, IntPtr.Zero, at.Left, at.Top, 0, 0,
+                        NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE | SWP_NOZORDER | SWP_ASYNCWINDOWPOS);
+                }
+            }
+
+            _neutralized.Clear();
             RestoreShellLocked();
         }
     }
@@ -570,6 +694,9 @@ internal sealed class OsdSuppressor : IDisposable
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetLayeredWindowAttributes(IntPtr hwnd, uint crKey, byte bAlpha, uint dwFlags);
 
     [DllImport("dwmapi.dll")]
     private static extern int DwmGetWindowAttribute(IntPtr hwnd, int attribute, out int value, int size);

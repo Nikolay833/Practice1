@@ -9,6 +9,7 @@ using System.Windows.Threading;
 using Dropshelf.Activities;
 using Dropshelf.Activities.Calendar;
 using Dropshelf.Activities.Devices;
+using Dropshelf.Activities.Downloads;
 using Dropshelf.Activities.Hud;
 using Dropshelf.Activities.Media;
 using Dropshelf.Activities.Notes;
@@ -75,6 +76,8 @@ public partial class App : Application
     private NotesActivity? _notes;
     private ShelfActivity? _shelf;
     private TerminalActivity? _terminal;
+    private DownloadActivity? _downloads;
+    private PrivacyMonitor? _privacy;
     private CalendarService? _calendar;
     private WeatherService? _weather;
     private TodayActivity? _today;
@@ -179,12 +182,19 @@ public partial class App : Application
             }
         };
 
-        _activityHost = new ActivityHost();
+        _activityHost = new ActivityHost { SplitEnabled = _settings.Current.SplitIsland };
         StartActivities();
 
         _island = new IslandWindow(_settings, ShowSettings, _activityHost);
         _island.WheelRegionSink = region => _mouseHook.SetWheelRegion(region);
         _island.Show();
+
+        TryStep("privacy dot", () =>
+        {
+            _privacy = new PrivacyMonitor();
+            _privacy.Changed += ApplyPrivacyDot;
+            _privacy.Enabled = _settings.Current.ShowPrivacyDots;
+        });
 
         _fullscreen = new FullscreenWatcher(_settings);
         _fullscreen.Changed += fullscreen =>
@@ -286,11 +296,11 @@ public partial class App : Application
     /// </summary>
     private void StartActivities()
     {
-        _osd = new OsdSuppressor { Gate = hud => _activityHost!.CanShowHud(hud) };
+        _osd = new OsdSuppressor { Gate = hud => _activityHost!.IslandVisibleFor(hud) };
 
         TryStep("indicators", () =>
         {
-            _indicator = new IndicatorActivity(_settings!);
+            _indicator = new IndicatorActivity(_settings!) { Osd = _osd };
             _activityHost!.Register(_indicator);
         });
 
@@ -373,6 +383,20 @@ public partial class App : Application
             _activityHost.Register(_terminal);
         });
 
+        TryStep("downloads", () =>
+        {
+            _downloads = new DownloadActivity(_settings!);
+            _activityHost.Register(_downloads);
+            _activityHost.Register(_downloads.Done);
+            _downloads.Finished += path =>
+            {
+                if (_settings!.Current.DownloadsToShelf && _settings.Current.ShelfEnabled)
+                {
+                    _shelf?.Store.AddPaths(new[] { path });
+                }
+            };
+        });
+
         TryStep("weather", () =>
         {
             _weather = new WeatherService(_settings!);
@@ -399,6 +423,8 @@ public partial class App : Application
         // Tear down in reverse order; every step tolerates a half-started app (second instance) and a failing
         // step never stops the later ones (tray icon, settings flush and mutex release must always run).
         TryStep("fullscreen watcher", () => _fullscreen?.Dispose());
+        TryStep("privacy dot", () => _privacy?.Dispose());
+        TryStep("downloads", () => _downloads?.Dispose());
         TryStep("notification pill", () => _notificationPill?.Dispose());
         TryStep("notifications", () => _notifications?.Dispose());
         TryStep("meeting alerts", () => _meeting?.Dispose());
@@ -516,6 +542,19 @@ public partial class App : Application
             case nameof(AppSettings.ShowCapsLockHud):
             case nameof(AppSettings.ShowFocusHud):
                 _indicator?.ApplySettings();
+                break;
+            case nameof(AppSettings.ShowPrivacyDots):
+                if (_privacy != null)
+                {
+                    _privacy.Enabled = _settings.Current.ShowPrivacyDots;
+                }
+
+                break;
+            case nameof(AppSettings.ShowDownloads):
+                _downloads?.ApplySettings();
+                break;
+            case nameof(AppSettings.SplitIsland):
+                _activityHost!.SplitEnabled = _settings.Current.SplitIsland;
                 break;
             case nameof(AppSettings.TerminalEnabled):
                 _terminal?.ApplySettings();
@@ -646,6 +685,23 @@ public partial class App : Application
             _hotkeys!.Unregister(HotkeyService.ClipboardId);
             _clipboardHotkeyRegistered = false;
         }
+    }
+
+    /// <summary>Green dot while an app uses the camera, orange while one uses the microphone; the tooltip names the app.</summary>
+    private void ApplyPrivacyDot()
+    {
+        if (_privacy == null || _island == null)
+        {
+            return;
+        }
+
+        string tip = string.Join("\n",
+            new[]
+            {
+                _privacy.CameraInUse ? $"{_privacy.CameraApp} is using the camera" : null,
+                _privacy.MicrophoneInUse ? $"{_privacy.MicrophoneApp} is using the microphone" : null,
+            }.Where(t => t != null));
+        _island.SetPrivacy(_privacy.CameraInUse, _privacy.MicrophoneInUse, tip);
     }
 
     // ---- Window entry points ----------------------------------------------------------------------

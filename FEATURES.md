@@ -383,10 +383,26 @@ Right-click a card for *Paste*, *Pin / Unpin* and *Delete*. Double-click pastes 
 Even while closed, the island can show live information, like the iPhone's Dynamic Island. There are two kinds:
 
 - **Live activities** stay as long as they are relevant: the song that is playing, a running timer, an upcoming
-  meeting, the temperature. The island smoothly widens and the information appears at its two ends (a picture or icon
-  on the left, details on the right). If several are active, the most important one wins.
+  meeting, a download, the temperature. The island smoothly widens and the information appears at its two ends (a
+  picture or icon on the left, details on the right).
+- **Split island:** when two are live at once (for example music and a timer), the more important one keeps the island
+  and the other **splits off into a small round bubble** to its right, like the iPhone: the timer's ring, the stopwatch,
+  the album art, a download ring or the terminal icon. The bubble springs out from under the island and slides back
+  when it is no longer needed. Rest the cursor on the bubble to open the island on that activity's tab.
 - **HUDs** are short pop-ups that take over the island for about 1.8 seconds and then hand it back: volume, brightness,
   battery, Bluetooth, notifications, "Converted 3 files", screenshot taken, timer finished.
+
+**Camera and microphone dot:** while any app uses the camera, a small **green dot** sits at the right end of the island;
+while one uses the microphone (and not the camera), an **orange dot**, as on the iPhone. Windows records which apps use
+them (the same information as its own privacy icon in the taskbar), so the dot is reliable; it is checked every 1.5
+seconds.
+
+**Downloads:** while a browser downloads into your **Downloads** folder (Chrome, Edge, Brave, Opera, Firefox...), the
+island shows a blue spinning ring with a download arrow and how much has arrived ("12.4 MB", or "2 · 40 MB" for two
+downloads). Browsers do not say how big the file will be, so the ring spins instead of filling. When it finishes, the
+island shows the file's icon and name with "Downloaded": **drag the icon out** of the island into a folder, an email or a
+chat, or click it to open the file. Finished downloads are also put on the **shelf** (setting *Put finished downloads
+on the shelf*).
 
 Changes between them cross-fade with spring animations. Each feature has its own on/off switch, and if a feature cannot
 work on a particular PC (for example no battery, or no brightness control on a desktop monitor) it simply stays off
@@ -421,14 +437,18 @@ Setting: *Now Playing* (on by default).
   (muted / low / medium / high), a white bar and the percentage.
 - **Brightness:** the same for a laptop screen's brightness (desktop monitors usually do not report brightness to
   Windows, so then nothing is shown).
-- **Replaces Windows' own volume pop-up:** by default Dropshelf hides Windows' built-in volume box so you only see one.
-  This uses a workaround (finding and hiding Windows' pop-up window); a future Windows update could break it, in which
-  case you would simply see both. Turn it off with *Replace the Windows volume popup*.
+- **Hides Windows' own pop-ups:** by default Dropshelf hides Windows' built-in volume / brightness / media box (it is
+  looked for every 16 ms for a moment after each change, so it is gone before it really shows), also while the island is
+  open. Many laptops add their own pop-ups for volume, brightness and **Caps Lock** (HP, ASUS, Lenovo...); those are hidden
+  too when their program's name says it is an on-screen display ("OSD") or a hotkey helper. So all of this only shows on
+  the island. In fullscreen apps, where the island is hidden, Windows' pop-up is left alone so you still see something.
+  This uses a workaround (finding and hiding the pop-up windows); a future Windows update could break it, in which case
+  you would simply see both. Turn it off with *Hide the Windows popups*.
 - **Scroll to change volume:** roll the mouse wheel over the closed island to turn the volume up or down. The wheel works
   normally everywhere else.
 - Changing your default speakers is handled silently (no pop-up).
 
-Settings: *Volume*, *Brightness*, *Replace the Windows volume popup*, *Scroll over the island to change volume*,
+Settings: *Volume*, *Brightness*, *Hide the Windows popups*, *Scroll over the island to change volume*,
 *Show volume in fullscreen* (all on, except the last one).
 
 ---
@@ -817,8 +837,11 @@ immediately; there is no Save button. Settings are grouped like this:
 | | Shelf / Remember shelf items | On / On |
 | | Terminal | On |
 | **Live Activities** | Now Playing | On |
+| | Split island | On |
+| | Downloads / Put finished downloads on the shelf | On / On |
+| | Camera and microphone dot | On |
 | | Volume | On |
-| | Replace the Windows volume popup | On |
+| | Hide the Windows popups | On |
 | | Show volume in fullscreen | Off |
 | | Brightness | On |
 | | Battery | On |

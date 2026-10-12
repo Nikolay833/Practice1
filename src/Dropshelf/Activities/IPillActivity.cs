@@ -113,6 +113,13 @@ internal interface IPillActivity
 
     /// <summary>The expanded tab's content (created once and cached by the host), or null.</summary>
     FrameworkElement? CreateExpanded();
+
+    /// <summary>
+    /// Live activities: a small view (about 22 x 22) for the round bubble beside the island when another live activity has the
+    /// island itself, like the split Dynamic Island. Must not be one of the compact elements; the same instance may be handed
+    /// out again so it keeps updating. Null = this activity never goes into the bubble.
+    /// </summary>
+    FrameworkElement? CreateMinimal();
 }
 
 /// <summary>
@@ -157,6 +164,7 @@ internal abstract class PillActivityBase : IPillActivity
 
     public virtual CompactContent? CreateCompact() => null;
     public virtual FrameworkElement? CreateExpanded() => null;
+    public virtual FrameworkElement? CreateMinimal() => null;
 
     protected void RaiseStateChanged() => StateChanged?.Invoke(this, EventArgs.Empty);
 

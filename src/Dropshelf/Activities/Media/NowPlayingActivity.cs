@@ -21,6 +21,8 @@ internal sealed class NowPlayingActivity : PillActivityBase, IDisposable
     private readonly AudioEndpointService? _audio;
     private readonly DispatcherTimer _lingerTimer;
     private readonly Image _art;
+    private readonly Image _miniArt;
+    private readonly Border _mini;
     private readonly Grid _artHost;
     private readonly Grid _barsHost;
     private readonly EqualizerBars _bars;
@@ -46,6 +48,14 @@ internal sealed class NowPlayingActivity : PillActivityBase, IDisposable
         _artHost = new Grid { Width = 22, Height = 24 };
         frame.Child = new Grid { Children = { glyph, _art } };
         _artHost.Children.Add(frame);
+
+        // The split-island bubble: just the album art, round like on the iPhone.
+        _miniArt = new Image { Stretch = Stretch.UniformToFill, Clip = new EllipseGeometry(new Rect(0, 0, 22, 22)) };
+        RenderOptions.SetBitmapScalingMode(_miniArt, BitmapScalingMode.HighQuality);
+        var miniGlyph = new TextBlock { Text = "\uEC4F", FontSize = 11 };
+        miniGlyph.SetResourceReference(FrameworkElement.StyleProperty, "Glyph");
+        _mini = new Border { Width = 22, Height = 22, CornerRadius = new CornerRadius(11), Child = new Grid { Children = { miniGlyph, _miniArt } } };
+        _mini.SetResourceReference(Border.BackgroundProperty, "FillBrush");
 
         _bars = new EqualizerBars(audio) { VerticalAlignment = VerticalAlignment.Center };
         _barsHost = new Grid { Width = 23, Height = 24 };
@@ -73,12 +83,15 @@ internal sealed class NowPlayingActivity : PillActivityBase, IDisposable
 
     public override FrameworkElement? CreateExpanded() => new NowPlayingView(_media, _audio);
 
+    public override FrameworkElement? CreateMinimal() => _mini;
+
     /// <summary>The "Show now playing" setting changed.</summary>
     public void ApplySettings() => Evaluate();
 
     private void OnMediaChanged()
     {
         _art.Source = _media.Art;
+        _miniArt.Source = _media.Art;
         _bars.SetTint(_media.ArtTint);
         _bars.Playing = _media.IsPlaying;
 

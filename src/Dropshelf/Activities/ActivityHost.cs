@@ -31,6 +31,7 @@ internal sealed class ActivityHost
         // Leading content hugs the left edge of the island and trailing content the right edge, like the Dynamic Island.
         LeftView = new CrossfadeHost { ChildHorizontalAlignment = HorizontalAlignment.Left, ChildVerticalAlignment = VerticalAlignment.Center };
         RightView = new CrossfadeHost { ChildHorizontalAlignment = HorizontalAlignment.Right, ChildVerticalAlignment = VerticalAlignment.Center };
+        BubbleView = new CrossfadeHost { ChildHorizontalAlignment = HorizontalAlignment.Center, ChildVerticalAlignment = VerticalAlignment.Center, Slide = 0 };
         _hudTimer = new DispatcherTimer { Interval = HudDuration };
         _hudTimer.Tick += (_, _) =>
         {
@@ -45,6 +46,29 @@ internal sealed class ActivityHost
 
     /// <summary>Hosts the trailing content (children are right-aligned).</summary>
     public FrameworkElement RightView { get; }
+
+    /// <summary>Hosts the second live activity's minimal view, for the bubble beside the island.</summary>
+    public FrameworkElement BubbleView { get; }
+
+    /// <summary>The live activity in the bubble beside the island, or null.</summary>
+    public IPillActivity? Secondary { get; private set; }
+
+    /// <summary>Show a second live activity in a bubble (the "Split island" setting).</summary>
+    public bool SplitEnabled
+    {
+        get => _splitEnabled;
+        set
+        {
+            _splitEnabled = value;
+            Reevaluate();
+        }
+    }
+
+    private bool _splitEnabled = true;
+    private FrameworkElement? _bubbleElement;
+
+    /// <summary>The bubble got another activity, or lost it.</summary>
+    public event Action? SecondaryChanged;
 
     public IReadOnlyList<IPillActivity> Activities => _activities;
 
@@ -118,6 +142,12 @@ internal sealed class ActivityHost
             EndHud();
         }
     }
+
+    /// <summary>
+    /// Is the island on screen for <paramref name="activity"/> (not slid away for a fullscreen app)? The native Windows popups
+    /// are hidden whenever it is, also while the island is open, so they never show next to it.
+    /// </summary>
+    public bool IslandVisibleFor(IPillActivity activity) => !(_fullscreen && !activity.ShowInFullscreen);
 
     /// <summary>Would a HUD request from <paramref name="activity"/> be shown right now?</summary>
     public bool CanShowHud(IPillActivity activity) => !_expandedOpen && !(_fullscreen && !activity.ShowInFullscreen);
@@ -207,13 +237,58 @@ internal sealed class ActivityHost
         }
     }
 
+    /// <summary>
+    /// The bubble shows the most important live activity after the one that has the island (a HUD on the island does not
+    /// push it out), if it has a minimal view.
+    /// </summary>
+    private void UpdateSecondary(List<IPillActivity> lives)
+    {
+        IPillActivity? secondary = null;
+        FrameworkElement? element = null;
+        if (_splitEnabled && lives.Count > 1)
+        {
+            IPillActivity primary = _hud == null && Current is { Kind: PillActivityKind.Live } current && lives.Contains(current) ? current : lives[0];
+            foreach (IPillActivity candidate in lives)
+            {
+                if (ReferenceEquals(candidate, primary))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    element = candidate.CreateMinimal();
+                }
+                catch (Exception ex)
+                {
+                    Log.Error($"Activity '{candidate.Id}' failed to create its minimal view", ex);
+                    element = null;
+                }
+
+                if (element != null)
+                {
+                    secondary = candidate;
+                    break;
+                }
+            }
+        }
+
+        if (ReferenceEquals(secondary, Secondary) && ReferenceEquals(element, _bubbleElement))
+        {
+            return;
+        }
+
+        Secondary = secondary;
+        _bubbleElement = element;
+        ((CrossfadeHost)BubbleView).Show(element);
+        SecondaryChanged?.Invoke();
+    }
+
     private void Reevaluate()
     {
-        IPillActivity? pick = _hud;
-        if (pick == null)
-        {
-            pick = _activities.Where(a => a.Kind == PillActivityKind.Live && a.IsActive).OrderByDescending(a => a.Priority).FirstOrDefault();
-        }
+        var lives = _activities.Where(a => a.Kind == PillActivityKind.Live && a.IsActive).OrderByDescending(a => a.Priority).ToList();
+        UpdateSecondary(lives);
+        IPillActivity? pick = _hud ?? lives.FirstOrDefault();
 
         CompactContent? content = null;
         if (pick != null)
@@ -240,6 +315,7 @@ internal sealed class ActivityHost
 
         Current = pick;
         Content = content;
+        UpdateSecondary(lives);
         ((CrossfadeHost)LeftView).Show(content?.Left);
         ((CrossfadeHost)RightView).Show(content?.Right);
         CompactChanged?.Invoke();

@@ -256,6 +256,34 @@
                             </StackPanel>
                         </CheckBox>
                         <Border Style="{StaticResource Divider}"/>
+                        <CheckBox IsChecked="{Binding SplitIsland, Mode=TwoWay}">
+                            <StackPanel>
+                                <TextBlock Text="Split island" Style="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="When two things are live (music and a timer), the second one shows in a small bubble beside the island" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </CheckBox>
+                        <Border Style="{StaticResource Divider}"/>
+                        <CheckBox IsChecked="{Binding ShowDownloads, Mode=TwoWay}">
+                            <StackPanel>
+                                <TextBlock Text="Downloads" Style="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="A ring while a browser downloads into your Downloads folder, then the file to drag out" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </CheckBox>
+                        <Border Style="{StaticResource Divider}"/>
+                        <CheckBox IsChecked="{Binding DownloadsToShelf, Mode=TwoWay}" IsEnabled="{Binding ShowDownloads}">
+                            <StackPanel>
+                                <TextBlock Text="Put finished downloads on the shelf" Style="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="They stay there to drag out later" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </CheckBox>
+                        <Border Style="{StaticResource Divider}"/>
+                        <CheckBox IsChecked="{Binding ShowPrivacyDots, Mode=TwoWay}">
+                            <StackPanel>
+                                <TextBlock Text="Camera and microphone dot" Style="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="A green dot while an app uses the camera, an orange dot while one uses the microphone" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </CheckBox>
+                        <Border Style="{StaticResource Divider}"/>
                         <CheckBox IsChecked="{Binding ShowVolumeHud, Mode=TwoWay}">
                             <StackPanel>
                                 <TextBlock Text="Volume" Style="{StaticResource TextPrimary}"/>
@@ -265,8 +293,8 @@
                         <Border Style="{StaticResource Divider}"/>
                         <CheckBox IsChecked="{Binding ReplaceWindowsOsd, Mode=TwoWay}">
                             <StackPanel>
-                                <TextBlock Text="Replace the Windows volume popup" Style="{StaticResource TextPrimary}"/>
-                                <TextBlock Text="Hide the native volume and brightness popup (best effort; if it cannot be hidden both show)" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                                <TextBlock Text="Hide the Windows popups" Style="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="Hide the Windows volume, brightness and media popup, and laptop makers' volume / brightness / Caps Lock popups, so they only show on the island (best effort)" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
                             </StackPanel>
                         </CheckBox>
                         <Border Style="{StaticResource Divider}"/>

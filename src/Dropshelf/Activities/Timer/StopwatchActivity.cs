@@ -147,5 +147,9 @@ internal sealed class StopwatchActivity : PillActivityBase, IOpensTab, IDisposab
 
     public override CompactContent? CreateCompact() => _content;
 
+    public override FrameworkElement? CreateMinimal() => _minimal ??= HudParts.Glyph("\uE916", "WarnBrush", 15);
+
+    private FrameworkElement? _minimal;
+
     public void Dispose() => _tick.Stop();
 }

@@ -16,16 +16,19 @@ namespace Dropshelf.Activities.Hud;
 /// <item>Windows 11 22H2+: a small topmost <c>XamlExplorerHostIslandWindow</c> in explorer.exe, centred near the bottom of a
 /// monitor; it is hidden with SW_HIDE.</item>
 /// </list>
+/// Laptop makers often add their own on-screen display for volume, brightness and Caps Lock (HP, ASUS, Lenovo...): a small
+/// topmost window of a process whose name says so ("...OSD...", "...Hotkey..."). Those are hidden too, in the same burst.
 /// Nothing is changed when the windows are not found, so then both popups simply show. Disabling the setting stops the
 /// hunting; the shell shows the popup again on its own at the next change.
 /// </summary>
 internal sealed class OsdSuppressor
 {
-    private const int TickMs = 40, Ticks = 30; // look for about 1.2 s; every pass enumerates all top-level windows
+    private const int TickMs = 16, Ticks = 80; // look for about 1.3 s, quickly enough that the popup never really shows
 
     private readonly DispatcherTimer _timer;
     private int _ticksLeft;
     private uint _shellPid;
+    private readonly System.Collections.Generic.Dictionary<uint, bool> _vendorOsd = new(); // pid -> is an OEM on-screen display
 
     public OsdSuppressor()
     {
@@ -96,6 +99,11 @@ internal sealed class OsdSuppressor
         NativeMethods.GetWindowThreadProcessId(hwnd, out uint pid);
         if (pid != _shellPid)
         {
+            if (IsVendorOsd(pid) && LooksLikeFlyout(hwnd, requireCentred: false))
+            {
+                NativeMethods.ShowWindow(hwnd, NativeMethods.SW_HIDE);
+            }
+
             return true;
         }
 
@@ -123,6 +131,40 @@ internal sealed class OsdSuppressor
         }
 
         return true;
+    }
+
+    /// <summary>Is <paramref name="pid"/> a laptop maker's on-screen display (by its process name)? Cached per process.</summary>
+    private bool IsVendorOsd(uint pid)
+    {
+        if (pid == 0 || pid == (uint)Environment.ProcessId)
+        {
+            return false;
+        }
+
+        if (_vendorOsd.TryGetValue(pid, out bool known))
+        {
+            return known;
+        }
+
+        bool osd = false;
+        try
+        {
+            using var process = System.Diagnostics.Process.GetProcessById((int)pid);
+            string name = process.ProcessName;
+            osd = name.Contains("osd", StringComparison.OrdinalIgnoreCase) || name.Contains("hotkey", StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            // Gone or not accessible.
+        }
+
+        if (_vendorOsd.Count > 256)
+        {
+            _vendorOsd.Clear();
+        }
+
+        _vendorOsd[pid] = osd;
+        return osd;
     }
 
     /// <summary>The popups are small and topmost; the Windows 11 one also sits horizontally centred in the lower part of a monitor.</summary>

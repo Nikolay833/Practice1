@@ -29,6 +29,7 @@ internal sealed class TimerActivity : PillActivityBase, IOpensTab, IDisposable
     private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
     private readonly DispatcherTimer _tick;
     private readonly ProgressRing _ring;
+    private readonly ProgressRing _miniRing;   // the split-island bubble
     private readonly TextBlock _time;
     private readonly Grid _left;
     private readonly Grid _right;
@@ -57,6 +58,7 @@ internal sealed class TimerActivity : PillActivityBase, IOpensTab, IDisposable
         }
 
         _ring = new ProgressRing(24, 2.5, "", 10);
+        _miniRing = new ProgressRing(22, 2.5, "", 9);
         _left = HudParts.Cell(_ring, 26);
         _time = HudParts.Label("00:00", 14, "WarnBrush", FontWeights.SemiBold);
         _time.SetResourceReference(TextBlock.FontFamilyProperty, "RoundedFont");
@@ -93,6 +95,8 @@ internal sealed class TimerActivity : PillActivityBase, IOpensTab, IDisposable
     public event Action? Updated;
 
     public override CompactContent? CreateCompact() => _content;
+
+    public override FrameworkElement? CreateMinimal() => _miniRing;
 
     public override FrameworkElement? CreateExpanded() => _clock = new ClockView(this, Stopwatch, Alarms, _settings);
 
@@ -227,7 +231,9 @@ internal sealed class TimerActivity : PillActivityBase, IOpensTab, IDisposable
         bool hours = Engine.Phase != TimerPhase.Idle ? Engine.Total.TotalSeconds >= 3600 : false;
         _time.Text = Format(seconds, hours);
         _ring.SetProgress(Engine.Elapsed);
+        _miniRing.SetProgress(Engine.Elapsed);
         _ring.Glyph = Engine.IsPaused ? "" : "";
+        _miniRing.Glyph = Engine.IsPaused ? "" : "";
         _time.SetResourceReference(TextBlock.ForegroundProperty,
             Engine.IsPaused ? "TextSecondaryBrush" : Engine.Phase is TimerPhase.Break or TimerPhase.LongBreak ? "SuccessBrush" : "WarnBrush");
 
@@ -235,11 +241,13 @@ internal sealed class TimerActivity : PillActivityBase, IOpensTab, IDisposable
         if (tint is { } color)
         {
             _ring.SetColor(color);
+            _miniRing.SetColor(color);
             _followAccent = false;
         }
         else if (!_followAccent)
         {
             _ring.FollowAccent();
+            _miniRing.FollowAccent();
             _followAccent = true;
         }
 

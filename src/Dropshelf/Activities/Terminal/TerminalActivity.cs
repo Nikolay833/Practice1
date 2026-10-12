@@ -48,6 +48,10 @@ internal sealed class TerminalActivity : PillActivityBase, IReleasesKeyboard, ID
 
     public void FocusInput() => _view?.FocusInput();
 
+    public override FrameworkElement? CreateMinimal() => Session.IsRunning ? _minimal ??= HudParts.Glyph("\uE756", "SuccessBrush", 14) : null;
+
+    private FrameworkElement? _minimal;
+
     public override CompactContent? CreateCompact()
     {
         if (Session.IsRunning)

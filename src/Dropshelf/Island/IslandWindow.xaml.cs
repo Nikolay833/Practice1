@@ -47,6 +47,9 @@ public partial class IslandWindow : Window
     private const int HoverRestPx = 5;            // ...and move less than this between polls
     private const double DragMarginDip = 16;      // while something is dragged, the notch takes drops this close to it
     private const int DragStartPx = 8;            // the left button must move this far before a press counts as a drag
+    private const double BubbleWidth = 44;        // the split-island bubble: 32 wide plus its two 6 px shoulders
+    private const double BubbleGap = 4;           // between the island's shoulder and the bubble's
+    private const double DotSpace = 12;           // room the privacy dot takes at the island's right end
 
     private readonly SettingsService _settings;
     private readonly Action _openSettings;
@@ -64,6 +67,7 @@ public partial class IslandWindow : Window
     private readonly Spring _collapsedH = new(CollapsedHeight, 420, 0.8);
     private readonly Spring _compact = new(0, 420, 1.0);                   // 0 = idle notch, 1 = activity content
     private readonly Spring _hide = new(0, 380, 1.0);                      // 1 = slid away above the screen (fullscreen app)
+    private readonly Spring _bubble = new(0, 360, 0.72);                   // 1 = the split-island bubble is out
     private readonly FrameLoop _loop;
 
     // Last values pushed to Win32 / WPF, so unchanged frames cost nothing.
@@ -87,6 +91,7 @@ public partial class IslandWindow : Window
     private bool _wheelPublished;
     private bool _activationAllowed;   // WS_EX_NOACTIVATE is off while a text box in the island needs the keyboard
     private IntPtr _previousForeground;
+    private bool _privacyDot;
 
     internal IslandWindow(SettingsService settings, Action openSettings, ActivityHost activities)
     {
@@ -107,6 +112,8 @@ public partial class IslandWindow : Window
         _activities.RightView.Margin = new Thickness(0, 0, CompactPad, 0);
         CompactLayer.Children.Add(_activities.LeftView);
         CompactLayer.Children.Add(_activities.RightView);
+        BubbleBody.Child = _activities.BubbleView;
+        _activities.SecondaryChanged += OnSecondaryChanged;
         CenterGap.Width = new GridLength(CompactGap);
         Tabs.TabClicked += id => SelectTab(id);
         _activities.CompactChanged += OnCompactChanged;
@@ -170,6 +177,7 @@ public partial class IslandWindow : Window
     {
         _activities.CompactChanged -= OnCompactChanged;
         _activities.TabsChanged -= RebuildTabs;
+        _activities.SecondaryChanged -= OnSecondaryChanged;
         PublishWheelRegion(null);
         _hoverTimer.Stop();
         _collapseTimer.Stop();
@@ -300,6 +308,7 @@ public partial class IslandWindow : Window
 
         bool leftDown = (NativeMethods.GetAsyncKeyState(NativeMethods.VK_LBUTTON) & 0x8000) != 0;
         bool hoverExpand = _settings.Current.ExpandOnHover;
+        bool onBubble = BubbleContains(cursor);
         bool onIsland = IslandContains(cursor, 0);
         TrackLeftDrag(leftDown, cursor);
 
@@ -320,7 +329,7 @@ public partial class IslandWindow : Window
         // Whatever is under the notch (browser tabs, an address bar, a title bar) must stay usable: the notch only opens when
         // the cursor rests on it, never while a button is held, and not again after a click there until the cursor has left.
         bool anyButton = leftDown || (NativeMethods.GetAsyncKeyState(NativeMethods.VK_RBUTTON) & 0x8000) != 0;
-        if (!onIsland)
+        if (!onIsland && !onBubble)
         {
             _hoverBlocked = false;
         }
@@ -329,7 +338,7 @@ public partial class IslandWindow : Window
             _hoverBlocked = true;
         }
 
-        if (hoverExpand && onIsland && !anyButton && !_hoverBlocked && !interactiveHud)
+        if (hoverExpand && (onIsland || onBubble) && !anyButton && !_hoverBlocked && !interactiveHud)
         {
             long now = Environment.TickCount64;
             bool resting = Math.Abs(cursor.X - _hoverPoint.X) <= HoverRestPx && Math.Abs(cursor.Y - _hoverPoint.Y) <= HoverRestPx;
@@ -340,7 +349,15 @@ public partial class IslandWindow : Window
             }
             else if (now - _hoverSince >= HoverDelayMs)
             {
-                Expand();
+                if (onBubble && !onIsland)
+                {
+                    ExpandOnBubble();
+                }
+                else
+                {
+                    Expand();
+                }
+
                 return;
             }
         }
@@ -350,7 +367,7 @@ public partial class IslandWindow : Window
         }
 
         // Poll fast while the cursor is near, slowly otherwise.
-        bool near = _hoverSince != 0 || leftDown || IslandContains(cursor, (int)Math.Round(HoverNearDip * _monitor.Scale));
+        bool near = _hoverSince != 0 || leftDown || onBubble || IslandContains(cursor, (int)Math.Round(HoverNearDip * _monitor.Scale));
         var interval = TimeSpan.FromMilliseconds(near ? HoverPollMs : HoverIdlePollMs);
         if (_hoverTimer.Interval != interval)
         {
@@ -466,10 +483,11 @@ public partial class IslandWindow : Window
         _collapsedH.Step(dt);
         _compact.Step(dt);
         _hide.Step(dt);
+        _bubble.Step(dt);
 
         bool settled = _progress.SettleIfClose(0.0005, 0.01) & _collapsedW.SettleIfClose(0.05, 0.5)
                        & _collapsedH.SettleIfClose(0.05, 0.5) & _compact.SettleIfClose(0.002, 0.02)
-                       & _hide.SettleIfClose(0.002, 0.02);
+                       & _hide.SettleIfClose(0.002, 0.02) & _bubble.SettleIfClose(0.002, 0.02);
         ApplyLayout(settled);
         if (settled)
         {
@@ -548,9 +566,29 @@ public partial class IslandWindow : Window
         ExpandedScale.ScaleX = zoom;
         ExpandedScale.ScaleY = zoom;
 
+        // Privacy dot at the island's right end, vertically centred on the closed island; it fades as the island opens.
+        double dotOpacity = _privacyDot ? 1 - opening : 0;
+        PrivacyDot.Opacity = dotOpacity;
+        PrivacyDot.Visibility = dotOpacity > 0.001 ? Visibility.Visible : Visibility.Collapsed;
+        PrivacyDot.Margin = new Thickness(0, Math.Max(0, ch / 2 - 3), 10, 0);
+
+        // Split island: the bubble slides out from under the island's right end and fades in; it hides while the island is open.
+        double b = Math.Max(0, _bubble.Value);
+        double islandHalf = w / 2 + shoulder;
+        double bubbleOpacity = Math.Clamp(b * 1.6 - 0.2, 0, 1) * (1 - opening) * (1 - Math.Clamp(_hide.Value, 0, 1));
+        BubbleShift.X = Lerp(islandHalf - BubbleWidth / 2 - 6, islandHalf + BubbleGap + BubbleWidth / 2, b);
+        Bubble.Height = Math.Max(1, ch);
+        Bubble.Opacity = bubbleOpacity;
+        Bubble.Visibility = bubbleOpacity > 0.001 ? Visibility.Visible : Visibility.Hidden;
+
         // Window: exactly the island when settled; while animating, big enough for where the springs are heading.
         double scale = _monitor.Scale;
         int needW = (int)Math.Ceiling((w + 2 * shoulder) * scale);
+        if (_bubble.Target > 0.5 || b > 0.001)
+        {
+            needW = Math.Max(needW, (int)Math.Ceiling(2 * (islandHalf + BubbleGap + BubbleWidth) * scale * 1.04));
+        }
+
         int needH = (int)Math.Ceiling((h + (_expanded || panel > 0.001 ? SwitcherSpace : 0)) * scale);
         int winW = _winW, winH = _winH;
         if (settled)
@@ -564,6 +602,10 @@ public partial class IslandWindow : Window
             double headW = Math.Max(Lerp(_collapsedW.Target, ExpandedWidth, t), w) * (t > 0.5 ? Overshoot : 1.04);
             double headH = Math.Max(Lerp(_collapsedH.Target, ExpandedHeight, t), h) * (t > 0.5 ? Overshoot : 1.04);
             winW = Math.Max(needW, (int)Math.Ceiling((headW + 2 * ShoulderOpen) * scale));
+            if (_bubble.Target > 0.5)
+            {
+                winW = Math.Max(winW, (int)Math.Ceiling((_collapsedW.Target + 2 * ShoulderOpen + 2 * (BubbleGap + BubbleWidth)) * scale * 1.06));
+            }
             winH = Math.Max(needH, (int)Math.Ceiling((headH + (t > 0.5 ? SwitcherSpace : 0)) * scale));
         }
 
@@ -623,6 +665,7 @@ public partial class IslandWindow : Window
             _collapsedH.Snap(_collapsedH.Target);
             _compact.Snap(_compact.Target);
             _hide.Snap(_hide.Target);
+            _bubble.Snap(_bubble.Target);
             ApplyLayout(settled: true);
             OnSettled();
         }
@@ -867,9 +910,11 @@ public partial class IslandWindow : Window
         if (content != null)
         {
             double side = Math.Max(content.LeftWidth, content.RightWidth) + CompactPad;
-            targetW = Math.Max(CollapsedWidth, CompactGap + 2 * side);
+            targetW = Math.Max(CollapsedWidth, CompactGap + 2 * side) + (_privacyDot ? 2 * DotSpace : 0);
             targetH = CollapsedHeight + content.ExtraHeight;
         }
+
+        _activities.RightView.Margin = new Thickness(0, 0, CompactPad + (_privacyDot && content != null ? DotSpace : 0), 0);
 
         _collapsedW.Target = targetW;
         _collapsedH.Target = targetH;
@@ -892,6 +937,75 @@ public partial class IslandWindow : Window
         }
 
         UpdateSlide();
+    }
+
+    // ---- Privacy dot, split island ------------------------------------------------------------------
+
+    /// <summary>An app started or stopped using the camera (green dot) or the microphone (orange dot).</summary>
+    public void SetPrivacy(bool camera, bool microphone, string tooltip)
+    {
+        bool dot = camera || microphone;
+        PrivacyDot.Fill = new SolidColorBrush(camera ? Color.FromRgb(0x30, 0xD1, 0x58) : Color.FromRgb(0xFF, 0x9F, 0x0A));
+        PrivacyDot.ToolTip = tooltip;
+        if (dot != _privacyDot)
+        {
+            _privacyDot = dot;
+            OnCompactChanged(); // the island makes room for the dot next to live content
+        }
+    }
+
+    /// <summary>The bubble got a live activity or lost it: spring it out or back under the island.</summary>
+    private void OnSecondaryChanged()
+    {
+        double target = _activities.Secondary != null ? 1 : 0;
+        if (Math.Abs(_bubble.Target - target) < 0.5)
+        {
+            return;
+        }
+
+        _bubble.Target = target;
+        if (AnimationSettings.IsOff || _hwnd == IntPtr.Zero)
+        {
+            _bubble.Snap(target);
+            ApplyLayout(settled: !_loop.IsRunning);
+        }
+        else
+        {
+            AnimationSettings.Configure(_bubble, 360, target > 0.5 ? 0.72 : 1.0);
+            _loop.Start();
+        }
+    }
+
+    /// <summary>Is the point over the bubble (while it is out and the island closed)?</summary>
+    private bool BubbleContains(NativeMethods.POINT p)
+    {
+        if (_expanded || _bubble.Target < 0.5 || _bubble.Value < 0.9 || IsSlidAway)
+        {
+            return false;
+        }
+
+        double scale = _monitor.Scale;
+        double centre = _monitor.Left + _monitor.Width / 2.0 + BubbleShift.X * scale;
+        double half = (BubbleWidth / 2 - 6) * scale;
+        double bottom = _monitor.Top + Math.Max(1, _collapsedH.Value) * scale;
+        return p.X >= centre - half && p.X < centre + half && p.Y >= _monitor.Top && p.Y < bottom;
+    }
+
+    /// <summary>Resting on the bubble opens the island on the bubble activity's tab (or page).</summary>
+    private void ExpandOnBubble()
+    {
+        IPillActivity? secondary = _activities.Secondary;
+        string? tab = secondary switch
+        {
+            IOpensTab page => page.TabId,
+            { } live when _activities.TabActivities.Contains(live) => live.Id,
+            _ => null,
+        };
+        Expand(tab);
+        if (secondary is IOpensTab opens)
+        {
+            opens.Reveal();
+        }
     }
 
     /// <summary>A fullscreen app is (or is no longer) in front: slide the island away, unless a HUD that may show over it is up.</summary>

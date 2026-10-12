@@ -66,6 +66,10 @@ public sealed class AppSettings : NotifyBase
     private bool _showCapsLockHud = true;
     private bool _showFocusHud = true;
     private bool _showSilentHud = true;
+    private bool _showPrivacyDots = true;
+    private bool _showDownloads = true;
+    private bool _downloadsToShelf = true;
+    private bool _splitIsland = true;
     private bool _hideInFullscreen = true;
     private bool _showVolumeHudInFullscreen;
     private AccentPreset _accent = AccentPreset.Blue;
@@ -152,6 +156,18 @@ public sealed class AppSettings : NotifyBase
 
     /// <summary>Muting the sound shows "Silent Mode On" (a ringing bell) instead of the volume bar.</summary>
     public bool ShowSilentHud { get => _showSilentHud; set => SetField(ref _showSilentHud, value); }
+
+    /// <summary>A green dot (camera) or orange dot (microphone) on the island while an app uses them.</summary>
+    public bool ShowPrivacyDots { get => _showPrivacyDots; set => SetField(ref _showPrivacyDots, value); }
+
+    /// <summary>Browser downloads into the Downloads folder: a ring while they run, then the file to drag out.</summary>
+    public bool ShowDownloads { get => _showDownloads; set => SetField(ref _showDownloads, value); }
+
+    /// <summary>Finished downloads are also put on the shelf.</summary>
+    public bool DownloadsToShelf { get => _downloadsToShelf; set => SetField(ref _downloadsToShelf, value); }
+
+    /// <summary>A second live activity shows in a round bubble beside the island.</summary>
+    public bool SplitIsland { get => _splitIsland; set => SetField(ref _splitIsland, value); }
 
     // ---- Fullscreen ----
     public bool HideInFullscreen { get => _hideInFullscreen; set => SetField(ref _hideInFullscreen, value); }

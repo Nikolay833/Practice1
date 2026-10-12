@@ -52,6 +52,10 @@
                         </Grid.ColumnDefinitions>
                     </Grid>
 
+                    <!-- Privacy dot: green while an app uses the camera, orange while one uses the microphone (like iOS). -->
+                    <Ellipse x:Name="PrivacyDot" Width="6" Height="6" HorizontalAlignment="Right" VerticalAlignment="Top"
+                             Margin="0,13,10,0" Visibility="Collapsed" IsHitTestVisible="False"/>
+
                     <!-- Expanded panel (fixed size; the island clips it while animating). -->
                     <Grid x:Name="ExpandedPanel" Width="640" Height="190" VerticalAlignment="Top" HorizontalAlignment="Center"
                           Opacity="0" Visibility="Hidden" IsHitTestVisible="False" RenderTransformOrigin="0.5,0">
@@ -72,6 +76,24 @@
 
                 </Grid>
             </Border>
+        </Grid>
+
+        <!-- Split island: a second live activity in a small bubble to the right of the island, like the iPhone. -->
+        <Grid x:Name="Bubble" Grid.Row="0" HorizontalAlignment="Center" VerticalAlignment="Top" Width="44" Height="32"
+              Visibility="Hidden" IsHitTestVisible="False" Opacity="0">
+            <Grid.RenderTransform>
+                <TranslateTransform x:Name="BubbleShift"/>
+            </Grid.RenderTransform>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="6"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="6"/>
+            </Grid.ColumnDefinitions>
+            <Path Grid.Column="0" VerticalAlignment="Top" Width="6" Height="6" Stretch="Fill"
+                  Fill="{StaticResource BlackBrush}" Data="M0,0 L1,0 L1,1 A1,1 0 0 0 0,0 Z"/>
+            <Path Grid.Column="2" VerticalAlignment="Top" Width="6" Height="6" Stretch="Fill"
+                  Fill="{StaticResource BlackBrush}" Data="M1,0 L0,0 L0,1 A1,1 0 0 1 1,0 Z"/>
+            <Border x:Name="BubbleBody" Grid.Column="1" Background="{StaticResource BlackBrush}" CornerRadius="0,0,14,14"/>
         </Grid>
 
         <!-- Floating tab switcher under the open island: a glass capsule of icon tabs, and a round settings button. -->

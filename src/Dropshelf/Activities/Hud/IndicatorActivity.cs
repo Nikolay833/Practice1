@@ -57,6 +57,9 @@ internal sealed class IndicatorActivity : PillActivityBase, IDisposable
 
     public override CompactContent? CreateCompact() => _content;
 
+    /// <summary>Hides other Caps Lock popups while ours shows.</summary>
+    public OsdSuppressor? Osd { get; set; }
+
     /// <summary>Starts or stops the watchers to match Settings.</summary>
     public void ApplySettings()
     {
@@ -88,6 +91,11 @@ internal sealed class IndicatorActivity : PillActivityBase, IDisposable
         bool on = (NativeMethods.GetKeyState(NativeMethods.VK_CAPITAL) & 1) != 0;
         if (_caps is { } was && was != on)
         {
+            if (_settings.Current.ReplaceWindowsOsd)
+            {
+                Osd?.Suppress(this); // a laptop maker's Caps Lock popup, if there is one
+            }
+
             Show(IndicatorKind.CapsLock, on);
         }
 

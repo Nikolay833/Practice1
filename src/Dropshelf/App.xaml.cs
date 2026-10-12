@@ -57,6 +57,7 @@ public partial class App : Application
     private ClipboardWindow? _clipboardWindow;
     private SettingsWindow? _settingsWindow;
     private bool _clipboardHotkeyRegistered;
+    private bool _volumeKeysOwned;
     private ThemeService? _theme;
     private ActivityHost? _activityHost;
     private AudioEndpointService? _audio;
@@ -202,6 +203,7 @@ public partial class App : Application
             _activityHost.SetFullscreen(fullscreen);
             _island.SetFullscreen(fullscreen);
             _osd?.SetIslandVisible(!fullscreen); // the island is hidden: give Windows' own volume popup back meanwhile
+            ApplyVolumeKeys();
         };
         if (_fullscreen.IsFullscreen)
         {
@@ -264,6 +266,7 @@ public partial class App : Application
 
         _settings.Changed += OnSettingChanged;
         ApplyMouseHookSetting();
+        ApplyVolumeKeys();
         ApplyClipboardSetting();
         ApplyScreenshotSetting();
         ScheduleOneTimeNotices();
@@ -545,10 +548,13 @@ public partial class App : Application
                 _shelf?.ApplySettings();
                 break;
             case nameof(AppSettings.ReplaceWindowsOsd):
+            case nameof(AppSettings.ShowVolumeHud):
                 if (_osd != null)
                 {
                     _osd.Enabled = _settings.Current.ReplaceWindowsOsd;
                 }
+
+                ApplyVolumeKeys();
 
                 break;
             case nameof(AppSettings.ShowCapsLockHud):
@@ -673,6 +679,45 @@ public partial class App : Application
         else
         {
             _mouseHook!.Uninstall();
+        }
+    }
+
+    /// <summary>
+    /// The cleanest way to keep Windows' volume popup away: Dropshelf takes the volume keys itself (RegisterHotKey, no hook),
+    /// so Windows never sees them and never shows its popup; Dropshelf changes the volume in the same 2 % steps and the island
+    /// shows it. Only while the island is on screen and "Hide the Windows popups" and the volume HUD are on: in a fullscreen
+    /// app (island hidden) the keys go back to Windows. Keys another app already owns stay with it (the popup hider covers them).
+    /// </summary>
+    private void ApplyVolumeKeys()
+    {
+        if (_hotkeys == null || _settings == null)
+        {
+            return;
+        }
+
+        bool own = _audio is { IsAvailable: true } && _volume != null && _settings.Current.ReplaceWindowsOsd
+                   && _settings.Current.ShowVolumeHud && _fullscreen?.IsFullscreen != true;
+        if (own == _volumeKeysOwned)
+        {
+            return;
+        }
+
+        _volumeKeysOwned = own;
+        if (own)
+        {
+            bool up = _hotkeys.Register(HotkeyService.VolumeUpId, 0, 0xAF, () => _audio!.StepVolume(+1), repeat: true);
+            bool down = _hotkeys.Register(HotkeyService.VolumeDownId, 0, 0xAE, () => _audio!.StepVolume(-1), repeat: true);
+            bool mute = _hotkeys.Register(HotkeyService.VolumeMuteId, 0, 0xAD, () => _audio!.SetMuted(!_audio.Muted));
+            if (!(up && down && mute))
+            {
+                Log.Info("Some volume keys are used by another app; Windows keeps those (its popup is hidden instead)");
+            }
+        }
+        else
+        {
+            _hotkeys.Unregister(HotkeyService.VolumeUpId);
+            _hotkeys.Unregister(HotkeyService.VolumeDownId);
+            _hotkeys.Unregister(HotkeyService.VolumeMuteId);
         }
     }
 

@@ -11,6 +11,9 @@ internal sealed class HotkeyService : IDisposable
     public const int ClipboardId = 2;
     public const int ScreenshotId = 3;
     public const int NotesId = 4;
+    public const int VolumeUpId = 5;
+    public const int VolumeDownId = 6;
+    public const int VolumeMuteId = 7;
 
     private readonly MessageWindow _window;
     private readonly Dictionary<int, Action> _actions = new();
@@ -21,11 +24,14 @@ internal sealed class HotkeyService : IDisposable
         _window.HotkeyPressed += OnHotkey;
     }
 
-    /// <summary>Registers a hotkey. Returns false when another app already owns the combination.</summary>
-    public bool Register(int id, uint modifiers, uint virtualKey, Action action)
+    /// <summary>
+    /// Registers a hotkey. Returns false when another app already owns the combination. With <paramref name="repeat"/> a held
+    /// key keeps firing (the volume keys).
+    /// </summary>
+    public bool Register(int id, uint modifiers, uint virtualKey, Action action, bool repeat = false)
     {
         Unregister(id);
-        if (!NativeMethods.RegisterHotKey(_window.Handle, id, modifiers | NativeMethods.MOD_NOREPEAT, virtualKey))
+        if (!NativeMethods.RegisterHotKey(_window.Handle, id, modifiers | (repeat ? 0 : NativeMethods.MOD_NOREPEAT), virtualKey))
         {
             Log.Error($"RegisterHotKey failed for id {id} (already in use?)");
             return false;

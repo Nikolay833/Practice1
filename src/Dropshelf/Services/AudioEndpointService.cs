@@ -102,6 +102,26 @@ internal sealed class AudioEndpointService : IDisposable
 
     public void AdjustVolume(float delta) => SetVolume(Volume + delta);
 
+    /// <summary>The volume keys' step: 2 % up or down, landing on whole 2 % steps like Windows does.</summary>
+    public void StepVolume(int direction) => SetVolume((float)(Math.Round(Volume * 50) + direction) / 50f);
+
+    public void SetMuted(bool muted)
+    {
+        if (_volume == null)
+        {
+            return;
+        }
+
+        try
+        {
+            _volume.SetMute(muted, ref _context);
+        }
+        catch (Exception ex) when (ex is COMException or InvalidComObjectException)
+        {
+            Log.Error("SetMute failed", ex);
+        }
+    }
+
     /// <summary>Peak output level 0..1 right now (0 when there is no meter or the call fails).</summary>
     public float PeakLevel()
     {

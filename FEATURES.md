@@ -438,6 +438,11 @@ Setting: *Now Playing* (on by default).
   (muted / low / medium / high), a white bar and the percentage.
 - **Brightness:** the same for a laptop screen's brightness (desktop monitors usually do not report brightness to
   Windows, so then nothing is shown).
+- **Takes over the volume keys:** Windows has no setting to turn its volume pop-up off, so while the island is on screen
+  Dropshelf registers the volume up / down / mute keys itself (an ordinary global shortcut, no keyboard hook). Windows then
+  never receives them and never shows its pop-up; Dropshelf changes the volume in the same 2 % steps and the island shows
+  it. In a fullscreen app (island hidden) or with *Hide the Windows popups* off, the keys go back to Windows. If another
+  app already owns a volume key, Windows keeps that one and the pop-up hiding below covers it.
 - **Hides Windows' own pop-ups:** by default Dropshelf hides Windows' built-in volume / brightness / media box, also while
   the island is open. Windows tells Dropshelf the moment any window appears (an accessibility "window shown" event, nothing
   is injected into other programs), and the pop-up is hidden in that same instant, before it is really drawn. On Windows

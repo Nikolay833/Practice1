@@ -571,7 +571,7 @@ internal sealed class OsdSuppressor : IDisposable
     {
         try
         {
-            NativeMethods.EnumWindows((hwnd, _) =>
+            NativeMethods.EnumWindows((hwnd, unused) =>
             {
                 NativeMethods.GetWindowThreadProcessId(hwnd, out uint pid);
                 lock (_gate)

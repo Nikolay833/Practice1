@@ -301,7 +301,8 @@ internal sealed class OsdSuppressor : IDisposable
     }
 
     private static bool VolumeKeyDown() =>
-        ((NativeMethods.GetAsyncKeyState(0xAD) | NativeMethods.GetAsyncKeyState(0xAE) | NativeMethods.GetAsyncKeyState(0xAF)) & 0x8000) != 0;
+        (NativeMethods.GetAsyncKeyState(0xAD) & 0x8000) != 0 || (NativeMethods.GetAsyncKeyState(0xAE) & 0x8000) != 0
+        || (NativeMethods.GetAsyncKeyState(0xAF) & 0x8000) != 0; // mute, volume down, volume up
 
     /// <summary>
     /// A transparent explorer XAML window that covers the whole monitor and has no title (Alt+Tab, Task View and Snap Assist

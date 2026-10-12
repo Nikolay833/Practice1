@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
 using System.Windows.Threading;
 using Dropshelf.Interop;
 using Dropshelf.Services;
@@ -39,6 +40,8 @@ internal sealed class OsdSuppressor : IDisposable
     private const int DWMWA_CLOAKED = 14;
     private const int SW_SHOWNA = 8;
     private const int MaxLoggedCandidates = 40;
+    private const uint SWP_NOZORDER = 0x0004;
+    private const uint SWP_ASYNCWINDOWPOS = 0x4000;
 
     private readonly DispatcherTimer _timer;
     private readonly WinEventDelegate _callback;     // kept alive while the hook exists
@@ -46,7 +49,10 @@ internal sealed class OsdSuppressor : IDisposable
     private readonly HashSet<IntPtr> _hiddenShell = new();
     private readonly HashSet<IntPtr> _osdHosts = new();      // explorer windows found to carry the volume / brightness popup
     private readonly HashSet<IntPtr> _loggedWindows = new();
-    private readonly List<IntPtr> _hooks = new();
+    private readonly Dictionary<IntPtr, NativeMethods.RECT> _movedHosts = new();   // full-screen hosts parked off screen
+    private readonly object _gate = new();          // the hook thread and the UI thread both judge windows
+    private Thread? _hookThread;
+    private uint _hookThreadId;
     private readonly List<(IntPtr Hwnd, long At)> _recent = new();   // windows shown in the last moment, for a late burst
     private int _ticksLeft;
     private uint _shellPid;
@@ -73,10 +79,10 @@ internal sealed class OsdSuppressor : IDisposable
     public Func<IPillActivity, bool>? Gate { get; set; }
 
     /// <summary>
-    /// Asked when a maker's popup appears outside a burst: did Caps Lock just change? (It reads the key state right away, so
-    /// the island's Caps Lock pill and the hiding happen at the same moment.)
+    /// A maker's Caps Lock popup was just hidden (raised on the hook thread): the island should read Caps Lock right away, so
+    /// its own pill appears at the same moment.
     /// </summary>
-    public Func<bool>? CapsLockJustChanged { get; set; }
+    public Action? CapsPopupSeen { get; set; }
 
     /// <summary>The "Hide the Windows popups" setting: installs or removes the hook.</summary>
     public bool Enabled
@@ -120,7 +126,7 @@ internal sealed class OsdSuppressor : IDisposable
             return;
         }
 
-        _burstUntil = Environment.TickCount64 + 1500;
+        Interlocked.Exchange(ref _burstUntil, Environment.TickCount64 + 1500);
         _ticksLeft = Ticks;
         if (!_timer.IsEnabled)
         {
@@ -129,7 +135,14 @@ internal sealed class OsdSuppressor : IDisposable
 
         // The popup may have appeared a moment before we heard of the change: look at what was just shown, with the burst's rules.
         long now = Environment.TickCount64;
-        foreach ((IntPtr hwnd, long at) in _recent.ToArray())
+        (IntPtr Hwnd, long At)[] recent;
+        lock (_gate)
+        {
+            recent = _recent.ToArray();
+            _recent.Clear();
+        }
+
+        foreach ((IntPtr hwnd, long at) in recent)
         {
             if (now - at < 700 && NativeMethods.IsWindow(hwnd) && NativeMethods.IsWindowVisible(hwnd))
             {
@@ -137,36 +150,72 @@ internal sealed class OsdSuppressor : IDisposable
             }
         }
 
-        _recent.Clear();
         Scan();
     }
 
     // ---- Events -------------------------------------------------------------------------------------
 
+    /// <summary>
+    /// The hook lives on its own thread with its own message loop, so a popup is judged and hidden within a millisecond of
+    /// appearing, even while the UI thread is busy drawing the island (a busy UI thread let a frame of it through).
+    /// </summary>
     private void InstallHooks()
     {
-        foreach (uint evt in new[] { EVENT_OBJECT_SHOW, EVENT_OBJECT_UNCLOAKED })
+        if (_hookThread != null)
         {
-            IntPtr hook = SetWinEventHook(evt, evt, IntPtr.Zero, _callback, 0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
-            if (hook != IntPtr.Zero)
-            {
-                _hooks.Add(hook);
-            }
-            else
-            {
-                Log.Info($"Popup hook {evt:X} could not be installed");
-            }
+            return;
         }
+
+        using var ready = new ManualResetEventSlim();
+        var thread = new Thread(() =>
+        {
+            _hookThreadId = NativeMethods.GetCurrentThreadId();
+            var hooks = new List<IntPtr>();
+            foreach (uint evt in new[] { EVENT_OBJECT_SHOW, EVENT_OBJECT_UNCLOAKED })
+            {
+                IntPtr hook = SetWinEventHook(evt, evt, IntPtr.Zero, _callback, 0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+                if (hook != IntPtr.Zero)
+                {
+                    hooks.Add(hook);
+                }
+                else
+                {
+                    Log.Info($"Popup hook {evt:X} could not be installed");
+                }
+            }
+
+            ready.Set();
+            while (NativeMethods.GetMessage(out NativeMethods.MSG msg, IntPtr.Zero, 0, 0) > 0)
+            {
+                // Only WinEvent callbacks arrive here; nothing to translate.
+            }
+
+            foreach (IntPtr hook in hooks)
+            {
+                UnhookWinEvent(hook);
+            }
+        })
+        {
+            IsBackground = true,
+            Name = "Dropshelf popup hook",
+            Priority = ThreadPriority.AboveNormal,
+        };
+        thread.Start();
+        ready.Wait(2000);
+        _hookThread = thread;
     }
 
     private void RemoveHooks()
     {
-        foreach (IntPtr hook in _hooks)
+        Thread? thread = _hookThread;
+        if (thread == null)
         {
-            UnhookWinEvent(hook);
+            return;
         }
 
-        _hooks.Clear();
+        _hookThread = null;
+        NativeMethods.PostThreadMessage(_hookThreadId, 0x0012 /* WM_QUIT */, UIntPtr.Zero, IntPtr.Zero);
+        thread.Join(1000);
     }
 
     private void OnWinEvent(IntPtr hook, uint evt, IntPtr hwnd, int idObject, int idChild, uint thread, uint time)
@@ -178,17 +227,20 @@ internal sealed class OsdSuppressor : IDisposable
 
         try
         {
-            if (_recent.Count >= 32)
+            lock (_gate)
             {
-                _recent.RemoveAt(0);
-            }
+                if (_recent.Count >= 32)
+                {
+                    _recent.RemoveAt(0);
+                }
 
-            _recent.Add((hwnd, Environment.TickCount64));
+                _recent.Add((hwnd, Environment.TickCount64));
+            }
 
             // A volume key held right now: the popup is on its way, even before the volume change reaches us.
             if (VolumeKeyDown())
             {
-                _burstUntil = Math.Max(_burstUntil, Environment.TickCount64 + 1500);
+                Interlocked.Exchange(ref _burstUntil, Math.Max(Interlocked.Read(ref _burstUntil), Environment.TickCount64 + 1500));
             }
 
             Consider(hwnd, fromEvent: true);
@@ -225,6 +277,14 @@ internal sealed class OsdSuppressor : IDisposable
     /// <summary>Hides <paramref name="hwnd"/> if it is one of the popups the island replaces.</summary>
     private void Consider(IntPtr hwnd, bool fromEvent)
     {
+        lock (_gate)
+        {
+            ConsiderLocked(hwnd, fromEvent);
+        }
+    }
+
+    private void ConsiderLocked(IntPtr hwnd, bool fromEvent)
+    {
         // Windows 11 shows the flyout's inner content window first (a DesktopWindowContentBridge, while the flyout still sits
         // just below the bottom edge before it slides up): judge, and hide, the top-level window it belongs to.
         IntPtr root = NativeMethods.GetAncestor(hwnd, 2 /* GA_ROOT */);
@@ -241,7 +301,7 @@ internal sealed class OsdSuppressor : IDisposable
             return;
         }
 
-        bool inBurst = Environment.TickCount64 < _burstUntil;
+        bool inBurst = Environment.TickCount64 < Interlocked.Read(ref _burstUntil);
         if (pid == ShellPid())
         {
             string cls = ClassOf(hwnd);
@@ -259,6 +319,14 @@ internal sealed class OsdSuppressor : IDisposable
             {
                 NativeMethods.ShowWindow(hwnd, NativeMethods.SW_HIDE);
                 _hiddenShell.Add(hwnd);
+                if ((fullScreenHost || known) && !_movedHosts.ContainsKey(hwnd) && NativeMethods.GetWindowRect(hwnd, out var at))
+                {
+                    // Also park it far off screen: if Windows shows it again before we hear of it, nothing is visible.
+                    _movedHosts[hwnd] = at;
+                    NativeMethods.SetWindowPos(hwnd, IntPtr.Zero, -32000, -32000, 0, 0,
+                        NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE | SWP_NOZORDER | SWP_ASYNCWINDOWPOS);
+                }
+
                 if (fullScreenHost && _osdHosts.Add(hwnd))
                 {
                     Log.Info($"Popup host found: '{cls}' '{TitleOf(hwnd)}'");
@@ -282,13 +350,19 @@ internal sealed class OsdSuppressor : IDisposable
             return;
         }
 
-        if (IsVendorOsd(pid))
+        if (IsVendorOsd(pid, out bool lockKeysOsd))
         {
-            // A maker's popup: hide it when it belongs to something the island shows right now.
-            bool related = inBurst || (CapsLockJustChanged?.Invoke() ?? false);
+            // A maker's popup: hide it when it belongs to something the island shows right now. Lenovo's Caps Lock / Num Lock
+            // helper only ever shows those, and the Caps Lock key is still down when its popup appears.
+            bool caps = lockKeysOsd || CapsKeyDown();
+            bool related = inBurst || caps || VolumeKeyDown();
             if (related && Size(hwnd, out _, out _))
             {
                 NativeMethods.ShowWindow(hwnd, NativeMethods.SW_HIDE);
+                if (caps)
+                {
+                    CapsPopupSeen?.Invoke();
+                }
             }
 
             return;
@@ -385,28 +459,38 @@ internal sealed class OsdSuppressor : IDisposable
     }
 
     /// <summary>Is <paramref name="pid"/> a laptop maker's on-screen display (by its process name)? Cached per process.</summary>
-    private bool IsVendorOsd(uint pid)
+    private bool IsVendorOsd(uint pid, out bool lockKeys)
     {
-        if (_vendorOsd.TryGetValue(pid, out bool known))
+        lockKeys = false;
+        if (!_vendorOsd.TryGetValue(pid, out bool osd))
         {
-            return known;
+            osd = false;
+            string name = ProcessName(pid);
+            foreach (string part in new[] { "osd", "hotkey", "capslk", "numlk" })
+            {
+                osd |= name.Contains(part, StringComparison.OrdinalIgnoreCase);
+            }
+
+            if (_vendorOsd.Count > 512)
+            {
+                _vendorOsd.Clear();
+                _lockKeyOsd.Clear();
+            }
+
+            _vendorOsd[pid] = osd;
+            if (name.Contains("capslk", StringComparison.OrdinalIgnoreCase) || name.Contains("numlk", StringComparison.OrdinalIgnoreCase))
+            {
+                _lockKeyOsd.Add(pid);
+            }
         }
 
-        bool osd = false;
-        string name = ProcessName(pid);
-        foreach (string part in new[] { "osd", "hotkey", "capslk", "numlk" })
-        {
-            osd |= name.Contains(part, StringComparison.OrdinalIgnoreCase);
-        }
-
-        if (_vendorOsd.Count > 512)
-        {
-            _vendorOsd.Clear();
-        }
-
-        _vendorOsd[pid] = osd;
+        lockKeys = _lockKeyOsd.Contains(pid);
         return osd;
     }
+
+    private readonly HashSet<uint> _lockKeyOsd = new();
+
+    private static bool CapsKeyDown() => (NativeMethods.GetAsyncKeyState(NativeMethods.VK_CAPITAL) & 0x8000) != 0;
 
     private static string ProcessName(uint pid)
     {
@@ -423,6 +507,24 @@ internal sealed class OsdSuppressor : IDisposable
 
     /// <summary>Gives back Windows' flyout (only while it is cloaked, so nothing stale ever appears on screen).</summary>
     private void RestoreShell()
+    {
+        lock (_gate)
+        {
+            foreach ((IntPtr host, NativeMethods.RECT at) in _movedHosts)
+            {
+                if (NativeMethods.IsWindow(host))
+                {
+                    NativeMethods.SetWindowPos(host, IntPtr.Zero, at.Left, at.Top, 0, 0,
+                        NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE | SWP_NOZORDER | SWP_ASYNCWINDOWPOS);
+                }
+            }
+
+            _movedHosts.Clear();
+            RestoreShellLocked();
+        }
+    }
+
+    private void RestoreShellLocked()
     {
         foreach (IntPtr hwnd in _hiddenShell)
         {

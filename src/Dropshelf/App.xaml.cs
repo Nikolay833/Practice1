@@ -169,6 +169,17 @@ public partial class App : Application
 
         _messages = new MessageWindow();
         _hotkeys = new HotkeyService(_messages);
+
+        // The screen brightness changed (keys, slider, Lenovo's driver): Windows says so at once, well before WMI reports it,
+        // so the popup hider is already on the lookout when Windows' brightness popup appears.
+        _messages.WatchBrightness();
+        _messages.BrightnessChanged += () =>
+        {
+            if (_brightness != null && _settings.Current.ReplaceWindowsOsd && _settings.Current.ShowBrightnessHud)
+            {
+                _osd?.Suppress(_brightness);
+            }
+        };
         _clipboard = new ClipboardHistoryService(_messages, _settings);
 
         _mouseHook = new MouseHook();
@@ -307,7 +318,8 @@ public partial class App : Application
         TryStep("indicators", () =>
         {
             _indicator = new IndicatorActivity(_settings!) { Osd = _osd };
-            _osd.CapsLockJustChanged = _indicator.CapsJustChanged;
+            IndicatorActivity indicator = _indicator;
+            _osd.CapsPopupSeen = () => Dispatcher.BeginInvoke(DispatcherPriority.Send, new Action(() => indicator.CapsJustChanged()));
             _activityHost!.Register(_indicator);
         });
 

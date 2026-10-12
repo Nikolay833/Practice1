@@ -44,6 +44,8 @@ internal sealed class OsdSuppressor : IDisposable
     private readonly WinEventDelegate _callback;     // kept alive while the hook exists
     private readonly Dictionary<uint, bool> _vendorOsd = new();   // pid -> a maker's on-screen display?
     private readonly HashSet<IntPtr> _hiddenShell = new();
+    private readonly HashSet<IntPtr> _osdHosts = new();      // explorer windows found to carry the volume / brightness popup
+    private readonly HashSet<IntPtr> _loggedWindows = new();
     private readonly List<IntPtr> _hooks = new();
     private readonly List<(IntPtr Hwnd, long At)> _recent = new();   // windows shown in the last moment, for a late burst
     private int _ticksLeft;
@@ -182,6 +184,13 @@ internal sealed class OsdSuppressor : IDisposable
             }
 
             _recent.Add((hwnd, Environment.TickCount64));
+
+            // A volume key held right now: the popup is on its way, even before the volume change reaches us.
+            if (VolumeKeyDown())
+            {
+                _burstUntil = Math.Max(_burstUntil, Environment.TickCount64 + 1500);
+            }
+
             Consider(hwnd, fromEvent: true);
         }
         catch (Exception ex)
@@ -238,10 +247,23 @@ internal sealed class OsdSuppressor : IDisposable
             string cls = ClassOf(hwnd);
             bool xamlHost = cls.StartsWith("XamlExplorerHostIslandWindow", StringComparison.Ordinal)
                             || cls == "Windows.UI.Composition.DesktopWindowContentBridge";
-            if (xamlHost && IsShellFlyout(hwnd, strict: !inBurst))
+
+            // A window already known to carry the popup: hide it the moment it shows, whatever else is going on.
+            bool known = _osdHosts.Contains(hwnd);
+
+            // On some PCs (Windows 11 24H2) the popup is drawn inside a transparent explorer window that covers the whole
+            // screen; it is recognised when it appears right after a volume / brightness change (and is not Alt+Tab, Task
+            // View, Snap and the like, which have a title), then remembered.
+            bool fullScreenHost = xamlHost && inBurst && IsFullScreenHost(hwnd);
+            if (known || (xamlHost && IsShellFlyout(hwnd, strict: !inBurst)) || fullScreenHost)
             {
                 NativeMethods.ShowWindow(hwnd, NativeMethods.SW_HIDE);
                 _hiddenShell.Add(hwnd);
+                if (fullScreenHost && _osdHosts.Add(hwnd))
+                {
+                    Log.Info($"Popup host found: '{cls}' '{TitleOf(hwnd)}'");
+                }
+
                 return;
             }
 
@@ -252,7 +274,7 @@ internal sealed class OsdSuppressor : IDisposable
                 return;
             }
 
-            if (inBurst && fromEvent)
+            if (inBurst && cls != "Shell_TrayWnd")
             {
                 LogCandidate(hwnd, pid, childClass.Length > 0 ? $"{cls} > {childClass}" : cls);
             }
@@ -276,6 +298,31 @@ internal sealed class OsdSuppressor : IDisposable
         {
             LogCandidate(hwnd, pid, ClassOf(hwnd));
         }
+    }
+
+    private static bool VolumeKeyDown() =>
+        ((NativeMethods.GetAsyncKeyState(0xAD) | NativeMethods.GetAsyncKeyState(0xAE) | NativeMethods.GetAsyncKeyState(0xAF)) & 0x8000) != 0;
+
+    /// <summary>
+    /// A transparent explorer XAML window that covers the whole monitor and has no title (Alt+Tab, Task View and Snap Assist
+    /// have one), which is how Windows 11 24H2 hosts the volume and brightness popup on some PCs.
+    /// </summary>
+    private static bool IsFullScreenHost(IntPtr hwnd)
+    {
+        if (!NativeMethods.GetWindowRect(hwnd, out var r))
+        {
+            return false;
+        }
+
+        MonitorInfo monitor = MonitorInfo.FromHandle(NativeMethods.MonitorFromWindow(hwnd, NativeMethods.MONITOR_DEFAULTTONEAREST));
+        bool covers = r.Width >= monitor.Width * 0.9 && r.Height >= monitor.Height * 0.9;
+        return covers && TitleOf(hwnd).Length == 0;
+    }
+
+    private static string TitleOf(IntPtr hwnd)
+    {
+        var title = new StringBuilder(128);
+        return GetWindowText(hwnd, title, title.Capacity) > 0 ? title.ToString() : string.Empty;
     }
 
     /// <summary>
@@ -378,8 +425,9 @@ internal sealed class OsdSuppressor : IDisposable
     {
         foreach (IntPtr hwnd in _hiddenShell)
         {
-            if (NativeMethods.IsWindow(hwnd) && !NativeMethods.IsWindowVisible(hwnd)
-                && DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, out int cloaked, sizeof(int)) == 0 && cloaked != 0)
+            // A full-screen popup host is transparent, so showing it again shows nothing until Windows draws a popup in it.
+            bool cloaked = DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, out int value, sizeof(int)) == 0 && value != 0;
+            if (NativeMethods.IsWindow(hwnd) && !NativeMethods.IsWindowVisible(hwnd) && (cloaked || _osdHosts.Contains(hwnd)))
             {
                 NativeMethods.ShowWindow(hwnd, SW_SHOWNA);
             }
@@ -391,13 +439,14 @@ internal sealed class OsdSuppressor : IDisposable
     /// <summary>Notes a window that appeared right after a volume / brightness / Caps Lock change, to identify stray popups.</summary>
     private void LogCandidate(IntPtr hwnd, uint pid, string cls)
     {
-        if (_logged >= MaxLoggedCandidates || !NativeMethods.GetWindowRect(hwnd, out var r))
+        if (_logged >= MaxLoggedCandidates || !_loggedWindows.Add(hwnd) || !NativeMethods.GetWindowRect(hwnd, out var r))
         {
             return;
         }
 
         _logged++;
-        Log.Info($"Popup candidate after a change: class '{cls}', process '{ProcessName(pid)}', {r.Width}x{r.Height} at {r.Left},{r.Top}");
+        Log.Info($"Popup candidate after a change: class '{cls}', title '{TitleOf(hwnd)}', process '{ProcessName(pid)}', " +
+                 $"{r.Width}x{r.Height} at {r.Left},{r.Top}");
     }
 
     public void Dispose()
@@ -415,6 +464,9 @@ internal sealed class OsdSuppressor : IDisposable
 
     [DllImport("user32.dll")]
     private static extern bool UnhookWinEvent(IntPtr hWinEventHook);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
 
     [DllImport("dwmapi.dll")]
     private static extern int DwmGetWindowAttribute(IntPtr hwnd, int attribute, out int value, int size);

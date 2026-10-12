@@ -154,7 +154,7 @@ internal sealed class WeatherService : IDisposable
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or InvalidOperationException)
         {
             Offline = true;
-            Log.Error("Weather: could not refresh", ex);
+            Log.Info($"Weather: could not refresh ({ex.GetType().Name}: {ex.Message})"); // usually just offline: one line, no stack
         }
         catch (Exception ex)
         {

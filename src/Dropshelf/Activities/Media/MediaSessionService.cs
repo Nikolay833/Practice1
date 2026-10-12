@@ -318,19 +318,33 @@ internal sealed class MediaSessionService : IDisposable
 
         try
         {
-            GlobalSystemMediaTransportControlsSessionPlaybackInfo info = session.GetPlaybackInfo();
+            // A session that is closing can hand back no info or no controls for a moment: keep what we had.
+            GlobalSystemMediaTransportControlsSessionPlaybackInfo? info = session.GetPlaybackInfo();
+            if (info == null)
+            {
+                return;
+            }
+
             Status = info.PlaybackStatus;
             _rate = info.PlaybackRate ?? 1.0;
-            GlobalSystemMediaTransportControlsSessionPlaybackControls c = info.Controls;
-            CanPlayPause = c.IsPlayPauseToggleEnabled || c.IsPlayEnabled || c.IsPauseEnabled;
-            CanNext = c.IsNextEnabled;
-            CanPrevious = c.IsPreviousEnabled;
-            CanSeek = c.IsPlaybackPositionEnabled;
-            CanShuffle = c.IsShuffleEnabled;
-            CanRepeat = c.IsRepeatEnabled;
+            GlobalSystemMediaTransportControlsSessionPlaybackControls? c = info.Controls;
+            if (c != null)
+            {
+                CanPlayPause = c.IsPlayPauseToggleEnabled || c.IsPlayEnabled || c.IsPauseEnabled;
+                CanNext = c.IsNextEnabled;
+                CanPrevious = c.IsPreviousEnabled;
+                CanSeek = c.IsPlaybackPositionEnabled;
+                CanShuffle = c.IsShuffleEnabled;
+                CanRepeat = c.IsRepeatEnabled;
+            }
+
             ShuffleActive = info.IsShuffleActive ?? false;
             RepeatMode = info.AutoRepeatMode ?? Windows.Media.MediaPlaybackAutoRepeatMode.None;
-            SourceApp = FriendlyAppName(session.SourceAppUserModelId);
+            string? appId = session.SourceAppUserModelId;
+            if (!string.IsNullOrEmpty(appId))
+            {
+                SourceApp = FriendlyAppName(appId);
+            }
         }
         catch (Exception ex)
         {

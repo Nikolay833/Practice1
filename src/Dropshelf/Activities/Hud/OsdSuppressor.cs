@@ -216,6 +216,16 @@ internal sealed class OsdSuppressor : IDisposable
     /// <summary>Hides <paramref name="hwnd"/> if it is one of the popups the island replaces.</summary>
     private void Consider(IntPtr hwnd, bool fromEvent)
     {
+        // Windows 11 shows the flyout's inner content window first (a DesktopWindowContentBridge, while the flyout still sits
+        // just below the bottom edge before it slides up): judge, and hide, the top-level window it belongs to.
+        IntPtr root = NativeMethods.GetAncestor(hwnd, 2 /* GA_ROOT */);
+        string childClass = string.Empty;
+        if (root != IntPtr.Zero && root != hwnd)
+        {
+            childClass = ClassOf(hwnd);
+            hwnd = root;
+        }
+
         NativeMethods.GetWindowThreadProcessId(hwnd, out uint pid);
         if (pid == 0 || pid == (uint)Environment.ProcessId)
         {
@@ -226,7 +236,9 @@ internal sealed class OsdSuppressor : IDisposable
         if (pid == ShellPid())
         {
             string cls = ClassOf(hwnd);
-            if (cls == "XamlExplorerHostIslandWindow" && IsShellFlyout(hwnd, strict: !inBurst))
+            bool xamlHost = cls.StartsWith("XamlExplorerHostIslandWindow", StringComparison.Ordinal)
+                            || cls == "Windows.UI.Composition.DesktopWindowContentBridge";
+            if (xamlHost && IsShellFlyout(hwnd, strict: !inBurst))
             {
                 NativeMethods.ShowWindow(hwnd, NativeMethods.SW_HIDE);
                 _hiddenShell.Add(hwnd);
@@ -242,7 +254,7 @@ internal sealed class OsdSuppressor : IDisposable
 
             if (inBurst && fromEvent)
             {
-                LogCandidate(hwnd, pid, cls);
+                LogCandidate(hwnd, pid, childClass.Length > 0 ? $"{cls} > {childClass}" : cls);
             }
 
             return;
@@ -283,9 +295,11 @@ internal sealed class OsdSuppressor : IDisposable
         double monitorCentre = monitor.Left + monitor.Width / 2.0;
         double w = r.Width / monitor.Scale, h = r.Height / monitor.Scale;
         bool centred = Math.Abs(centre - monitorCentre) < monitor.Width * 0.1;
+        // Either the small box itself, or the strip it slides up in: as wide as the screen, short, at (or below) the bottom edge.
+        bool strip = r.Width >= monitor.Width * 0.9 && h <= 160 && r.Top > monitor.Top + monitor.Height * 0.75;
         return strict
-            ? centred && w <= 420 && h <= 140 && r.Top > monitor.Top + monitor.Height * 0.7
-            : centred && h <= 420 && r.Top > monitor.Top + monitor.Height * 0.5; // it may be a wide, transparent strip
+            ? strip || (centred && w <= 420 && h <= 140 && r.Top > monitor.Top + monitor.Height * 0.7)
+            : strip || (centred && h <= 420 && r.Top > monitor.Top + monitor.Height * 0.5);
     }
 
     /// <summary>Small enough to be a popup (40-700 x 20-320 DIPs).</summary>

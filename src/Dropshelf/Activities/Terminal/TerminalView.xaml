@@ -1,0 +1,117 @@
+<UserControl x:Class="Dropshelf.Activities.Terminal.TerminalView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- A minimal terminal: the output in a monospaced font, and one prompt line at the bottom. -->
+    <UserControl.Resources>
+        <FontFamily x:Key="Mono">Cascadia Mono, Cascadia Code, Consolas</FontFamily>
+        <SolidColorBrush x:Key="PromptGreen" Color="#FF30D158"/>
+
+        <ControlTemplate x:Key="BareBox" TargetType="TextBox">
+            <ScrollViewer x:Name="PART_ContentHost" Padding="{TemplateBinding Padding}" Focusable="False"
+                          VerticalScrollBarVisibility="{TemplateBinding VerticalScrollBarVisibility}"
+                          HorizontalScrollBarVisibility="{TemplateBinding HorizontalScrollBarVisibility}"/>
+        </ControlTemplate>
+
+        <!-- Shell switch: two words, the chosen one bright. -->
+        <Style x:Key="ShellOption" TargetType="RadioButton">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="Bd" Background="Transparent" CornerRadius="10" Padding="9,3">
+                            <ContentPresenter x:Name="Text" TextElement.Foreground="{StaticResource TextSecondaryBrush}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource HoverBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource FillBrush}"/>
+                                <Setter TargetName="Text" Property="TextElement.Foreground" Value="{StaticResource TextBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="BareGlyph" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Width" Value="26"/>
+            <Setter Property="Height" Value="26"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="FontFamily" Value="{StaticResource IconFont}"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="Transparent" CornerRadius="13">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              TextElement.Foreground="{TemplateBinding Foreground}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource HoverBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Title, shell switch, clear -->
+        <Grid Grid.Row="0" Margin="4,0,0,4">
+            <TextBlock Text="Terminal" Style="{StaticResource TextTitle}" FontSize="15" FontWeight="Bold" VerticalAlignment="Center"/>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                <RadioButton x:Name="PowerShellOption" Content="PowerShell" Style="{StaticResource ShellOption}" GroupName="Shell"
+                             Click="Shell_Click"/>
+                <RadioButton x:Name="CmdOption" Content="CMD" Style="{StaticResource ShellOption}" GroupName="Shell" Margin="2,0,6,0"
+                             Click="Shell_Click"/>
+                <Button Content="&#xE894;" Style="{StaticResource BareGlyph}" ToolTip="Clear (Ctrl+L)" Click="Clear_Click"/>
+            </StackPanel>
+        </Grid>
+
+        <!-- Output (selectable, read-only) -->
+        <TextBox x:Name="OutputBox" Grid.Row="1" IsReadOnly="True" IsReadOnlyCaretVisible="False" TextWrapping="Wrap"
+                 VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Template="{StaticResource BareBox}"
+                 FontFamily="{StaticResource Mono}" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"
+                 SelectionBrush="{StaticResource PromptGreen}" SelectionOpacity="0.35" Padding="4,0" PreviewKeyDown="Output_PreviewKeyDown"/>
+        <TextBlock x:Name="Hint" Grid.Row="1" Style="{StaticResource TextSecondary}" FontFamily="{StaticResource Mono}" FontSize="12"
+                   Foreground="{StaticResource TextDisabledBrush}" Margin="6,0,0,0" IsHitTestVisible="False" TextWrapping="Wrap"
+                   Text="Type a command and press Enter.  cd changes the folder, cls clears, Ctrl+C stops, Esc gives the keyboard back."/>
+
+        <!-- Prompt line -->
+        <Border Grid.Row="2" Margin="0,6,0,0" CornerRadius="10" Background="#14FFFFFF" Padding="10,0,4,0" Height="30">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="PromptText" Grid.Column="0" FontFamily="{StaticResource Mono}" FontSize="12" FontWeight="SemiBold"
+                           Foreground="{StaticResource PromptGreen}" VerticalAlignment="Center" MaxWidth="220"
+                           TextTrimming="CharacterEllipsis"/>
+                <TextBox x:Name="Input" Grid.Column="1" Template="{StaticResource BareBox}" FontFamily="{StaticResource Mono}" FontSize="12"
+                         Foreground="{StaticResource TextBrush}" CaretBrush="{StaticResource PromptGreen}" VerticalAlignment="Center"
+                         SelectionBrush="{StaticResource PromptGreen}" SelectionOpacity="0.35" Padding="6,0,0,0"
+                         PreviewKeyDown="Input_PreviewKeyDown"/>
+                <Button x:Name="StopButton" Grid.Column="2" Content="&#xE71A;" Style="{StaticResource BareGlyph}" Foreground="{StaticResource DangerBrush}"
+                        ToolTip="Stop (Ctrl+C)" Visibility="Collapsed" Click="Stop_Click"/>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

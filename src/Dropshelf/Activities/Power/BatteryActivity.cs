@@ -1,9 +1,9 @@
 using System;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Threading;
-using Dropshelf.Animation;
 using Dropshelf.Activities.Hud;
 using Dropshelf.Services;
 using Microsoft.Win32;
@@ -12,53 +12,51 @@ using WinForms = System.Windows.Forms;
 namespace Dropshelf.Activities.Power;
 
 /// <summary>
-/// Battery HUD: plugging in or unplugging the charger shows the charge level (with a pulsing bolt while charging), a low
-/// battery warning appears at 20 % and 10 % (the glyph pulses red) and a "fully charged" notice when it reaches 100 % on
-/// the charger. State comes from <see cref="WinForms.SystemInformation.PowerStatus"/>, read when
-/// <see cref="SystemEvents.PowerModeChanged"/> fires and every 30 seconds. Machines without a battery never show anything.
+/// Battery HUD, like the iPhone's: plugging the charger in shows "Charging" and the level next to a drawn battery whose green
+/// fill glides up from empty (the percentage counts along), a bolt pops in and a highlight sweeps across it. Unplugging shows
+/// "On Battery", a low battery (20 % and 10 %) breathes red, and reaching 100 % on the charger says "Charged". State comes from
+/// <see cref="WinForms.SystemInformation.PowerStatus"/>, read when <see cref="SystemEvents.PowerModeChanged"/> fires and every
+/// 30 seconds. Machines without a battery never show anything.
 /// </summary>
 internal sealed class BatteryActivity : PillActivityBase, IDisposable
 {
     private enum Mood { Plugged, Unplugged, Low, Critical, Full }
 
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(30);
+    private static readonly Color Green = Color.FromRgb(0x30, 0xD1, 0x58);
+    private static readonly Color Red = Color.FromRgb(0xFF, 0x45, 0x3A);
 
     private readonly SettingsService _settings;
     private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
     private readonly DispatcherTimer _pollTimer;
-    private readonly TextBlock _glyph;
-    private readonly FrameworkElement _left;
-    private readonly TextBlock _bolt;
-    private readonly TextBlock _percent;
     private readonly TextBlock _status;
+    private readonly FrameworkElement _left;
+    private readonly TextBlock _percent;
+    private readonly BatteryGlyph _battery;
     private readonly FrameworkElement _right;
-    private readonly FrameLoop _pulseLoop;
-    private readonly ScaleTransform _boltScale = new(1, 1) ;
     private bool _initialized;
     private bool _plugged;
     private bool _warned20, _warned10, _notifiedFull;
-    private Mood _mood;
-    private double _pulseClock;
+    private int _shownPercent;
     private bool _disposed;
 
     public BatteryActivity(SettingsService settings)
     {
         _settings = settings;
-        _pulseLoop = new FrameLoop(OnPulse, maxFps: 30);
+        _status = HudParts.Label(string.Empty, 12.5, "TextBrush", FontWeights.SemiBold);
+        _left = _status;
 
-        _glyph = HudParts.Glyph("");
-        _left = HudParts.Cell(_glyph, 22);
-
-        _bolt = HudParts.Glyph("", "SuccessBrush", 12);
-        _bolt.RenderTransform = _boltScale;
-        _bolt.RenderTransformOrigin = new Point(0.5, 0.5);
         _percent = HudParts.Label(string.Empty, 13, "TextBrush", FontWeights.SemiBold);
-        _status = HudParts.Label(string.Empty, 11, "TextSecondaryBrush");
-        _status.Margin = new Thickness(6, 0, 0, 0);
+        _percent.SetResourceReference(TextBlock.FontFamilyProperty, "RoundedFont");
+        Typography.SetNumeralAlignment(_percent, FontNumeralAlignment.Tabular);
+        _percent.TextTrimming = TextTrimming.None;
+        _percent.MinWidth = 34;
+        _percent.TextAlignment = TextAlignment.Right;
+        _battery = new BatteryGlyph { Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        _battery.LevelChanged = level => _percent.Text = $"{Math.Min(_shownPercent, (int)Math.Round(level * 100))}%";
         var row = new StackPanel { Orientation = Orientation.Horizontal, Height = 24 };
-        row.Children.Add(_bolt);
         row.Children.Add(_percent);
-        row.Children.Add(_status);
+        row.Children.Add(_battery);
         _right = row;
 
         _pollTimer = new DispatcherTimer { Interval = PollInterval };
@@ -173,66 +171,21 @@ internal sealed class BatteryActivity : PillActivityBase, IDisposable
             return;
         }
 
-        _mood = mood;
-        int level = Math.Min(10, percent / 10);
-        _glyph.Text = level >= 10 ? "" : ((char)(0xE850 + level)).ToString();
-        string tone = mood is Mood.Low or Mood.Critical ? "DangerBrush" : mood == Mood.Full ? "SuccessBrush" : "TextBrush";
-        _glyph.SetResourceReference(TextBlock.ForegroundProperty, tone);
-        _bolt.Visibility = plugged ? Visibility.Visible : Visibility.Collapsed;
-        _percent.Text = $"{percent}%";
-        _status.Text = mood switch
+        _shownPercent = percent;
+        (string text, string brush, Color tone) = mood switch
         {
-            Mood.Plugged => "Charging",
-            Mood.Unplugged => "On battery",
-            Mood.Low => "Low battery",
-            Mood.Critical => "Very low",
-            _ => "Fully charged",
+            Mood.Plugged => ("Charging", "TextBrush", Green),
+            Mood.Unplugged => ("On Battery", "TextSecondaryBrush", Colors.White),
+            Mood.Low => ("Low Battery", "DangerBrush", Red),
+            Mood.Critical => ("Battery Very Low", "DangerBrush", Red),
+            _ => ("Charged", "SuccessBrush", Green),
         };
-
-        _pulseClock = 0;
-        if (!AnimationSettings.IsOff)
-        {
-            _pulseLoop.Start();
-        }
-        else
-        {
-            ResetPulse();
-        }
-
+        _status.Text = text;
+        _status.SetResourceReference(TextBlock.ForegroundProperty, brush);
+        _percent.SetResourceReference(TextBlock.ForegroundProperty, mood is Mood.Low or Mood.Critical ? "DangerBrush" : mood == Mood.Unplugged ? "TextBrush" : "SuccessBrush");
+        _percent.Text = $"{percent}%";
+        _battery.Play(percent / 100.0, tone, charging: plugged, fromEmpty: mood == Mood.Plugged, pulse: mood is Mood.Low or Mood.Critical);
         RequestHud();
-    }
-
-    // Charging: the bolt breathes. Low / very low: the glyph pulses red (faster when critical).
-    private bool OnPulse(double dt)
-    {
-        _pulseClock += dt;
-        if (_pulseClock > ActivityHost.HudDuration.TotalSeconds + 0.3)
-        {
-            ResetPulse();
-            return false;
-        }
-
-        double wave = 0.5 + 0.5 * Math.Sin(_pulseClock * (_mood == Mood.Critical ? 11 : 7));
-        if (_mood is Mood.Low or Mood.Critical)
-        {
-            _glyph.Opacity = 0.35 + 0.65 * wave;
-        }
-        else
-        {
-            double s = 1 + 0.25 * wave;
-            _boltScale.ScaleX = s;
-            _boltScale.ScaleY = s;
-            _bolt.Opacity = 0.6 + 0.4 * wave;
-        }
-
-        return true;
-    }
-
-    private void ResetPulse()
-    {
-        _glyph.Opacity = 1;
-        _bolt.Opacity = 1;
-        _boltScale.ScaleX = _boltScale.ScaleY = 1;
     }
 
     public void Dispose()
@@ -240,6 +193,5 @@ internal sealed class BatteryActivity : PillActivityBase, IDisposable
         _disposed = true;
         SystemEvents.PowerModeChanged -= OnPowerModeChanged;
         _pollTimer.Stop();
-        _pulseLoop.Stop();
     }
 }

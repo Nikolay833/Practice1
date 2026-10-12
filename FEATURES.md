@@ -14,17 +14,17 @@
 4. [Getting it and installing it](#4-getting-it-and-installing-it)
 5. [The island (the notch at the top of the screen)](#5-the-island-the-notch-at-the-top-of-the-screen)
 6. [How it stays fast](#6-how-it-stays-fast)
-7. [The basket](#7-the-basket)
+7. [The shelf and the basket](#7-the-shelf-and-the-basket)
 8. [Clipboard history](#8-clipboard-history)
 9. [Live activities on the island](#9-live-activities-on-the-island)
 10. [Now playing (music and video)](#10-now-playing-music-and-video)
 11. [Volume and brightness](#11-volume-and-brightness)
-12. [Battery and Bluetooth](#12-battery-and-bluetooth)
+12. [Battery, devices and status indicators](#12-battery-devices-and-status-indicators)
 13. [Notifications on the island](#13-notifications-on-the-island)
 14. [File tools: convert, resize, compress, zip](#14-file-tools-convert-resize-compress-zip)
 15. [Screenshots and copying text out of images](#15-screenshots-and-copying-text-out-of-images)
-16. [Timer and Pomodoro](#16-timer-and-pomodoro)
-17. [Quick notes](#17-quick-notes)
+16. [Clock: alarms, stopwatch, timer](#16-clock-alarms-stopwatch-timer)
+17. [Quick notes and the terminal](#17-quick-notes-and-the-terminal)
 18. [Today: calendar and weather](#18-today-calendar-and-weather)
 19. [Looks: the Apple design, colours, animations](#19-looks-the-apple-design-colours-animations)
 20. [Hiding during games, videos and presentations](#20-hiding-during-games-videos-and-presentations)
@@ -46,7 +46,8 @@
 **Dropshelf is a free helper app for Windows 10 and 11.** It puts a small black notch at the top-centre of your screen,
 designed to look and move like Apple's MacBook notch, the iPhone's **Dynamic Island** and the Mac notch app **Droppy**. While closed it shows live
 information: the song that is playing, a running timer, your volume, your battery, your next meeting. Hover over it and
-it springs open into a small control centre with Now Playing controls, a timer, notes and your day's agenda.
+it springs open into a small control centre: a **shelf** for files you drag onto the notch, Now Playing controls, a
+clock (alarms, stopwatch, timer), notes, a mini terminal and your day's agenda.
 
 Next to the island there is a **basket** (a floating drop zone you can summon while dragging files) and a searchable
 **clipboard history**.
@@ -79,7 +80,7 @@ run on Windows.)
  │        █ 2:16 ━━━━━━━━━━━━━━━──────── -0:46 │ Volume                 █                │
  │        ▒ [⇄]      ◀◀    ❚❚    ▶▶      [↻] │ 🔈 ━━━━━━━──── 🔊     ▒  ... to glass  │
  │         ◥▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒◤                  │
- │                             ( ♪  ⏱  ✎  ▦ )  ( ⚙ )      ← floating tab capsule     │
+ │                       ( ▢  ▦  ⏱  ✎  >_  ♪ )  ( ⚙ )      ← floating tab capsule     │
  └──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -227,12 +228,12 @@ and about 16 times a second when you are close.
 ### Tabs under the open island
 
 Under the open island floats a **glass capsule of round icon tabs** (like Droppy's switcher), one per feature that is
-turned on: **Now Playing** ♪ (while something plays), **Timer** ⏱, **Notes** ✎ and **Today** ▦. A lighter circle glides
-behind the selected tab; pointing at a tab shows its name. Next to the capsule is a round glass **settings** button. The
+turned on: **Shelf** ▢, **Today** ▦, **Clock** ⏱, **Notes** ✎, **Terminal** >_ and **Now Playing** ♪ (while something
+plays). A lighter circle glides behind the selected tab; pointing at a tab shows its name. Next to the capsule is a round glass **settings** button. The
 panel itself has no header, so its content uses the whole island.
 
-When you open the island while a live activity is showing (a song, a running timer), it opens on that activity's tab,
-just like long-pressing the Dynamic Island. Otherwise it opens on the tab you used last.
+When you open the island while a live activity is showing (a song, a running timer or stopwatch), it opens on that
+activity's tab, just like long-pressing the Dynamic Island. Otherwise it opens on the tab you used last.
 
 ---
 
@@ -264,7 +265,27 @@ Earlier versions lagged. This version was reworked around one rule: **never draw
 
 ---
 
-## 7. The basket
+## 7. The shelf and the basket
+
+### The shelf
+
+The **Shelf** tab is a parking spot inside the island, like Droppy's notch shelf.
+
+- **Drag** a file, a folder, some selected text or a web link **onto the notch**. The island opens on the Shelf tab by
+  itself; let go and the item is kept there. This works even when "Open on hover" is off. (If the open tab takes the
+  drop itself, like Notes taking text, it goes there instead.)
+- Later, open the island and **drag the item out** to a folder, an email, a chat or anything else that accepts files.
+  Files and folders are **copied out**, never moved; the shelf keeps them until you remove them.
+- It works like the basket: the item is a **link** to the original (nothing is copied), text becomes a `.txt` file and a
+  link a `.url` shortcut. Ctrl / Shift to pick several, double-click to open, right-click for the tools menu (*Copy*, *Open*,
+  *Show in Explorer*, convert / resize / compress pictures, *Extract Text*, *Create ZIP*, *Remove*).
+- **Copy All** puts every item on the clipboard (paste in Explorer); **Clear** empties the shelf (your files stay where they are).
+- While empty it shows a dashed **Drop files here** zone.
+- It **remembers its items after a restart** (encrypted in `shelf.json`). Items whose file was deleted or moved disappear.
+
+Settings: *Shelf*, *Remember shelf items* (both on).
+
+### The basket
 
 The basket is a floating drop zone that comes to *you* while you are dragging something. It is laid out like Droppy's
 basket.
@@ -412,21 +433,34 @@ Settings: *Volume*, *Brightness*, *Replace the Windows volume popup*, *Scroll ov
 
 ---
 
-## 12. Battery and Bluetooth
+## 12. Battery, devices and status indicators
 
-**Battery** (laptops and tablets only; nothing is shown on desktops):
+**Battery** (laptops and tablets only; nothing is shown on desktops), drawn like the iPhone's:
 
-- **Plugging in / unplugging** the charger: a green lightning bolt and the current percentage.
-- **Low battery warnings** at **20 %** and again at **10 %**, with a pulsing red bar.
-- A **fully charged** notice.
+- **Plugging in the charger:** "Charging" on the left; on the right the percentage next to a small battery whose **green
+  fill glides up from empty** while the number counts up with it, a **lightning bolt pops in** and a soft highlight
+  **sweeps across** the battery once.
+- **Unplugging:** "On Battery" with a white battery; the bolt shrinks away.
+- **Low battery** at **20 %** and again at **10 %**: "Low Battery" in red with a red battery that breathes.
+- **Charged** when it reaches 100 % on the charger.
 
-**Bluetooth:**
+**Bluetooth devices**, like AirPods on the iPhone:
 
-- When a Bluetooth device **connects or disconnects**, the island shows its name and an icon for its type (headphones,
-  keyboard, mouse, game controller, or a generic one).
-- If the device reports its **battery level** to Windows (many headphones do), that is shown too.
+- **Connecting:** the device's icon (headphones, keyboard, mouse, game controller, phone or a generic one) **pops in on a
+  blue disc** and two rings **ripple out** of it; next to it the name and "Connected" in blue.
+- If the device reports its **battery level** to Windows (many headphones do), a **green ring fills up** to it with the
+  number inside (red at 20 % or less).
+- **Disconnecting:** the disc turns grey and sinks back a little, "Disconnected".
 
-Settings: *Battery*, *Bluetooth devices* (both on by default).
+**Status indicators** (small pills that say what just changed):
+
+- **Silent Mode:** muting the sound (the mute key, the tray, any app) shows **Silent Mode On** with a red bell that
+  **rings** and a slash through it; unmuting shows **Silent Mode Off**. Changing the volume still shows the volume bar.
+- **Caps Lock On / Off**, with an arrow that rises into place (filled while on).
+- **Do Not Disturb On / Off** with a purple moon that swings in, when Do Not Disturb or a Focus session turns on or off
+  (Windows 11).
+
+Settings: *Battery*, *Bluetooth devices*, *Silent Mode*, *Caps Lock*, *Do Not Disturb* (all on by default).
 
 ---
 
@@ -523,9 +557,31 @@ shortcut off in Settings → Screenshot (the tray menu still offers *Take screen
 
 ---
 
-## 16. Timer and Pomodoro
+## 16. Clock: alarms, stopwatch, timer
 
-Open the island → **Timer** tab.
+Open the island → **Clock** tab. Like the iPhone's Clock app it has three pages behind a small switch at the top:
+**Alarm · Stopwatch · Timer**. It remembers the page you used last.
+
+### Alarm
+
+- On the left, pick a time: **scroll** over the hours or the minutes (minutes go in steps of 5; hold Shift for 1) or use
+  the small arrows; on 12-hour clocks click **AM / PM**. Then **Add Alarm**.
+- On the right, your alarms in time order, each with an **on / off switch**. Click the grey line under the time to switch
+  between **once** and **every day**. Point at an alarm for the **delete** button.
+- **When an alarm goes off** the island shows it with **Snooze** (9 minutes) and **Stop**, and the chime repeats for up to
+  a minute (even over fullscreen apps). If the island is open, the Alarm page shows Snooze and Stop instead. A one-time
+  alarm switches itself off afterwards.
+- If the PC was asleep at the alarm time, it still rings on wake when it is less than 5 minutes late. Alarms only ring
+  while Dropshelf runs (it starts with Windows).
+
+### Stopwatch
+
+- **Start / Stop** (green / red) and **Lap / Reset**. The time is in large digits with hundredths; laps are listed newest
+  first, the fastest in green and the slowest in red.
+- While it runs, the closed island shows an orange stopwatch and the time; opening the island goes straight to this page.
+- It keeps counting while the PC sleeps and even across a restart of Dropshelf.
+
+### Timer
 
 Laid out like the iOS StandBy timer:
 
@@ -538,10 +594,10 @@ Laid out like the iOS StandBy timer:
   phase starts automatically.
 
 **While running, on the closed island:** a circular progress ring at the left end and the remaining time at the right
-end, in **orange** like Apple's timer Live Activity (**green** during breaks).
+end, in **orange** like Apple's timer Live Activity (**green** during breaks). Opening the island shows the Timer page.
 
-**When time is up:** the island grows with a springy "ding" and a soft chime plays (it can be muted with *Chime when a
-timer ends*).
+**When time is up:** the island grows with a springy "ding" and a soft chime plays (it can be muted with *Chime for
+timers and alarms*).
 
 **Accuracy:** the timer uses the PC's internal running clock, so it stays exact even if Windows changes the time (for
 example daylight saving or a clock sync). If the PC sleeps, the sleep time is counted. If the PC slept through the end
@@ -550,7 +606,9 @@ running timer even survives restarting Dropshelf.
 
 ---
 
-## 17. Quick notes
+## 17. Quick notes and the terminal
+
+### Quick notes
 
 Open the island → **Notes** tab, or press **Ctrl+Shift+N** from anywhere (the island opens with the cursor already in
 the editor).
@@ -568,6 +626,26 @@ the editor).
   overwritten, and every save is written in a way that cannot leave a half-written file. Pending notes are also saved
   when you sign out or shut down.
 
+
+### The terminal
+
+Open the island → **Terminal** tab: a small command line, like Droppy's mini-terminal.
+
+- Click the prompt line at the bottom, type a command and press **Enter**. The output appears above it, in a monospaced
+  font (you can select and copy it).
+- Choose **PowerShell** or **CMD** at the top right. Each command runs in a new, hidden PowerShell / Command Prompt in the
+  folder shown in the green prompt (it starts in your user folder).
+- **`cd`** changes the folder (also `cd ..`, `cd ~`, `cd /d D:\x`) and is remembered; **`cls`** or **`clear`** (or
+  **Ctrl+L**) clears the output; **↑ / ↓** bring back earlier commands.
+- **Ctrl+C** (or the red stop button) stops a running command and everything it started. A command cannot be typed into
+  while it runs: anything that waits for input gets "end of input" at once.
+- While a command runs, the closed island shows a green terminal icon and the command; when it finishes, a short
+  **Done** or **Failed** note.
+- **Esc** gives the keyboard back to the app you were in.
+- Each command is separate, so variables you set in one are gone in the next (the folder is kept). Nothing ever runs
+  unless you type it and press Enter.
+
+Setting: *Terminal* (on).
 ---
 
 ## 18. Today: calendar and weather
@@ -736,6 +814,8 @@ immediately; there is no Save button. Settings are grouped like this:
 | **Island** | Open on hover | On |
 | | Scroll over the island to change volume | On |
 | | Shake to open basket | On |
+| | Shelf / Remember shelf items | On / On |
+| | Terminal | On |
 | **Live Activities** | Now Playing | On |
 | | Volume | On |
 | | Replace the Windows volume popup | On |
@@ -743,6 +823,7 @@ immediately; there is no Save button. Settings are grouped like this:
 | | Brightness | On |
 | | Battery | On |
 | | Bluetooth devices | On |
+| | Silent Mode / Caps Lock / Do Not Disturb | On / On / On |
 | **Notifications** (MSIX) | Show notifications on the island | Off |
 | | Hide notification content | Off |
 | | Muted apps | none |
@@ -752,9 +833,9 @@ immediately; there is no Save button. Settings are grouped like this:
 | **Clipboard** | Clipboard history | On |
 | | History size (10–500) | 50 |
 | **Screenshot** | Ctrl+Shift+S shortcut | On |
-| **Timer** | Pomodoro focus / break / long break minutes | 25 / 5 / 15 |
+| **Clock** | Pomodoro focus / break / long break minutes | 25 / 5 / 15 |
 | | Rounds before a long break | 4 |
-| | Chime when a timer ends | On |
+| | Chime for timers and alarms | On |
 | **Calendar & Weather** | Calendar | On |
 | | Meeting alerts | On |
 | | Windows calendars (MSIX) | On |
@@ -784,7 +865,10 @@ immediately; there is no Save button. Settings are grouped like this:
 
 **Inside notes:** `Ctrl+N` new note, `Esc` give the keyboard back.
 
-**Mouse:** hover the island to open, wheel over the closed island for volume, shake while dragging for the basket.
+**Inside the terminal:** `Enter` run, `↑` `↓` history, `Ctrl+C` stop, `Ctrl+L` clear, `Esc` give the keyboard back.
+
+**Mouse:** hover the island to open, drag files onto the notch for the shelf, wheel over the closed island for volume,
+shake while dragging for the basket.
 
 If another app already uses one of the global shortcuts, Dropshelf shows a message instead of stealing it.
 
@@ -816,15 +900,16 @@ Everything is in **`%LOCALAPPDATA%\Dropshelf`** (paste that into the Explorer ad
 | `settings.json` | All settings (including the muted-notification app list) |
 | `clipboard.json` | Clipboard history (encrypted) |
 | `Clipboard\` | Images from the clipboard history (PNG) |
-| `Items\` | Text and links you dropped into the basket (`.txt`, `.url`) |
+| `Items\` | Text and links you dropped into the shelf or the basket (`.txt`, `.url`) |
+| `shelf.json` | The shelf's items (encrypted) |
 | `notes.json` | Notes (encrypted) |
 | `calendar.json` | Calendar links (encrypted) |
 | `weather.json` | Last forecast and location (encrypted) |
 | `timer.json` | A running timer, so it survives a restart |
+| `stopwatch.json` | The stopwatch and its laps |
+| `alarms.json` | Your alarms |
 | `restarts.json` | The crash-loop counter |
 | `dropshelf.log` | A log of errors, useful for reporting problems |
-
-(Older versions also kept `shelf.json`; it is deleted automatically.)
 
 The program itself is in `%LOCALAPPDATA%\Programs\Dropshelf` (portable version) or managed by Windows in
 `C:\Program Files\WindowsApps` (MSIX version). Screenshots go to `Pictures\Screenshots`.

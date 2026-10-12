@@ -9,6 +9,8 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using Dropshelf.Activities;
 using Dropshelf.Activities.Notes;
+using Dropshelf.Activities.Shelf;
+using Dropshelf.Items;
 using Dropshelf.Animation;
 using Dropshelf.Interop;
 using Dropshelf.Services;
@@ -43,6 +45,8 @@ public partial class IslandWindow : Window
     private const double HoverNearDip = 120;      // closer than this keeps the fast poll
     private const int HoverDelayMs = 350;         // the cursor must rest on the notch this long: passing over it never opens it
     private const int HoverRestPx = 5;            // ...and move less than this between polls
+    private const double DragMarginDip = 16;      // while something is dragged, the notch takes drops this close to it
+    private const int DragStartPx = 8;            // the left button must move this far before a press counts as a drag
 
     private readonly SettingsService _settings;
     private readonly Action _openSettings;
@@ -70,6 +74,9 @@ public partial class IslandWindow : Window
     private long _hoverSince;          // tick when the cursor started resting on the collapsed island, 0 = not hovering
     private NativeMethods.POINT _hoverPoint;
     private bool _hoverBlocked;        // a click landed on the notch (on whatever is under it): no hover-open until the cursor leaves
+    private bool _leftWasDown;
+    private bool _leftDragging;        // the left button is held and has moved since it went down (something may be dragged)
+    private NativeMethods.POINT _leftPress;
     private readonly DispatcherTimer _outsideTimer;   // while open: a click anywhere else closes the island at once
     private string? _tab;
     private string _tabKey = string.Empty;
@@ -88,9 +95,9 @@ public partial class IslandWindow : Window
         _openSettings = openSettings;
         _activities = activities;
         _loop = new FrameLoop(OnFrame);
-        foreach (NotesActivity notes in _activities.Activities.OfType<NotesActivity>())
+        foreach (IReleasesKeyboard tab in _activities.Activities.OfType<IReleasesKeyboard>())
         {
-            notes.ReleaseRequested += ReleaseKeyboard;
+            tab.ReleaseRequested += ReleaseKeyboard;
         }
 
         // Activities: leading / trailing views on the collapsed island, tabs in the expanded panel.
@@ -222,8 +229,17 @@ public partial class IslandWindow : Window
 
         // Like the Dynamic Island: opening shows the activity that is live on the island (the song, the timer), unless a
         // specific tab was asked for; otherwise the tab that was open last time.
-        string? pick = tab ?? (_activities.Current is { } live && _activities.TabActivities.Contains(live) ? live.Id : _tab);
+        string? pick = tab ?? _activities.Current switch
+        {
+            IOpensTab page => page.TabId,
+            { } live when _activities.TabActivities.Contains(live) => live.Id,
+            _ => _tab,
+        };
         SelectTab(pick, instant: true);
+        if (tab == null && _activities.Current is IOpensTab opens)
+        {
+            opens.Reveal(); // the timer, the stopwatch or a ringing alarm: its page of the Clock tab
+        }
 
         ExpandedPanel.Visibility = Visibility.Visible; // now, not on the next frame: Ctrl+Shift+N focuses the editor right away
         ExpandedPanel.IsHitTestVisible = true;
@@ -285,10 +301,16 @@ public partial class IslandWindow : Window
         bool leftDown = (NativeMethods.GetAsyncKeyState(NativeMethods.VK_LBUTTON) & 0x8000) != 0;
         bool hoverExpand = _settings.Current.ExpandOnHover;
         bool onIsland = IslandContains(cursor, 0);
+        TrackLeftDrag(leftDown, cursor);
 
         // An interactive HUD (screenshot "Copy text") needs the mouse: solid under the cursor, no hover-expand, and it stays up.
+        // While something may be dragged (the left button is held and moving) the notch is solid near the cursor, so a file
+        // dragged onto it reaches the window (OnDragOverOrEnter opens the shelf). A press that only selects text stays with the
+        // app that has the mouse captured, so this never gets in its way.
         bool interactiveHud = _activities.IsHudShowing && _activities.Content is { Interactive: true };
-        bool solid = onIsland && (!hoverExpand || interactiveHud);
+        bool dragging = (DragState.IsActive || _leftDragging) && ShelfTab != null;
+        bool solid = (onIsland && (!hoverExpand || interactiveHud))
+                     || (dragging && IslandContains(cursor, (int)Math.Round(DragMarginDip * _monitor.Scale)));
         WindowHelper.SetClickThrough(_hwnd, !solid);
         if (interactiveHud && onIsland)
         {
@@ -328,13 +350,37 @@ public partial class IslandWindow : Window
         }
 
         // Poll fast while the cursor is near, slowly otherwise.
-        bool near = _hoverSince != 0 || IslandContains(cursor, (int)Math.Round(HoverNearDip * _monitor.Scale));
+        bool near = _hoverSince != 0 || leftDown || IslandContains(cursor, (int)Math.Round(HoverNearDip * _monitor.Scale));
         var interval = TimeSpan.FromMilliseconds(near ? HoverPollMs : HoverIdlePollMs);
         if (_hoverTimer.Interval != interval)
         {
             _hoverTimer.Interval = interval;
         }
     }
+
+    /// <summary>A real drag is the left button held and moved a few pixels since the press (a plain click is not one).</summary>
+    private void TrackLeftDrag(bool leftDown, NativeMethods.POINT cursor)
+    {
+        if (!leftDown)
+        {
+            _leftWasDown = false;
+            _leftDragging = false;
+            return;
+        }
+
+        if (!_leftWasDown)
+        {
+            _leftWasDown = true;
+            _leftPress = cursor;
+        }
+        else if (!_leftDragging && (Math.Abs(cursor.X - _leftPress.X) > DragStartPx || Math.Abs(cursor.Y - _leftPress.Y) > DragStartPx))
+        {
+            _leftDragging = true;
+        }
+    }
+
+    /// <summary>The shelf, when it is turned on.</summary>
+    private ShelfActivity? ShelfTab => _activities.Activities.OfType<ShelfActivity>().FirstOrDefault(s => s.HasExpanded);
 
     /// <summary>While open: a mouse button pressed outside the island (in another app) closes it at once.</summary>
     private void OnOutsideTick(object? sender, EventArgs e)
@@ -347,7 +393,7 @@ public partial class IslandWindow : Window
 
         bool button = (NativeMethods.GetAsyncKeyState(NativeMethods.VK_LBUTTON) & 0x8000) != 0
                       || (NativeMethods.GetAsyncKeyState(NativeMethods.VK_RBUTTON) & 0x8000) != 0;
-        if (button && Mouse.Captured == null && NativeMethods.GetCursorPos(out var cursor) && !IslandContains(cursor, 0)
+        if (button && Mouse.Captured == null && !DragState.IsActive && NativeMethods.GetCursorPos(out var cursor) && !IslandContains(cursor, 0)
             && !WindowHelper.IsOwnWindow(NativeMethods.WindowFromPoint(cursor)))
         {
             _holdUntilTick = 0;
@@ -374,7 +420,8 @@ public partial class IslandWindow : Window
         }
 
         bool hovered = NativeMethods.GetCursorPos(out var cursor) && IslandContains(cursor, 0);
-        if (hovered || Environment.TickCount64 < _holdUntilTick || Mouse.Captured != null)
+        bool busy = _activities.Activities.OfType<IKeepsIslandOpen>().Any(a => a.KeepsIslandOpen);
+        if (hovered || busy || Environment.TickCount64 < _holdUntilTick || Mouse.Captured != null)
         {
             // Still hovered, held open or a control has the mouse (a slider being dragged): look again shortly.
             _collapseTimer.Start();
@@ -583,10 +630,20 @@ public partial class IslandWindow : Window
 
     // ---- Drops onto a tab (text onto Notes) ---------------------------------------------------------
 
+    /// <summary>
+    /// Something is dragged over the island. The open tab takes it if it can (text onto Notes); otherwise the shelf does, and
+    /// the island opens (or switches) to the Shelf tab, the way Droppy's notch opens when a file is dragged onto it.
+    /// </summary>
     private void OnDragOverOrEnter(object sender, DragEventArgs e)
     {
-        bool accept = _expanded && !DragState.IsActive && CurrentDropTarget() is { } target && target.CanDrop(e.Data);
-        e.Effects = accept ? DragDropEffects.Copy : DragDropEffects.None;
+        IIslandDropTarget? target = DropTargetFor(e.Data);
+        if (target is ShelfActivity shelf && (!_expanded || _tab != shelf.Id))
+        {
+            Expand(shelf.Id);
+        }
+
+        bool accept = _expanded && target != null;
+        e.Effects = !accept ? DragDropEffects.None : DragState.IsActive ? DropHelper.InternalEffect(e) : DragDropEffects.Copy;
         e.Handled = true;
         TabDropHighlight.Visibility = accept ? Visibility.Visible : Visibility.Collapsed;
         if (_expanded)
@@ -598,15 +655,30 @@ public partial class IslandWindow : Window
     private void OnDrop(object sender, DragEventArgs e)
     {
         TabDropHighlight.Visibility = Visibility.Collapsed;
-        bool taken = _expanded && !DragState.IsActive && CurrentDropTarget() is { } target && target.CanDrop(e.Data) && target.Drop(e.Data);
-        e.Effects = taken ? DragDropEffects.Copy : DragDropEffects.None;
+        IIslandDropTarget? target = _expanded ? DropTargetFor(e.Data) : null;
+        if (target is ShelfActivity shelf)
+        {
+            shelf.NoteDropPoint(e.GetPosition(this), this); // the new tiles fly in from where they were dropped
+        }
+
+        bool internalDrag = DragState.IsActive;
+        bool taken = target != null && target.Drop(e.Data);
+        e.Effects = !taken ? DragDropEffects.None : internalDrag ? DropHelper.InternalEffect(e) : DragDropEffects.Copy;
         e.Handled = true;
         ScheduleCollapse();
     }
 
-    /// <summary>The expanded tab that accepts dropped content itself (the Notes tab takes text), or null.</summary>
-    private IIslandDropTarget? CurrentDropTarget() =>
-        _tab == null ? null : _activities.TabActivities.FirstOrDefault(a => a.Id == _tab) as IIslandDropTarget;
+    /// <summary>Who takes <paramref name="data"/>: the open tab if it accepts it, else the shelf (if it is on), else nobody.</summary>
+    private IIslandDropTarget? DropTargetFor(IDataObject data)
+    {
+        if (_expanded && _tab != null && _activities.TabActivities.FirstOrDefault(a => a.Id == _tab) is IIslandDropTarget current
+            && current.CanDrop(data))
+        {
+            return current;
+        }
+
+        return ShelfTab is { } shelf && shelf.CanDrop(data) ? shelf : null;
+    }
 
     // ---- Keyboard input (notes, custom timer) ------------------------------------------------------
 
@@ -726,10 +798,12 @@ public partial class IslandWindow : Window
     /// <summary>Icon of each tab in the switcher capsule (Segoe Fluent Icons).</summary>
     private static string TabGlyph(string id) => id switch
     {
+        "shelf" => "\uE7B8",   // box
         "media" => "\uEC4F",   // music note
         "timer" => "\uE916",   // stopwatch
         "notes" => "\uE70B",   // note
         "today" => "\uE787",   // calendar
+        "terminal" => "\uE756", // command prompt
         _ => "\uE10F",         // home
     };
 

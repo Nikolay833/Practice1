@@ -239,6 +239,10 @@ internal static class NativeMethods
     [DllImport("user32.dll")]
     public static extern short GetAsyncKeyState(int vKey);
 
+    /// <summary>Key state; for toggle keys (Caps Lock) the low bit is 1 while the key is toggled on.</summary>
+    [DllImport("user32.dll")]
+    public static extern short GetKeyState(int vKey);
+
     // ---- Monitors / DPI ----------------------------------------------------------------------
     public const uint MONITOR_DEFAULTTOPRIMARY = 1;
     public const uint MONITOR_DEFAULTTONEAREST = 2;
@@ -276,6 +280,7 @@ internal static class NativeMethods
     public const ushort VK_RWIN = 0x5C;
     public const int VK_LBUTTON = 0x01;
     public const int VK_RBUTTON = 0x02;
+    public const int VK_CAPITAL = 0x14;
     public const ushort VK_V = 0x56;
     public const uint VK_B = 0x42;
     public const uint VK_S = 0x53;

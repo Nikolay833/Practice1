@@ -62,7 +62,7 @@
                         <act:CrossfadeHost x:Name="Pages" Margin="26,18,26,20"/>
                         <TextBlock x:Name="EmptyText" Visibility="Collapsed" Style="{StaticResource TextSecondary}"
                                    HorizontalAlignment="Center" VerticalAlignment="Center"
-                                   Text="Turn on Now Playing, Timer, Notes or Today in Settings"/>
+                                   Text="Turn on the Shelf, Terminal or Now Playing in Settings"/>
 
                         <!-- Drag-over highlight for a tab that takes drops (text onto Notes). -->
                         <Border x:Name="TabDropHighlight" Margin="18,12,18,14" Visibility="Collapsed" IsHitTestVisible="False"

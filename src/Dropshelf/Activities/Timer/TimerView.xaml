@@ -57,7 +57,7 @@
             </Canvas>
             <!-- The marker under the selected minute -->
             <Path x:Name="Marker" Data="M0,8 L5,0 L10,8 Z" Fill="{StaticResource WarnBrush}" HorizontalAlignment="Center"
-                  VerticalAlignment="Top" Margin="0,64,0,0"/>
+                  VerticalAlignment="Top" Margin="0,50,0,0"/>
         </Grid>
 
         <!-- Start / pause, Pomodoro, cancel on the left; the time on the right -->

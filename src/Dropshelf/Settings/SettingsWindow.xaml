@@ -222,6 +222,27 @@
                                 <TextBlock Text="Shake the mouse left and right while dragging" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
                             </StackPanel>
                         </CheckBox>
+                        <Border Style="{StaticResource Divider}"/>
+                        <CheckBox IsChecked="{Binding ShelfEnabled, Mode=TwoWay}">
+                            <StackPanel>
+                                <TextBlock Text="Shelf" Style="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="Drag files, text or links onto the notch to keep them in the Shelf tab" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </CheckBox>
+                        <Border Style="{StaticResource Divider}"/>
+                        <CheckBox IsChecked="{Binding RememberShelf, Mode=TwoWay}" IsEnabled="{Binding ShelfEnabled}">
+                            <StackPanel>
+                                <TextBlock Text="Remember shelf items" Style="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="Keep the shelf after a restart (saved encrypted on this PC)" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </CheckBox>
+                        <Border Style="{StaticResource Divider}"/>
+                        <CheckBox IsChecked="{Binding TerminalEnabled, Mode=TwoWay}">
+                            <StackPanel>
+                                <TextBlock Text="Terminal" Style="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="A Terminal tab that runs PowerShell or Command Prompt commands you type" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </CheckBox>
                     </StackPanel>
                 </Border>
 
@@ -274,6 +295,27 @@
                             <StackPanel>
                                 <TextBlock Text="Bluetooth devices" Style="{StaticResource TextPrimary}"/>
                                 <TextBlock Text="Headphones, keyboards and mice connecting or disconnecting" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
+                            </StackPanel>
+                        </CheckBox>
+                        <Border Style="{StaticResource Divider}"/>
+                        <CheckBox IsChecked="{Binding ShowSilentHud, Mode=TwoWay}">
+                            <StackPanel>
+                                <TextBlock Text="Silent Mode" Style="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="Muting the sound shows Silent Mode On / Off with a ringing bell instead of the volume bar" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </CheckBox>
+                        <Border Style="{StaticResource Divider}"/>
+                        <CheckBox IsChecked="{Binding ShowCapsLockHud, Mode=TwoWay}">
+                            <StackPanel>
+                                <TextBlock Text="Caps Lock" Style="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="Show Caps Lock On / Off" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </CheckBox>
+                        <Border Style="{StaticResource Divider}"/>
+                        <CheckBox IsChecked="{Binding ShowFocusHud, Mode=TwoWay}">
+                            <StackPanel>
+                                <TextBlock Text="Do Not Disturb" Style="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="Show when Do Not Disturb or a Focus session turns on or off (Windows 11)" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
                             </StackPanel>
                         </CheckBox>
                     </StackPanel>
@@ -368,7 +410,7 @@
                     </CheckBox>
                 </Border>
 
-                <TextBlock Text="Timer" Style="{StaticResource SectionLabel}"/>
+                <TextBlock Text="Clock" Style="{StaticResource SectionLabel}"/>
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
                         <Grid>
@@ -401,8 +443,8 @@
                         <Border Style="{StaticResource Divider}"/>
                         <CheckBox IsChecked="{Binding TimerSound, Mode=TwoWay}">
                             <StackPanel>
-                                <TextBlock Text="Chime when a timer ends" Style="{StaticResource TextPrimary}"/>
-                                <TextBlock Text="A short soft bell; turn it off to mute" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
+                                <TextBlock Text="Chime for timers and alarms" Style="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="A short soft bell (alarms repeat it for up to a minute); turn it off to mute" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
                             </StackPanel>
                         </CheckBox>
                     </StackPanel>

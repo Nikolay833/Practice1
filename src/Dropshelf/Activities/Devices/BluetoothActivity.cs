@@ -4,14 +4,18 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
+using System.Windows.Media;
 using Dropshelf.Activities.Hud;
+using Dropshelf.Animation;
 using Dropshelf.Services;
 using Windows.Devices.Enumeration;
 
 namespace Dropshelf.Activities.Devices;
 
 /// <summary>
-/// Bluetooth HUD: a <see cref="DeviceWatcher"/> over paired Bluetooth (classic and LE) endpoints follows
+/// Bluetooth HUD, like AirPods on the iPhone: the device's icon pops in on a blue disc with two rings rippling out of it, its
+/// name and "Connected" in blue, and a green ring with the battery level that fills up when Windows reports one. A disconnect
+/// greys the disc and says "Disconnected". A <see cref="DeviceWatcher"/> over paired Bluetooth (classic and LE) endpoints follows
 /// <c>System.Devices.Aep.IsConnected</c>. When a device connects or disconnects the pill shows its icon (headphones, keyboard,
 /// mouse, ... from the AEP category or the name), its name and, when Windows reports it, the battery level
 /// (<c>DEVPKEY_Bluetooth_Battery</c>). The initial enumeration is silent. WinRT events arrive on other threads and are
@@ -40,11 +44,15 @@ internal sealed class BluetoothActivity : PillActivityBase, IDisposable
     private readonly SettingsService _settings;
     private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
     private readonly Dictionary<string, Device> _devices = new();
-    private readonly TextBlock _glyph;
-    private readonly FrameworkElement _left;
+    private readonly DeviceBadge _badge;
     private readonly TextBlock _name;
     private readonly TextBlock _detail;
+    private readonly ProgressRing _ring;
+    private readonly TextBlock _ringText;
+    private readonly Grid _ringCell;
     private readonly FrameworkElement _right;
+    private readonly Spring _ringFill = new(0, 300, 0.95);
+    private readonly FrameLoop _ringLoop;
     private DeviceWatcher? _watcher;
     private bool _enumerated;
     private string? _shownId;
@@ -53,20 +61,28 @@ internal sealed class BluetoothActivity : PillActivityBase, IDisposable
     public BluetoothActivity(SettingsService settings)
     {
         _settings = settings;
-        _glyph = HudParts.Glyph("", "TextBrush", 16);
-        _left = HudParts.Cell(_glyph, 24);
-        _name = HudParts.Label(string.Empty, 12, "TextBrush", FontWeights.SemiBold);
+        _badge = new DeviceBadge();
+        _name = HudParts.Label(string.Empty, 12.5, "TextBrush", FontWeights.SemiBold);
         _name.MaxWidth = 150;
-        _detail = HudParts.Label(string.Empty, 10.5, "TextSecondaryBrush");
+        _detail = HudParts.Label(string.Empty, 10.5, "TextSecondaryBrush", FontWeights.SemiBold);
         _detail.MaxWidth = 150;
-        _right = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { _name, _detail } };
+        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { _name, _detail } };
+
+        _ring = new ProgressRing(24, 2.5);
+        _ring.SetColor(Color.FromRgb(0x30, 0xD1, 0x58));
+        _ringText = HudParts.Label(string.Empty, 8.5, "TextBrush", FontWeights.Bold);
+        _ringText.HorizontalAlignment = HorizontalAlignment.Center;
+        _ringText.TextTrimming = TextTrimming.None;
+        _ringCell = new Grid { Width = 24, Height = 24, Margin = new Thickness(10, 0, 0, 0), Children = { _ring, _ringText } };
+        _ringLoop = new FrameLoop(OnRingFrame);
+        _right = new StackPanel { Orientation = Orientation.Horizontal, Children = { text, _ringCell } };
     }
 
     public override string Id => "bluetooth";
     public override int Priority => 240;
     public override PillActivityKind Kind => PillActivityKind.Hud;
 
-    public override CompactContent? CreateCompact() => CompactContent.Of(_left, _right, extraHeight: 6);
+    public override CompactContent? CreateCompact() => CompactContent.Of(_badge, _right, extraHeight: 8);
 
     public void Start()
     {
@@ -190,13 +206,52 @@ internal sealed class BluetoothActivity : PillActivityBase, IDisposable
 
     private void Present(string id, Device device)
     {
+        bool sameShowing = id == _shownId && _badgeConnected == device.Connected;
         _shownId = id;
-        _glyph.Text = GlyphFor(device);
-        _glyph.SetResourceReference(TextBlock.ForegroundProperty, device.Connected ? "TextBrush" : "TextSecondaryBrush");
+        _badgeConnected = device.Connected;
+        if (!sameShowing)
+        {
+            _badge.Play(GlyphFor(device), device.Connected); // a battery update for the device on screen does not replay it
+        }
+
         _name.Text = string.IsNullOrWhiteSpace(device.Name) ? "Bluetooth device" : device.Name;
-        string state = device.Connected ? "Connected" : "Disconnected";
-        _detail.Text = device.Connected && device.Battery >= 0 ? $"{state} · {device.Battery}%" : state;
+        _detail.Text = device.Connected ? "Connected" : "Disconnected";
+        _detail.SetResourceReference(TextBlock.ForegroundProperty, device.Connected ? "AccentBrush" : "TextSecondaryBrush");
+
+        bool battery = device.Connected && device.Battery >= 0;
+        _ringCell.Visibility = battery ? Visibility.Visible : Visibility.Collapsed;
+        if (battery)
+        {
+            _ringText.Text = device.Battery.ToString(System.Globalization.CultureInfo.CurrentCulture);
+            _ring.SetColor(device.Battery <= 20 ? Color.FromRgb(0xFF, 0x45, 0x3A) : Color.FromRgb(0x30, 0xD1, 0x58));
+            if (!sameShowing)
+            {
+                _ringFill.Snap(0);
+            }
+
+            _ringFill.Target = device.Battery / 100.0;
+            if (AnimationSettings.IsOff)
+            {
+                _ringFill.Snap(_ringFill.Target);
+                _ring.SetProgress(_ringFill.Value);
+            }
+            else
+            {
+                AnimationSettings.Configure(_ringFill, 300, 0.95);
+                _ringLoop.Start();
+            }
+        }
+
         RequestHud();
+    }
+
+    private bool _badgeConnected;
+
+    private bool OnRingFrame(double dt)
+    {
+        _ringFill.Step(dt);
+        _ring.SetProgress(Math.Clamp(_ringFill.Value, 0, 1));
+        return !_ringFill.SettleIfClose(0.001, 0.01);
     }
 
     /// <summary>Segoe MDL2 / Fluent: E7F6 headphones, E765 keyboard, E962 mouse, E7FC gamepad, E8EA phone, E702 Bluetooth.</summary>

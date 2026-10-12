@@ -22,11 +22,14 @@ internal sealed class VolumeActivity : PillActivityBase
     private float _lastVolume = -1;
     private bool _lastMuted;
 
-    public VolumeActivity(AudioEndpointService audio, SettingsService settings, OsdSuppressor osd)
+    private readonly IndicatorActivity? _indicator;
+
+    public VolumeActivity(AudioEndpointService audio, SettingsService settings, OsdSuppressor osd, IndicatorActivity? indicator)
     {
         _audio = audio;
         _settings = settings;
         _osd = osd;
+        _indicator = indicator;
 
         _glyph = HudParts.Glyph(GlyphFor(audio.Volume, audio.Muted));
         _left = HudParts.Cell(_glyph, 22);
@@ -56,15 +59,30 @@ internal sealed class VolumeActivity : PillActivityBase
 
     private void OnVolumeChanged(float volume, bool muted)
     {
-        bool changed = Math.Abs(volume - _lastVolume) > 0.0005f || muted != _lastMuted;
+        bool volumeChanged = Math.Abs(volume - _lastVolume) > 0.0005f;
+        bool muteChanged = muted != _lastMuted;
         _lastVolume = volume;
         _lastMuted = muted;
-        if (!changed || !_settings.Current.ShowVolumeHud)
+        _glyph.Text = GlyphFor(volume, muted);
+
+        // Muting or unmuting (and nothing else) is "Silent Mode On / Off", like the iPhone's switch.
+        if (muteChanged && !volumeChanged && _indicator is { SilentEnabled: true })
+        {
+            if (_settings.Current.ReplaceWindowsOsd)
+            {
+                _osd.Suppress(_indicator);
+            }
+
+            _bar.Set(muted ? 0 : volume, muted ? "Muted" : Percent(volume), muted ? "TextDisabledBrush" : "TextBrush", animate: false);
+            _indicator.ShowSilent(muted);
+            return;
+        }
+
+        if (!(volumeChanged || muteChanged) || !_settings.Current.ShowVolumeHud)
         {
             return;
         }
 
-        _glyph.Text = GlyphFor(volume, muted);
         _bar.Set(muted ? 0 : volume, muted ? "Muted" : Percent(volume), muted ? "TextDisabledBrush" : "TextBrush");
         if (_settings.Current.ReplaceWindowsOsd)
         {

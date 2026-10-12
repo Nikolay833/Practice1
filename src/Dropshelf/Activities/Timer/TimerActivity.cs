@@ -18,7 +18,7 @@ namespace Dropshelf.Activities.Timer;
 /// island grows with a spring "ding" HUD and a soft chime plays (unless muted in Settings).
 /// The only timer in here ticks once per second while a countdown runs, and is off otherwise.
 /// </summary>
-internal sealed class TimerActivity : PillActivityBase, IDisposable
+internal sealed class TimerActivity : PillActivityBase, IOpensTab, IDisposable
 {
     // Apple's timer colours: systemOrange while counting down (as in the Clock app and its Live Activity), systemGreen on breaks.
     private static readonly Color Orange = Color.FromRgb(0xFF, 0x9F, 0x0A);
@@ -37,10 +37,12 @@ internal sealed class TimerActivity : PillActivityBase, IDisposable
     private bool _followAccent = true;
     private bool _disposed;
 
-    public TimerActivity(SettingsService settings, ToastActivity toast)
+    public TimerActivity(SettingsService settings, ToastActivity toast, ActivityHost host)
     {
         _settings = settings;
         _toast = toast;
+        Stopwatch = new StopwatchActivity();
+        Alarms = new AlarmActivity(settings, host);
         Engine = new TimerEngine();
         ApplyPlan();
 
@@ -74,9 +76,15 @@ internal sealed class TimerActivity : PillActivityBase, IDisposable
 
     public TimerEngine Engine { get; }
 
+    /// <summary>The stopwatch (its own pill activity; a page of this tab).</summary>
+    public StopwatchActivity Stopwatch { get; }
+
+    /// <summary>The alarms (their own pill activity; a page of this tab).</summary>
+    public AlarmActivity Alarms { get; }
+
     public override string Id => "timer";
     public override int Priority => 200;
-    public override string? TabTitle => "Timer";
+    public override string? TabTitle => "Clock";
     public override int TabOrder => -80;
     public override bool HasExpanded => true;
     public override bool IsActive => Engine.Phase != TimerPhase.Idle;
@@ -86,7 +94,14 @@ internal sealed class TimerActivity : PillActivityBase, IDisposable
 
     public override CompactContent? CreateCompact() => _content;
 
-    public override FrameworkElement? CreateExpanded() => new TimerView(this);
+    public override FrameworkElement? CreateExpanded() => _clock = new ClockView(this, Stopwatch, Alarms, _settings);
+
+    private ClockView? _clock;
+
+    public string TabId => Id;
+
+    /// <summary>The island opened from the running timer: show the Timer page.</summary>
+    public void Reveal() => _clock?.ShowTimer();
 
     // ---- Commands (used by the tab) ---------------------------------------------------------------
 
@@ -304,6 +319,8 @@ internal sealed class TimerActivity : PillActivityBase, IDisposable
     public void Dispose()
     {
         _disposed = true;
+        Stopwatch.Dispose();
+        Alarms.Dispose();
         SystemEvents.PowerModeChanged -= OnPowerModeChanged;
         _tick.Stop();
         Engine.Changed -= OnEngineChanged;

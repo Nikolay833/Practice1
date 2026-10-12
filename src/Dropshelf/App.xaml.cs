@@ -14,6 +14,8 @@ using Dropshelf.Activities.Media;
 using Dropshelf.Activities.Notes;
 using Dropshelf.Activities.Notifications;
 using Dropshelf.Activities.Power;
+using Dropshelf.Activities.Shelf;
+using Dropshelf.Activities.Terminal;
 using Dropshelf.Activities.Timer;
 using Dropshelf.Activities.Weather;
 using Dropshelf.Animation;
@@ -60,6 +62,7 @@ public partial class App : Application
     private MediaSessionService? _media;
     private NowPlayingActivity? _nowPlaying;
     private VolumeActivity? _volume;
+    private IndicatorActivity? _indicator;
     private BrightnessActivity? _brightness;
     private BatteryActivity? _battery;
     private BluetoothActivity? _bluetooth;
@@ -70,6 +73,8 @@ public partial class App : Application
     private ToolsService? _tools;
     private TimerActivity? _timer;
     private NotesActivity? _notes;
+    private ShelfActivity? _shelf;
+    private TerminalActivity? _terminal;
     private CalendarService? _calendar;
     private WeatherService? _weather;
     private TodayActivity? _today;
@@ -156,7 +161,6 @@ public partial class App : Application
         _settings = new SettingsService();
         AnimationSettings.Attach(_settings.Current);
         _theme = new ThemeService(_settings); // accent resources; must exist before any window is created
-        TryStep("old shelf data", () => JsonFile.Delete(AppPaths.ShelfFile)); // the shelf is gone; its saved list is not needed
         _basketStore = new ItemStore();
 
         _messages = new MessageWindow();
@@ -284,12 +288,18 @@ public partial class App : Application
     {
         _osd = new OsdSuppressor { Gate = hud => _activityHost!.CanShowHud(hud) };
 
+        TryStep("indicators", () =>
+        {
+            _indicator = new IndicatorActivity(_settings!);
+            _activityHost!.Register(_indicator);
+        });
+
         TryStep("audio endpoint", () => _audio = new AudioEndpointService());
         if (_audio is { IsAvailable: true })
         {
             TryStep("volume HUD", () =>
             {
-                _volume = new VolumeActivity(_audio, _settings!, _osd);
+                _volume = new VolumeActivity(_audio, _settings!, _osd, _indicator);
                 _activityHost!.Register(_volume);
             });
         }
@@ -339,14 +349,28 @@ public partial class App : Application
 
         TryStep("timer", () =>
         {
-            _timer = new TimerActivity(_settings!, _toast);
+            _timer = new TimerActivity(_settings!, _toast, _activityHost);
             _activityHost.Register(_timer);
+            _activityHost.Register(_timer.Stopwatch);
+            _activityHost.Register(_timer.Alarms);
+        });
+
+        TryStep("shelf", () =>
+        {
+            _shelf = new ShelfActivity(_settings!);
+            _activityHost.Register(_shelf);
         });
 
         TryStep("notes", () =>
         {
             _notes = new NotesActivity();
             _activityHost.Register(_notes);
+        });
+
+        TryStep("terminal", () =>
+        {
+            _terminal = new TerminalActivity(_settings!);
+            _activityHost.Register(_terminal);
         });
 
         TryStep("weather", () =>
@@ -382,8 +406,11 @@ public partial class App : Application
         TryStep("weather pill", () => _weatherPill?.Dispose());
         TryStep("weather", () => _weather?.Dispose());
         TryStep("notes", () => _notes?.Dispose());
+        TryStep("shelf", () => _shelf?.Dispose());
+        TryStep("terminal", () => _terminal?.Dispose());
         TryStep("timer", () => _timer?.Dispose());
         TryStep("Bluetooth HUD", () => _bluetooth?.Dispose());
+        TryStep("indicators", () => _indicator?.Dispose());
         TryStep("battery HUD", () => _battery?.Dispose());
         TryStep("brightness HUD", () => _brightness?.Dispose());
         TryStep("now playing", () =>
@@ -430,6 +457,7 @@ public partial class App : Application
         }
 
         TryStep("notes flush", () => _notes?.Store.Flush());
+        TryStep("shelf flush", () => _shelf?.Store.Flush());
         TryStep("clipboard flush", () => _clipboard?.Flush());
         TryStep("settings flush", () => _settings?.Flush());
     }
@@ -481,6 +509,19 @@ public partial class App : Application
             case nameof(AppSettings.ShakeToOpenBasket):
             case nameof(AppSettings.ScrollToChangeVolume):
                 ApplyMouseHookSetting();
+                break;
+            case nameof(AppSettings.ShelfEnabled):
+                _shelf?.ApplySettings();
+                break;
+            case nameof(AppSettings.ShowCapsLockHud):
+            case nameof(AppSettings.ShowFocusHud):
+                _indicator?.ApplySettings();
+                break;
+            case nameof(AppSettings.TerminalEnabled):
+                _terminal?.ApplySettings();
+                break;
+            case nameof(AppSettings.RememberShelf):
+                _shelf?.Store.OnRememberChanged();
                 break;
             case nameof(AppSettings.ShowNowPlaying):
                 _nowPlaying?.ApplySettings();

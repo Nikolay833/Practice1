@@ -27,11 +27,31 @@ public enum AccentPreset
     Graphite,
 }
 
+/// <summary>The page the Clock tab shows.</summary>
+public enum ClockPage
+{
+    Alarm,
+    Stopwatch,
+    Timer,
+}
+
+/// <summary>The shell the island's terminal runs commands in.</summary>
+public enum TerminalShell
+{
+    PowerShell,
+    CommandPrompt,
+}
+
 /// <summary>User-configurable options. Bound directly by the settings window.</summary>
 public sealed class AppSettings : NotifyBase
 {
     private bool _launchAtStartup = true; // on by default: Dropshelf is meant to be always running
     private bool _shakeToOpenBasket = true;
+    private bool _shelfEnabled = true;
+    private bool _rememberShelf = true;
+    private bool _terminalEnabled = true;
+    private TerminalShell _terminalShell = TerminalShell.PowerShell;
+    private string _terminalDirectory = string.Empty;
     private bool _clipboardHistoryEnabled = true;
     private int _clipboardHistorySize = 50;
     private bool _expandOnHover = true;
@@ -43,6 +63,9 @@ public sealed class AppSettings : NotifyBase
     private bool _scrollToChangeVolume = true;
     private bool _showBatteryHud = true;
     private bool _showBluetoothHud = true;
+    private bool _showCapsLockHud = true;
+    private bool _showFocusHud = true;
+    private bool _showSilentHud = true;
     private bool _hideInFullscreen = true;
     private bool _showVolumeHudInFullscreen;
     private AccentPreset _accent = AccentPreset.Blue;
@@ -52,6 +75,7 @@ public sealed class AppSettings : NotifyBase
     private int _pomodoroLongBreakMinutes = 15;
     private int _pomodoroRounds = 4;
     private bool _timerSound = true;
+    private ClockPage _clockPage = ClockPage.Timer;
     private bool _weatherEnabled;
     private bool _weatherUseLocation = true;
     private string _weatherCity = string.Empty;
@@ -71,6 +95,22 @@ public sealed class AppSettings : NotifyBase
 
     public bool LaunchAtStartup { get => _launchAtStartup; set => SetField(ref _launchAtStartup, value); }
     public bool ShakeToOpenBasket { get => _shakeToOpenBasket; set => SetField(ref _shakeToOpenBasket, value); }
+
+    /// <summary>The Shelf tab: things dragged onto the notch are kept there.</summary>
+    public bool ShelfEnabled { get => _shelfEnabled; set => SetField(ref _shelfEnabled, value); }
+
+    /// <summary>Keep the shelf's items after a restart (saved encrypted to shelf.json).</summary>
+    public bool RememberShelf { get => _rememberShelf; set => SetField(ref _rememberShelf, value); }
+
+    // ---- Terminal ----
+    /// <summary>The Terminal tab: run a command from the island.</summary>
+    public bool TerminalEnabled { get => _terminalEnabled; set => SetField(ref _terminalEnabled, value); }
+
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public TerminalShell TerminalShell { get => _terminalShell; set => SetField(ref _terminalShell, value); }
+
+    /// <summary>The terminal's current folder (empty = the user's home folder).</summary>
+    public string TerminalDirectory { get => _terminalDirectory; set => SetField(ref _terminalDirectory, value ?? string.Empty); }
     public bool ClipboardHistoryEnabled { get => _clipboardHistoryEnabled; set => SetField(ref _clipboardHistoryEnabled, value); }
 
     public int ClipboardHistorySize
@@ -104,6 +144,15 @@ public sealed class AppSettings : NotifyBase
     public bool ShowBatteryHud { get => _showBatteryHud; set => SetField(ref _showBatteryHud, value); }
     public bool ShowBluetoothHud { get => _showBluetoothHud; set => SetField(ref _showBluetoothHud, value); }
 
+    /// <summary>"Caps Lock On / Off" on the island.</summary>
+    public bool ShowCapsLockHud { get => _showCapsLockHud; set => SetField(ref _showCapsLockHud, value); }
+
+    /// <summary>"Do Not Disturb On / Off" on the island (Windows 11).</summary>
+    public bool ShowFocusHud { get => _showFocusHud; set => SetField(ref _showFocusHud, value); }
+
+    /// <summary>Muting the sound shows "Silent Mode On" (a ringing bell) instead of the volume bar.</summary>
+    public bool ShowSilentHud { get => _showSilentHud; set => SetField(ref _showSilentHud, value); }
+
     // ---- Fullscreen ----
     public bool HideInFullscreen { get => _hideInFullscreen; set => SetField(ref _hideInFullscreen, value); }
     public bool ShowVolumeHudInFullscreen { get => _showVolumeHudInFullscreen; set => SetField(ref _showVolumeHudInFullscreen, value); }
@@ -124,6 +173,10 @@ public sealed class AppSettings : NotifyBase
 
     /// <summary>Play the soft chime when a timer finishes.</summary>
     public bool TimerSound { get => _timerSound; set => SetField(ref _timerSound, value); }
+
+    /// <summary>The Clock tab's last page (Alarm, Stopwatch or Timer).</summary>
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public ClockPage ClockPage { get => _clockPage; set => SetField(ref _clockPage, value); }
 
     // ---- Calendar & weather ----
     /// <summary>Off by default: turning it on sends the approximate location (or the city) to open-meteo.com.</summary>

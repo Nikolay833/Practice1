@@ -16,7 +16,7 @@ internal interface IIslandDropTarget
 /// Quick notes: the "Notes" tab with a note list on the left and a plain-text editor. Nothing on the pill. Dropping text onto
 /// the tab appends it to the current note; Ctrl+Shift+N opens the island on this tab with the editor focused.
 /// </summary>
-internal sealed class NotesActivity : PillActivityBase, IIslandDropTarget, IDisposable
+internal sealed class NotesActivity : PillActivityBase, IIslandDropTarget, IReleasesKeyboard, IDisposable
 {
     private NotesView? _view;
 
@@ -47,7 +47,8 @@ internal sealed class NotesActivity : PillActivityBase, IIslandDropTarget, IDisp
     public void FocusEditor() => _view?.FocusEditor();
 
     public bool CanDrop(IDataObject data) =>
-        !data.GetDataPresent(DataFormats.FileDrop)
+        !DragState.IsActive
+        && !data.GetDataPresent(DataFormats.FileDrop)
         && (data.GetDataPresent(DataFormats.UnicodeText) || data.GetDataPresent(DataFormats.Text));
 
     public bool Drop(IDataObject data)

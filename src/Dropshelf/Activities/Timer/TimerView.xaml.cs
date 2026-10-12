@@ -20,7 +20,7 @@ public partial class TimerView : UserControl
 {
     private const int MaxMinutes = 120;
     private const double Spacing = 11;         // pixels per minute on the ruler
-    private const double TickTop = 24, TickHeight = 34, TickWidth = 3;
+    private const double TickTop = 20, TickHeight = 26, TickWidth = 3;
 
     private static readonly Brush StartFill = Frozen(Color.FromArgb(0x40, 0xFF, 0x9F, 0x0A));
     private static readonly Brush BreakFill = Frozen(Color.FromArgb(0x40, 0x30, 0xD1, 0x58));
@@ -89,7 +89,7 @@ public partial class TimerView : UserControl
                 var label = new TextBlock
                 {
                     Text = m.ToString(CultureInfo.CurrentCulture),
-                    FontSize = 14,
+                    FontSize = 13,
                     FontWeight = FontWeights.SemiBold,
                     Width = 30,
                     TextAlignment = TextAlignment.Center,

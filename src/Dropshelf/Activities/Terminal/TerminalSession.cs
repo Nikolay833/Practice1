@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
 using System.Threading;
@@ -70,6 +71,7 @@ internal sealed class TerminalSession : IDisposable
         // Tell programs this terminal does colours (claude and other node tools look at these).
         Environment.SetEnvironmentVariable("COLORTERM", "truecolor");
         Environment.SetEnvironmentVariable("TERM_PROGRAM", "Dropshelf");
+        RefreshPath();
 
         var console = new PseudoConsole();
         console.Output += OnOutput;
@@ -86,6 +88,41 @@ internal sealed class TerminalSession : IDisposable
             _ended = true;
             Screen.Feed($"\x1b[91mCould not start {ShellName}: {ex.Message}\x1b[0m\r\n");
             Changed?.Invoke();
+        }
+    }
+
+    /// <summary>
+    /// Dropshelf's own PATH is a copy taken when it started, so a tool installed since then (claude, node, git) would be
+    /// "not recognized". Rebuild it from the saved system and user PATH, as a new Windows Terminal tab would, keeping any
+    /// entries only this process has.
+    /// </summary>
+    private static void RefreshPath()
+    {
+        try
+        {
+            var entries = new List<string>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string? source in new[]
+                     {
+                         Environment.GetEnvironmentVariable("Path", EnvironmentVariableTarget.Machine),
+                         Environment.GetEnvironmentVariable("Path", EnvironmentVariableTarget.User),
+                         Environment.GetEnvironmentVariable("Path", EnvironmentVariableTarget.Process),
+                     })
+            {
+                foreach (string entry in (source ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    if (seen.Add(entry.TrimEnd('\\')))
+                    {
+                        entries.Add(entry);
+                    }
+                }
+            }
+
+            Environment.SetEnvironmentVariable("Path", string.Join(';', entries));
+        }
+        catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException)
+        {
+            Log.Info($"Could not refresh PATH for the terminal: {ex.Message}");
         }
     }
 

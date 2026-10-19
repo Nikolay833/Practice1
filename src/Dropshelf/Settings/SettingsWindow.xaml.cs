@@ -28,6 +28,7 @@ public partial class SettingsWindow : Window
         DataContext = _settings;
 
         ShowAnimationMode();
+        ShowShell();
         BuildAccentSwatches();
         VersionText.Text = "Version " + Installer.CurrentVersion;
         UpdateInstallInfo();
@@ -340,6 +341,20 @@ public partial class SettingsWindow : Window
         finally
         {
             IcsTestButton.IsEnabled = true;
+        }
+    }
+
+    private void ShowShell()
+    {
+        ShellPowerShell.IsChecked = _settings.TerminalShell == TerminalShell.PowerShell;
+        ShellCmd.IsChecked = _settings.TerminalShell == TerminalShell.CommandPrompt;
+    }
+
+    private void Shell_Checked(object sender, RoutedEventArgs e)
+    {
+        if (!_initializing && sender is RadioButton { Tag: string tag } && Enum.TryParse(tag, out TerminalShell shell))
+        {
+            _settings.TerminalShell = shell;
         }
     }
 

@@ -127,7 +127,7 @@ internal sealed class CalendarService : IDisposable
         }
     }
 
-    /// <summary>Rebuilds the list if the day changed since it was built (the Today tab calls this when it opens).</summary>
+    /// <summary>Rebuilds the list if the day changed since it was built .</summary>
     public void EnsureCurrentDay()
     {
         if (Enabled && _builtFor != DateTime.Today)

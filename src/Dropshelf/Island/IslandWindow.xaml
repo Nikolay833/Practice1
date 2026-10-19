@@ -5,7 +5,7 @@
         Title="Dropshelf" Width="196" Height="32"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         ResizeMode="NoResize" ShowInTaskbar="False" ShowActivated="False" Topmost="True"
-        WindowStartupLocation="Manual" Left="0" Top="0" AllowDrop="True"
+        WindowStartupLocation="Manual" Left="0" Top="0"
         UseLayoutRounding="True" SnapsToDevicePixels="True"
         FontFamily="{StaticResource UiFont}" Foreground="{StaticResource TextBrush}">
     <!-- The window is at least as large as the island (plus the tab capsule under it while open) and is only resized when
@@ -41,7 +41,7 @@
             <Border x:Name="Body" Grid.Column="1" CornerRadius="0,0,11,11" ClipToBounds="True">
                 <Border.Background>
                     <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                        <GradientStop Color="#FF000000" Offset="0"/>
+                        <GradientStop x:Name="GlassTop" Color="#FF000000" Offset="0"/>
                         <GradientStop x:Name="GlassMid" Color="#FF000000" Offset="0.55"/>
                         <GradientStop x:Name="GlassBottom" Color="#FF000000" Offset="1"/>
                     </LinearGradientBrush>
@@ -63,7 +63,7 @@
                              Margin="0,13,10,0" Visibility="Collapsed" IsHitTestVisible="False"/>
 
                     <!-- Expanded panel (fixed size; the island clips it while animating). -->
-                    <Grid x:Name="ExpandedPanel" Width="640" Height="190" VerticalAlignment="Top" HorizontalAlignment="Center"
+                    <Grid x:Name="ExpandedPanel" Width="720" Height="400" VerticalAlignment="Top" HorizontalAlignment="Center"
                           Opacity="0" Visibility="Hidden" IsHitTestVisible="False" RenderTransformOrigin="0.5,0">
                         <Grid.RenderTransform>
                             <ScaleTransform x:Name="ExpandedScale"/>
@@ -72,12 +72,8 @@
                         <act:CrossfadeHost x:Name="Pages" Margin="26,18,26,20"/>
                         <TextBlock x:Name="EmptyText" Visibility="Collapsed" Style="{StaticResource TextSecondary}"
                                    HorizontalAlignment="Center" VerticalAlignment="Center"
-                                   Text="Turn on the Shelf, Terminal or Now Playing in Settings"/>
+                                   Text="The terminal could not be created"/>
 
-                        <!-- Drag-over highlight for a tab that takes drops (text onto Notes). -->
-                        <Border x:Name="TabDropHighlight" Margin="18,12,18,14" Visibility="Collapsed" IsHitTestVisible="False"
-                                CornerRadius="18" BorderThickness="1.5" BorderBrush="{DynamicResource AccentBrush}"
-                                Background="{DynamicResource AccentWashBrush}"/>
                     </Grid>
 
                 </Grid>
@@ -95,9 +91,9 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="6"/>
             </Grid.ColumnDefinitions>
-            <Path Grid.Column="0" VerticalAlignment="Top" Width="6" Height="6" Stretch="Fill"
+            <Path x:Name="BubbleLeftShoulder" Grid.Column="0" VerticalAlignment="Top" Width="6" Height="6" Stretch="Fill"
                   Fill="{StaticResource BlackBrush}" Data="M0,0 L1,0 L1,1 A1,1 0 0 0 0,0 Z"/>
-            <Path Grid.Column="2" VerticalAlignment="Top" Width="6" Height="6" Stretch="Fill"
+            <Path x:Name="BubbleRightShoulder" Grid.Column="2" VerticalAlignment="Top" Width="6" Height="6" Stretch="Fill"
                   Fill="{StaticResource BlackBrush}" Data="M1,0 L0,0 L0,1 A1,1 0 0 1 1,0 Z"/>
             <Border x:Name="BubbleBody" Grid.Column="1" Background="{StaticResource BlackBrush}" CornerRadius="0,0,14,14"/>
         </Grid>

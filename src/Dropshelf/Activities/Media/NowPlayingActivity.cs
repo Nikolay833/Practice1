@@ -76,7 +76,7 @@ internal sealed class NowPlayingActivity : PillActivityBase, IDisposable
     public override string Id => "media";
     public override int Priority => 100;
     public override bool IsActive => _active;
-    public override string? TabTitle => "Now Playing";
+    public override string? TabTitle => null; // the island only has the terminal; the song shows on the closed island
     public override bool HasExpanded => _hasExpanded;
 
     public override CompactContent? CreateCompact() => CompactContent.Of(_artHost, _barsHost);

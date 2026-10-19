@@ -27,14 +27,6 @@ public enum AccentPreset
     Graphite,
 }
 
-/// <summary>The page the Clock tab shows.</summary>
-public enum ClockPage
-{
-    Alarm,
-    Stopwatch,
-    Timer,
-}
-
 /// <summary>The shell the island's terminal runs commands in.</summary>
 public enum TerminalShell
 {
@@ -47,14 +39,12 @@ public sealed class AppSettings : NotifyBase
 {
     private bool _launchAtStartup = true; // on by default: Dropshelf is meant to be always running
     private bool _shakeToOpenBasket = true;
-    private bool _shelfEnabled = true;
-    private bool _rememberShelf = true;
-    private bool _terminalEnabled = true;
     private TerminalShell _terminalShell = TerminalShell.PowerShell;
     private string _terminalDirectory = string.Empty;
     private bool _clipboardHistoryEnabled = true;
     private int _clipboardHistorySize = 50;
     private bool _expandOnHover = true;
+    private bool _islandTransparent = true;
     private AnimationMode? _animations;
     private bool _showNowPlaying = true;
     private bool _showVolumeHud = true;
@@ -68,18 +58,11 @@ public sealed class AppSettings : NotifyBase
     private bool _showSilentHud = true;
     private bool _showPrivacyDots = true;
     private bool _showDownloads = true;
-    private bool _downloadsToShelf = true;
     private bool _splitIsland = true;
     private bool _hideInFullscreen = true;
     private bool _showVolumeHudInFullscreen;
     private AccentPreset _accent = AccentPreset.Blue;
     private bool _screenshotHotkeyEnabled = true;
-    private int _pomodoroWorkMinutes = 25;
-    private int _pomodoroBreakMinutes = 5;
-    private int _pomodoroLongBreakMinutes = 15;
-    private int _pomodoroRounds = 4;
-    private bool _timerSound = true;
-    private ClockPage _clockPage = ClockPage.Timer;
     private bool _weatherEnabled;
     private bool _weatherUseLocation = true;
     private string _weatherCity = string.Empty;
@@ -100,21 +83,15 @@ public sealed class AppSettings : NotifyBase
     public bool LaunchAtStartup { get => _launchAtStartup; set => SetField(ref _launchAtStartup, value); }
     public bool ShakeToOpenBasket { get => _shakeToOpenBasket; set => SetField(ref _shakeToOpenBasket, value); }
 
-    /// <summary>The Shelf tab: things dragged onto the notch are kept there.</summary>
-    public bool ShelfEnabled { get => _shelfEnabled; set => SetField(ref _shelfEnabled, value); }
-
-    /// <summary>Keep the shelf's items after a restart (saved encrypted to shelf.json).</summary>
-    public bool RememberShelf { get => _rememberShelf; set => SetField(ref _rememberShelf, value); }
-
     // ---- Terminal ----
-    /// <summary>The Terminal tab: run a command from the island.</summary>
-    public bool TerminalEnabled { get => _terminalEnabled; set => SetField(ref _terminalEnabled, value); }
 
+    /// <summary>The shell the island's terminal runs.</summary>
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public TerminalShell TerminalShell { get => _terminalShell; set => SetField(ref _terminalShell, value); }
 
-    /// <summary>The terminal's current folder (empty = the user's home folder).</summary>
+    /// <summary>The folder the terminal starts in (empty = the user's home folder).</summary>
     public string TerminalDirectory { get => _terminalDirectory; set => SetField(ref _terminalDirectory, value ?? string.Empty); }
+
     public bool ClipboardHistoryEnabled { get => _clipboardHistoryEnabled; set => SetField(ref _clipboardHistoryEnabled, value); }
 
     public int ClipboardHistorySize
@@ -126,6 +103,9 @@ public sealed class AppSettings : NotifyBase
     /// <summary>Resting the cursor on the island opens it (otherwise a click does). Keeps its old JSON name.</summary>
     [JsonPropertyName("ExpandShelfOnHover")]
     public bool ExpandOnHover { get => _expandOnHover; set => SetField(ref _expandOnHover, value); }
+
+    /// <summary>The island has no black notch: invisible while closed, transparent with light grey text while open.</summary>
+    public bool IslandTransparent { get => _islandTransparent; set => SetField(ref _islandTransparent, value); }
 
     /// <summary>
     /// Animation level chosen by the user. Null (never chosen) means Full, unless Windows' "Animation effects" is off,
@@ -163,9 +143,6 @@ public sealed class AppSettings : NotifyBase
     /// <summary>Browser downloads into the Downloads folder: a ring while they run, then the file to drag out.</summary>
     public bool ShowDownloads { get => _showDownloads; set => SetField(ref _showDownloads, value); }
 
-    /// <summary>Finished downloads are also put on the shelf.</summary>
-    public bool DownloadsToShelf { get => _downloadsToShelf; set => SetField(ref _downloadsToShelf, value); }
-
     /// <summary>A second live activity shows in a round bubble beside the island.</summary>
     public bool SplitIsland { get => _splitIsland; set => SetField(ref _splitIsland, value); }
 
@@ -180,19 +157,6 @@ public sealed class AppSettings : NotifyBase
     // ---- Screenshot ----
     /// <summary>Ctrl+Shift+S opens the region capture overlay.</summary>
     public bool ScreenshotHotkeyEnabled { get => _screenshotHotkeyEnabled; set => SetField(ref _screenshotHotkeyEnabled, value); }
-
-    // ---- Timer / Pomodoro ----
-    public int PomodoroWorkMinutes { get => _pomodoroWorkMinutes; set => SetField(ref _pomodoroWorkMinutes, Math.Clamp(value, 1, 180)); }
-    public int PomodoroBreakMinutes { get => _pomodoroBreakMinutes; set => SetField(ref _pomodoroBreakMinutes, Math.Clamp(value, 1, 60)); }
-    public int PomodoroLongBreakMinutes { get => _pomodoroLongBreakMinutes; set => SetField(ref _pomodoroLongBreakMinutes, Math.Clamp(value, 1, 120)); }
-    public int PomodoroRounds { get => _pomodoroRounds; set => SetField(ref _pomodoroRounds, Math.Clamp(value, 1, 12)); }
-
-    /// <summary>Play the soft chime when a timer finishes.</summary>
-    public bool TimerSound { get => _timerSound; set => SetField(ref _timerSound, value); }
-
-    /// <summary>The Clock tab's last page (Alarm, Stopwatch or Timer).</summary>
-    [JsonConverter(typeof(JsonStringEnumConverter))]
-    public ClockPage ClockPage { get => _clockPage; set => SetField(ref _clockPage, value); }
 
     // ---- Calendar & weather ----
     /// <summary>Off by default: turning it on sends the approximate location (or the city) to open-meteo.com.</summary>

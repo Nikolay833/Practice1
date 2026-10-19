@@ -1,8 +1,8 @@
 # Dropshelf
 
-Dropshelf is a small Windows utility that turns the top of your screen into an Apple-style **island**: a black
-MacBook-style notch that shows live activities like the iPhone's Dynamic Island and springs open into a small control
-centre. It also has a floating "basket" you can summon mid-drag and a searchable clipboard history. It lives in the
+Dropshelf is a small Windows utility that turns the top of your screen into an Apple-style **island**: an invisible
+(or black, if you prefer) notch that shows live activities like the iPhone's Dynamic Island and opens into a real
+terminal. It also has a floating "basket" you can summon mid-drag and a searchable clipboard history. It lives in the
 system tray.
 
 It is an independent Windows app inspired by Droppy for macOS and by Apple's design. It is not affiliated with, endorsed
@@ -12,13 +12,12 @@ For a plain-language tour of everything it does, see [FEATURES.md](FEATURES.md).
 
 ## Features
 
-- **The island** - a pure black notch flush with the top edge of the primary screen, with the concave "shoulders" and
-  rounded bottom corners of a MacBook notch. While collapsed it is click-through, so it does not block clicks on tab
-  strips or title bars underneath. Hover it (or click it, with *Open on hover* off) and it springs open like Droppy's
-  notch: black at the top fading to almost clear at the bottom, wide curved shoulders, and a floating glass
-  capsule of icon tabs (**Now Playing**, **Timer**, **Notes**, **Today**) plus a round settings button under it. Opening
-  while a live activity shows opens that activity's tab. It only opens when the cursor *rests* on it (passing over or
-  clicking through to the tabs or address bar under it never opens it), and a click anywhere else closes it. Text dropped onto the open Notes tab is appended to the note.
+- **The island** - fully transparent by default (*Transparent island*): nothing shows at the top-centre of the primary
+  screen until something happens, and its text is light grey (turn the setting off for a black MacBook-style notch).
+  While collapsed it is click-through. Rest the cursor on it (or click it, with *Open on hover* off, or press
+  `Ctrl+Shift+N`) and it opens into a **real terminal**: PowerShell or Command Prompt in a Windows pseudo console
+  (ConPTY), drawn by Dropshelf's own VT screen, so interactive programs such as `claude` run in it. A click anywhere else
+  closes it; the shell keeps running while it is closed.
 - **Live activities** - while collapsed, the island shows a leading view at its left end and a trailing view at its right
   end, like the Dynamic Island, and springs wider to fit them. Short-lived HUDs (volume, brightness, battery, Bluetooth,
   tool results, screenshots, notifications) take it over for about 1.8 seconds and then hand it back. See
@@ -62,8 +61,6 @@ For a plain-language tour of everything it does, see [FEATURES.md](FEATURES.md).
   (kind, age, preview, size; white outline on the selected card) with a search field and filter capsules (Clipboard,
   Pinned, Text, Images, Files). Type to search, `Left` / `Right` to choose, `Enter` to paste into the window you came from. Remembers text, images and file lists (default 50 entries, pinned entries are kept). Content flagged as
   private by password managers is never recorded; the history is encrypted with Windows DPAPI. The list is virtualized.
-- **Quick notes** - the *Notes* tab, auto-saved and encrypted with DPAPI; `Ctrl+Shift+N` opens it with the caret in the
-  editor.
 - **Apple design** - Apple's dark-mode system colours and label greys, SF Pro when installed (Segoe UI Variable
   otherwise), iOS/macOS switches, sliders, segmented controls, plain accent buttons and macOS menus with an icon on every
   row. Settings looks like macOS System Settings (traffic-light window buttons, grouped sections) and dialogs are
@@ -74,7 +71,7 @@ For a plain-language tour of everything it does, see [FEATURES.md](FEATURES.md).
 - **Always running** - installs itself on first run, starts with Windows, relaunches after a crash and comes back after
   update reboots (see [Always running](#always-running)). The MSIX version is installed and updated by Windows and starts
   through a startup task instead.
-- **Tray icon** - Open Dropshelf, Open basket, Clipboard history, Take screenshot, Quick note, Settings, Uninstall, Quit.
+- **Tray icon** - Open Dropshelf, Open basket, Clipboard history, Take screenshot, Terminal, Settings, Uninstall, Quit.
   Only one instance runs at a time.
 
 ## Performance
@@ -141,8 +138,7 @@ window.
   events are marshalled to the UI thread, and frames are only produced while a spring moves.
 - A `CompactContent` can be *interactive* (the island then takes mouse input, does not open on hover and a click on its
   button does not open it: the screenshot HUD's *Copy text*), a HUD can set its own duration and ask to be kept until the
-  island closes (results of tools), and a tab can pick its position (`TabOrder`). A tab may also take drops itself
-  (`IIslandDropTarget`, used by Notes).
+  island closes (results of tools), and a tab can pick its position (`TabOrder`).
 
 Every activity is created inside a `try`; on a machine where its API is missing (no Core Audio, no WinRT media controls, no
 WMI brightness class...) the feature is simply off and the rest keeps working.
@@ -199,7 +195,7 @@ Command-line switches: `--no-install` (run from where it is, never self-install)
 | `Ctrl+Shift+B` | Open the basket at the cursor |
 | `Ctrl+Shift+V` | Open clipboard history |
 | `Ctrl+Shift+S` | Screenshot: drag a region (`Enter` / release = capture, `F` = full screen, `Esc` = cancel) |
-| `Ctrl+Shift+N` | Quick note: open the island on the Notes tab with the editor focused |
+| `Ctrl+Shift+N` | Open the island with the keyboard in the terminal |
 | `Ctrl+N`, `Esc` | In the notes editor: new note, release the keyboard |
 | `Up` / `Down`, `Enter` | In clipboard history: move, copy back and paste |
 | `Ctrl+P`, `Delete`, `Esc` | In clipboard history: pin/unpin, remove entry, close |

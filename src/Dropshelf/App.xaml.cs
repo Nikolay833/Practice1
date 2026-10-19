@@ -12,12 +12,9 @@ using Dropshelf.Activities.Devices;
 using Dropshelf.Activities.Downloads;
 using Dropshelf.Activities.Hud;
 using Dropshelf.Activities.Media;
-using Dropshelf.Activities.Notes;
 using Dropshelf.Activities.Notifications;
 using Dropshelf.Activities.Power;
-using Dropshelf.Activities.Shelf;
 using Dropshelf.Activities.Terminal;
-using Dropshelf.Activities.Timer;
 using Dropshelf.Activities.Weather;
 using Dropshelf.Animation;
 using Dropshelf.Basket;
@@ -73,15 +70,11 @@ public partial class App : Application
     private ToastActivity? _toast;
     private ProgressActivity? _progress;
     private ToolsService? _tools;
-    private TimerActivity? _timer;
-    private NotesActivity? _notes;
-    private ShelfActivity? _shelf;
     private TerminalActivity? _terminal;
     private DownloadActivity? _downloads;
     private PrivacyMonitor? _privacy;
     private CalendarService? _calendar;
     private WeatherService? _weather;
-    private TodayActivity? _today;
     private MeetingActivity? _meeting;
     private WeatherPillActivity? _weatherPill;
     private ScreenshotService? _screenshot;
@@ -165,6 +158,7 @@ public partial class App : Application
         _settings = new SettingsService();
         AnimationSettings.Attach(_settings.Current);
         _theme = new ThemeService(_settings); // accent resources; must exist before any window is created
+        IslandWindow.SetTextColor(_settings.Current.IslandTransparent ? IslandWindow.LightGrey : System.Windows.Media.Colors.White);
         _basketStore = new ItemStore();
 
         _messages = new MessageWindow();
@@ -231,7 +225,7 @@ public partial class App : Application
             uninstall: PackageIdentity.IsPackaged ? OpenAppsSettings : Uninstall,
             quit: QuitByUser,
             screenshot: () => _screenshot?.Begin(),
-            quickNote: () => _island.ShowNotes());
+            openTerminal: () => _island.ShowTerminal());
         OcrActions.Message += text => _tray?.ShowBalloon("Dropshelf", text);
 
         _screenshot = new ScreenshotService(_toast!);
@@ -241,9 +235,9 @@ public partial class App : Application
             _tray.ShowBalloon("Dropshelf", "Ctrl+Shift+B is already used by another app, so the basket hotkey is unavailable.");
         }
 
-        if (!_hotkeys.Register(HotkeyService.NotesId, NativeMethods.MOD_CONTROL | NativeMethods.MOD_SHIFT, NativeMethods.VK_N, () => _island.ShowNotes()))
+        if (!_hotkeys.Register(HotkeyService.TerminalId, NativeMethods.MOD_CONTROL | NativeMethods.MOD_SHIFT, NativeMethods.VK_N, () => _island.ShowTerminal()))
         {
-            _tray.ShowBalloon("Dropshelf", "Ctrl+Shift+N is already used by another app, so the quick note hotkey is unavailable.");
+            _tray.ShowBalloon("Dropshelf", "Ctrl+Shift+N is already used by another app, so the terminal hotkey is unavailable.");
         }
 
         // Keep the registry entry pointing at the installed exe (this also writes it on the first run after install),
@@ -376,26 +370,6 @@ public partial class App : Application
             _activityHost.Register(_notificationPill);
         });
 
-        TryStep("timer", () =>
-        {
-            _timer = new TimerActivity(_settings!, _toast, _activityHost);
-            _activityHost.Register(_timer);
-            _activityHost.Register(_timer.Stopwatch);
-            _activityHost.Register(_timer.Alarms);
-        });
-
-        TryStep("shelf", () =>
-        {
-            _shelf = new ShelfActivity(_settings!);
-            _activityHost.Register(_shelf);
-        });
-
-        TryStep("notes", () =>
-        {
-            _notes = new NotesActivity();
-            _activityHost.Register(_notes);
-        });
-
         TryStep("terminal", () =>
         {
             _terminal = new TerminalActivity(_settings!);
@@ -407,13 +381,6 @@ public partial class App : Application
             _downloads = new DownloadActivity(_settings!);
             _activityHost.Register(_downloads);
             _activityHost.Register(_downloads.Done);
-            _downloads.Finished += path =>
-            {
-                if (_settings!.Current.DownloadsToShelf && _settings.Current.ShelfEnabled)
-                {
-                    _shelf?.Store.AddPaths(new[] { path });
-                }
-            };
         });
 
         TryStep("weather", () =>
@@ -430,11 +397,6 @@ public partial class App : Application
             _activityHost.Register(_meeting);
         });
 
-        TryStep("today tab", () =>
-        {
-            _today = new TodayActivity(_settings!);
-            _activityHost.Register(_today);
-        });
     }
 
     protected override void OnExit(ExitEventArgs e)
@@ -450,10 +412,7 @@ public partial class App : Application
         TryStep("calendar", () => _calendar?.Dispose());
         TryStep("weather pill", () => _weatherPill?.Dispose());
         TryStep("weather", () => _weather?.Dispose());
-        TryStep("notes", () => _notes?.Dispose());
-        TryStep("shelf", () => _shelf?.Dispose());
         TryStep("terminal", () => _terminal?.Dispose());
-        TryStep("timer", () => _timer?.Dispose());
         TryStep("Bluetooth HUD", () => _bluetooth?.Dispose());
         TryStep("indicators", () => _indicator?.Dispose());
         TryStep("popup hider", () => _osd?.Dispose());
@@ -502,8 +461,6 @@ public partial class App : Application
             return;
         }
 
-        TryStep("notes flush", () => _notes?.Store.Flush());
-        TryStep("shelf flush", () => _shelf?.Store.Flush());
         TryStep("clipboard flush", () => _clipboard?.Flush());
         TryStep("settings flush", () => _settings?.Flush());
     }
@@ -556,9 +513,6 @@ public partial class App : Application
             case nameof(AppSettings.ScrollToChangeVolume):
                 ApplyMouseHookSetting();
                 break;
-            case nameof(AppSettings.ShelfEnabled):
-                _shelf?.ApplySettings();
-                break;
             case nameof(AppSettings.ReplaceWindowsOsd):
             case nameof(AppSettings.ShowVolumeHud):
                 if (_osd != null)
@@ -586,11 +540,11 @@ public partial class App : Application
             case nameof(AppSettings.SplitIsland):
                 _activityHost!.SplitEnabled = _settings.Current.SplitIsland;
                 break;
-            case nameof(AppSettings.TerminalEnabled):
+            case nameof(AppSettings.TerminalShell):
                 _terminal?.ApplySettings();
                 break;
-            case nameof(AppSettings.RememberShelf):
-                _shelf?.Store.OnRememberChanged();
+            case nameof(AppSettings.IslandTransparent):
+                _island?.ApplyLook();
                 break;
             case nameof(AppSettings.ShowNowPlaying):
                 _nowPlaying?.ApplySettings();
@@ -612,16 +566,9 @@ public partial class App : Application
             case nameof(AppSettings.ScreenshotHotkeyEnabled):
                 ApplyScreenshotSetting();
                 break;
-            case nameof(AppSettings.PomodoroWorkMinutes):
-            case nameof(AppSettings.PomodoroBreakMinutes):
-            case nameof(AppSettings.PomodoroLongBreakMinutes):
-            case nameof(AppSettings.PomodoroRounds):
-                _timer?.ApplySettings();
-                break;
             case nameof(AppSettings.WeatherEnabled):
                 _weather?.ApplySettings();
                 _weatherPill?.ApplySettings();
-                _today?.ApplySettings();
                 break;
             case nameof(AppSettings.WeatherUseLocation):
             case nameof(AppSettings.WeatherCity):
@@ -636,7 +583,6 @@ public partial class App : Application
             case nameof(AppSettings.CalendarEnabled):
                 _calendar?.ApplySettings();
                 _meeting?.ApplySettings();
-                _today?.ApplySettings();
                 break;
             case nameof(AppSettings.CalendarUseWindows):
                 _calendar?.ApplySettings();

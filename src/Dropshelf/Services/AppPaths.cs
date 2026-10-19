@@ -16,13 +16,7 @@ internal static class AppPaths
     public static string ClipboardDir { get; } = Path.Combine(Root, "Clipboard");
 
     public static string SettingsFile { get; } = Path.Combine(Root, "settings.json");
-    /// <summary>The shelf's items (encrypted), while "Remember shelf items" is on.</summary>
-    public static string ShelfFile { get; } = Path.Combine(Root, "shelf.json");
     public static string ClipboardFile { get; } = Path.Combine(Root, "clipboard.json");
-    public static string NotesFile { get; } = Path.Combine(Root, "notes.json");
-    public static string TimerFile { get; } = Path.Combine(Root, "timer.json");
-    public static string StopwatchFile { get; } = Path.Combine(Root, "stopwatch.json");
-    public static string AlarmsFile { get; } = Path.Combine(Root, "alarms.json");
     public static string CalendarFile { get; } = Path.Combine(Root, "calendar.json");   // ICS URLs (encrypted)
     public static string WeatherFile { get; } = Path.Combine(Root, "weather.json");     // last forecast + location (encrypted)
     public static string RestartsFile { get; } = Path.Combine(Root, "restarts.json");

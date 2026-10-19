@@ -107,7 +107,7 @@ internal sealed class WeatherService : IDisposable
         }
     }
 
-    /// <summary>Refreshes when the data is older than the refresh interval (the Today tab calls this when it opens).</summary>
+    /// <summary>Refreshes when the data is older than the refresh interval .</summary>
     public void RefreshIfStale()
     {
         if (Enabled && !_refreshing && (Data == null || DateTime.UtcNow - Data.FetchedUtc > RefreshEvery))

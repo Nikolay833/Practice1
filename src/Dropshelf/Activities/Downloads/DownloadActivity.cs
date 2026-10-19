@@ -17,8 +17,7 @@ namespace Dropshelf.Activities.Downloads;
 /// (Chrome / Edge / Brave: <c>.crdownload</c>, Firefox: <c>.part</c>, Opera: <c>.opdownload</c>) and rename it when it is
 /// done, so a <see cref="FileSystemWatcher"/> on that folder sees both. While something downloads the island shows a spinning
 /// ring with a download arrow and how much has arrived (browsers do not write the total size anywhere, so the ring spins
-/// instead of filling). When it finishes, a HUD shows the file: drag its icon out of the island, or click it to open it; it is
-/// also put on the shelf when that setting is on.
+/// instead of filling). When it finishes, a HUD shows the file: drag its icon out of the island, or click it to open it.
 /// </summary>
 internal sealed class DownloadActivity : PillActivityBase, IDisposable
 {

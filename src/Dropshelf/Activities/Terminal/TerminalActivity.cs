@@ -1,28 +1,24 @@
 using System;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
-using Dropshelf.Activities.Hud;
 using Dropshelf.Services;
 
 namespace Dropshelf.Activities.Terminal;
 
 /// <summary>
-/// The "Terminal" tab: a one-line command prompt in the island (PowerShell or Command Prompt). While a command runs the
-/// collapsed island shows it (a terminal glyph and the command); when it ends with the island closed, a short "Done" or
-/// "Failed" HUD says so.
+/// The island's only tab: a real PowerShell or Command Prompt (Settings) in a pseudo console, drawn straight on the
+/// transparent island. Anything that runs in a console runs here, including interactive tools such as claude. The shell
+/// starts the first time the island opens and keeps running while it is closed.
 /// </summary>
-internal sealed class TerminalActivity : PillActivityBase, IReleasesKeyboard, IDisposable
+internal sealed class TerminalActivity : PillActivityBase, IDisposable
 {
     private readonly SettingsService _settings;
-    private TerminalView? _view;
+    private TerminalScreen? _screen;
 
     public TerminalActivity(SettingsService settings)
     {
         _settings = settings;
         Session = new TerminalSession(settings);
-        Session.StateChanged += RaiseStateChanged;
-        Session.Finished += RequestHud; // the host drops it while the island is open (the tab shows the result)
     }
 
     public TerminalSession Session { get; }
@@ -31,51 +27,26 @@ internal sealed class TerminalActivity : PillActivityBase, IReleasesKeyboard, ID
     public override int Priority => 15;
     public override string? TabTitle => "Terminal";
     public override int TabOrder => -60;
-    public override bool HasExpanded => _settings.Current.TerminalEnabled;
-    public override bool IsActive => Session.IsRunning;
-    public override TimeSpan HudDuration => TimeSpan.FromMilliseconds(2600);
+    public override bool HasExpanded => true;
 
-    public event Action? ReleaseRequested;
-
-    public void ApplySettings() => RaiseStateChanged();
+    /// <summary>The shell setting changed: a running shell is replaced by the chosen one.</summary>
+    public void ApplySettings() => Session.ShellChanged();
 
     public override FrameworkElement? CreateExpanded()
     {
-        _view = new TerminalView(Session, _settings);
-        _view.ReleaseRequested += () => ReleaseRequested?.Invoke();
-        return _view;
+        _screen = new TerminalScreen(Session);
+        return new Grid { Children = { _screen } };
     }
 
-    public void FocusInput() => _view?.FocusInput();
-
-    public override FrameworkElement? CreateMinimal() => Session.IsRunning ? _minimal ??= HudParts.Glyph("\uE756", "SuccessBrush", 14) : null;
-
-    private FrameworkElement? _minimal;
-
-    public override CompactContent? CreateCompact()
+    /// <summary>Puts the keyboard in the terminal (the island must already be allowed to take it).</summary>
+    public void FocusScreen()
     {
-        if (Session.IsRunning)
+        if (_screen != null)
         {
-            var glyph = HudParts.Glyph("", "SuccessBrush");
-            var command = new TextBlock
-            {
-                Text = Trim(Session.LastCommand, 18),
-                FontSize = 12,
-                FontWeight = FontWeights.SemiBold,
-                FontFamily = new FontFamily("Cascadia Mono, Consolas"),
-                VerticalAlignment = VerticalAlignment.Center,
-            };
-            command.SetResourceReference(TextBlock.ForegroundProperty, "TextSecondaryBrush");
-            return CompactContent.Of(glyph, command);
+            _screen.Focus();
+            System.Windows.Input.Keyboard.Focus(_screen);
         }
-
-        bool ok = Session.LastExitCode == 0;
-        var mark = HudParts.Glyph(ok ? "" : "", ok ? "SuccessBrush" : "DangerBrush");
-        var label = HudParts.Label(ok ? "Done" : $"Failed ({Session.LastExitCode})");
-        return CompactContent.Of(mark, label);
     }
-
-    private static string Trim(string text, int max) => text.Length <= max ? text : text[..(max - 1)] + "…";
 
     public void Dispose() => Session.Dispose();
 }

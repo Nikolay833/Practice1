@@ -122,29 +122,6 @@ internal interface IPillActivity
     FrameworkElement? CreateMinimal();
 }
 
-/// <summary>
-/// A live activity without a tab of its own whose page lives in another tab (the stopwatch is a page of the Clock tab): opening
-/// the island while it is on the pill goes to <see cref="TabId"/> and calls <see cref="Reveal"/>.
-/// </summary>
-internal interface IOpensTab
-{
-    string TabId { get; }
-
-    void Reveal();
-}
-
-/// <summary>A tab with a text box that can hand the keyboard back to the app the user was in (Esc).</summary>
-internal interface IReleasesKeyboard
-{
-    event Action? ReleaseRequested;
-}
-
-/// <summary>A tab that must keep the open island from closing for a moment (a tile is being dragged out, its menu is open).</summary>
-internal interface IKeepsIslandOpen
-{
-    bool KeepsIslandOpen { get; }
-}
-
 /// <summary>Convenience base class: events, defaults for "no tab", "not active".</summary>
 internal abstract class PillActivityBase : IPillActivity
 {

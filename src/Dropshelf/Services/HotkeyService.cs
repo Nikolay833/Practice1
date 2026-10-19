@@ -10,7 +10,7 @@ internal sealed class HotkeyService : IDisposable
     public const int BasketId = 1;
     public const int ClipboardId = 2;
     public const int ScreenshotId = 3;
-    public const int NotesId = 4;
+    public const int TerminalId = 4;
     public const int VolumeUpId = 5;
     public const int VolumeDownId = 6;
     public const int VolumeMuteId = 7;

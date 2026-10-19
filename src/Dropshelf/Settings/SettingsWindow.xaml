@@ -202,6 +202,13 @@
                 <TextBlock Text="Island" Style="{StaticResource SectionLabel}"/>
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
+                        <CheckBox IsChecked="{Binding IslandTransparent, Mode=TwoWay}">
+                            <StackPanel>
+                                <TextBlock Text="Transparent island" Style="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="No black notch: invisible until you point at it, then clear with light grey text" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </CheckBox>
+                        <Border Style="{StaticResource Divider}"/>
                         <CheckBox IsChecked="{Binding ExpandOnHover, Mode=TwoWay}">
                             <StackPanel>
                                 <TextBlock Text="Open on hover" Style="{StaticResource TextPrimary}"/>
@@ -220,27 +227,6 @@
                             <StackPanel>
                                 <TextBlock Text="Shake to open basket" Style="{StaticResource TextPrimary}"/>
                                 <TextBlock Text="Shake the mouse left and right while dragging" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
-                            </StackPanel>
-                        </CheckBox>
-                        <Border Style="{StaticResource Divider}"/>
-                        <CheckBox IsChecked="{Binding ShelfEnabled, Mode=TwoWay}">
-                            <StackPanel>
-                                <TextBlock Text="Shelf" Style="{StaticResource TextPrimary}"/>
-                                <TextBlock Text="Drag files, text or links onto the notch to keep them in the Shelf tab" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
-                            </StackPanel>
-                        </CheckBox>
-                        <Border Style="{StaticResource Divider}"/>
-                        <CheckBox IsChecked="{Binding RememberShelf, Mode=TwoWay}" IsEnabled="{Binding ShelfEnabled}">
-                            <StackPanel>
-                                <TextBlock Text="Remember shelf items" Style="{StaticResource TextPrimary}"/>
-                                <TextBlock Text="Keep the shelf after a restart (saved encrypted on this PC)" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
-                            </StackPanel>
-                        </CheckBox>
-                        <Border Style="{StaticResource Divider}"/>
-                        <CheckBox IsChecked="{Binding TerminalEnabled, Mode=TwoWay}">
-                            <StackPanel>
-                                <TextBlock Text="Terminal" Style="{StaticResource TextPrimary}"/>
-                                <TextBlock Text="A Terminal tab that runs PowerShell or Command Prompt commands you type" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
                             </StackPanel>
                         </CheckBox>
                     </StackPanel>
@@ -267,13 +253,6 @@
                             <StackPanel>
                                 <TextBlock Text="Downloads" Style="{StaticResource TextPrimary}"/>
                                 <TextBlock Text="A ring while a browser downloads into your Downloads folder, then the file to drag out" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
-                            </StackPanel>
-                        </CheckBox>
-                        <Border Style="{StaticResource Divider}"/>
-                        <CheckBox IsChecked="{Binding DownloadsToShelf, Mode=TwoWay}" IsEnabled="{Binding ShowDownloads}">
-                            <StackPanel>
-                                <TextBlock Text="Put finished downloads on the shelf" Style="{StaticResource TextPrimary}"/>
-                                <TextBlock Text="They stay there to drag out later" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
                             </StackPanel>
                         </CheckBox>
                         <Border Style="{StaticResource Divider}"/>
@@ -438,43 +417,24 @@
                     </CheckBox>
                 </Border>
 
-                <TextBlock Text="Clock" Style="{StaticResource SectionLabel}"/>
+                <TextBlock Text="Terminal" Style="{StaticResource SectionLabel}"/>
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
                         <Grid>
-                            <TextBlock Text="Pomodoro: focus" Style="{StaticResource TextPrimary}"/>
-                            <TextBlock Text="{Binding PomodoroWorkMinutes, StringFormat={}{0} min}" Style="{StaticResource TextSecondary}" HorizontalAlignment="Right"/>
-                        </Grid>
-                        <Slider Minimum="5" Maximum="90" TickFrequency="5" IsSnapToTickEnabled="True" SmallChange="5" LargeChange="5" Margin="0,6,0,0"
-                                Value="{Binding PomodoroWorkMinutes, Mode=TwoWay}"/>
-                        <Border Style="{StaticResource Divider}"/>
-                        <Grid>
-                            <TextBlock Text="Short break" Style="{StaticResource TextPrimary}"/>
-                            <TextBlock Text="{Binding PomodoroBreakMinutes, StringFormat={}{0} min}" Style="{StaticResource TextSecondary}" HorizontalAlignment="Right"/>
-                        </Grid>
-                        <Slider Minimum="1" Maximum="30" TickFrequency="1" IsSnapToTickEnabled="True" SmallChange="1" LargeChange="5" Margin="0,6,0,0"
-                                Value="{Binding PomodoroBreakMinutes, Mode=TwoWay}"/>
-                        <Border Style="{StaticResource Divider}"/>
-                        <Grid>
-                            <TextBlock Text="Long break" Style="{StaticResource TextPrimary}"/>
-                            <TextBlock Text="{Binding PomodoroLongBreakMinutes, StringFormat={}{0} min}" Style="{StaticResource TextSecondary}" HorizontalAlignment="Right"/>
-                        </Grid>
-                        <Slider Minimum="5" Maximum="60" TickFrequency="5" IsSnapToTickEnabled="True" SmallChange="5" LargeChange="5" Margin="0,6,0,0"
-                                Value="{Binding PomodoroLongBreakMinutes, Mode=TwoWay}"/>
-                        <Border Style="{StaticResource Divider}"/>
-                        <Grid>
-                            <TextBlock Text="Rounds before the long break" Style="{StaticResource TextPrimary}"/>
-                            <TextBlock Text="{Binding PomodoroRounds}" Style="{StaticResource TextSecondary}" HorizontalAlignment="Right"/>
-                        </Grid>
-                        <Slider Minimum="2" Maximum="8" TickFrequency="1" IsSnapToTickEnabled="True" SmallChange="1" LargeChange="1" Margin="0,6,0,0"
-                                Value="{Binding PomodoroRounds, Mode=TwoWay}"/>
-                        <Border Style="{StaticResource Divider}"/>
-                        <CheckBox IsChecked="{Binding TimerSound, Mode=TwoWay}">
-                            <StackPanel>
-                                <TextBlock Text="Chime for timers and alarms" Style="{StaticResource TextPrimary}"/>
-                                <TextBlock Text="A short soft bell (alarms repeat it for up to a minute); turn it off to mute" Style="{StaticResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Text="Shell" Style="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="What runs in the island's terminal (changing it starts a new one)" Style="{StaticResource TextSecondary}"
+                                           Margin="0,2,0,0" TextWrapping="Wrap" MaxWidth="250" HorizontalAlignment="Left"/>
                             </StackPanel>
-                        </CheckBox>
+                            <Border Style="{StaticResource SegmentTrack}">
+                                <StackPanel Orientation="Horizontal">
+                                    <RadioButton x:Name="ShellPowerShell" Content="PowerShell" Tag="PowerShell" GroupName="Shell"
+                                                 Style="{StaticResource Segment}" Checked="Shell_Checked"/>
+                                    <RadioButton x:Name="ShellCmd" Content="Command Prompt" Tag="CommandPrompt" GroupName="Shell"
+                                                 Style="{StaticResource Segment}" Checked="Shell_Checked"/>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
                     </StackPanel>
                 </Border>
 
@@ -484,7 +444,7 @@
                         <CheckBox IsChecked="{Binding CalendarEnabled, Mode=TwoWay}">
                             <StackPanel>
                                 <TextBlock Text="Calendar" Style="{StaticResource TextPrimary}"/>
-                                <TextBlock Text="Today's and tomorrow's events in the Today tab" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
+                                <TextBlock Text="Used for the &quot;meeting starting&quot; alerts on the island" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
                             </StackPanel>
                         </CheckBox>
                         <Border Style="{StaticResource Divider}"/>
@@ -583,7 +543,7 @@
                         </Grid>
                         <Border Style="{StaticResource Divider}"/>
                         <Grid>
-                            <TextBlock Text="Quick note" Style="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
+                            <TextBlock Text="Terminal" Style="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
                             <Border Style="{StaticResource KeyCap}" HorizontalAlignment="Right">
                                 <TextBlock Text="Ctrl Shift N" Style="{StaticResource TextSecondary}"/>
                             </Border>

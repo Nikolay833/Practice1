@@ -14,6 +14,7 @@ using Dropshelf.Activities.Hud;
 using Dropshelf.Activities.Media;
 using Dropshelf.Activities.Notifications;
 using Dropshelf.Activities.Power;
+using Dropshelf.Activities.Notes;
 using Dropshelf.Activities.Terminal;
 using Dropshelf.Activities.Weather;
 using Dropshelf.Animation;
@@ -71,6 +72,7 @@ public partial class App : Application
     private ProgressActivity? _progress;
     private ToolsService? _tools;
     private TerminalActivity? _terminal;
+    private NotesActivity? _notes;
     private DownloadActivity? _downloads;
     private PrivacyMonitor? _privacy;
     private CalendarService? _calendar;
@@ -225,7 +227,8 @@ public partial class App : Application
             uninstall: PackageIdentity.IsPackaged ? OpenAppsSettings : Uninstall,
             quit: QuitByUser,
             screenshot: () => _screenshot?.Begin(),
-            openTerminal: () => _island.ShowTerminal());
+            openTerminal: () => _island.ShowTerminal(),
+            openNotes: () => _island.ShowNotes());
         OcrActions.Message += text => _tray?.ShowBalloon("Dropshelf", text);
 
         _screenshot = new ScreenshotService(_toast!);
@@ -376,6 +379,12 @@ public partial class App : Application
             _activityHost.Register(_terminal);
         });
 
+        TryStep("notes", () =>
+        {
+            _notes = new NotesActivity();
+            _activityHost.Register(_notes);
+        });
+
         TryStep("downloads", () =>
         {
             _downloads = new DownloadActivity(_settings!);
@@ -413,6 +422,7 @@ public partial class App : Application
         TryStep("weather pill", () => _weatherPill?.Dispose());
         TryStep("weather", () => _weather?.Dispose());
         TryStep("terminal", () => _terminal?.Dispose());
+        TryStep("notes", () => _notes?.Dispose());
         TryStep("Bluetooth HUD", () => _bluetooth?.Dispose());
         TryStep("indicators", () => _indicator?.Dispose());
         TryStep("popup hider", () => _osd?.Dispose());
@@ -461,6 +471,7 @@ public partial class App : Application
             return;
         }
 
+        TryStep("notes flush", () => _notes?.Store.Flush());
         TryStep("clipboard flush", () => _clipboard?.Flush());
         TryStep("settings flush", () => _settings?.Flush());
     }

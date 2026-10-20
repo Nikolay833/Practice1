@@ -17,6 +17,7 @@ internal static class AppPaths
 
     public static string SettingsFile { get; } = Path.Combine(Root, "settings.json");
     public static string ClipboardFile { get; } = Path.Combine(Root, "clipboard.json");
+    public static string NotesFile { get; } = Path.Combine(Root, "notes.json");         // the Notes tab (encrypted)
     public static string CalendarFile { get; } = Path.Combine(Root, "calendar.json");   // ICS URLs (encrypted)
     public static string WeatherFile { get; } = Path.Combine(Root, "weather.json");     // last forecast + location (encrypted)
     public static string RestartsFile { get; } = Path.Combine(Root, "restarts.json");

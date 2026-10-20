@@ -105,8 +105,14 @@
                 <TranslateTransform x:Name="SwitcherShift"/>
             </StackPanel.RenderTransform>
             <act:ActivityTabBar x:Name="Tabs" VerticalAlignment="Center"/>
-            <Button Style="{StaticResource GlassCircleButton}" Content="&#xE713;" Margin="8,0,0,0" ToolTip="Settings"
-                    Click="Settings_Click"/>
+            <Button x:Name="SettingsButton" Style="{StaticResource GlassCircleButton}" Content="&#xE713;" Margin="8,0,0,0"
+                    ToolTip="Settings" Click="Settings_Click"/>
+            <!-- The transparent island's version: the word, like the plain tab names. -->
+            <TextBlock x:Name="SettingsLink" Text="settings" Visibility="Collapsed" VerticalAlignment="Center" Margin="8,0,0,0"
+                       Padding="8,0" Height="30" LineHeight="30" Background="#01000000" Cursor="Hand"
+                       FontFamily="Cascadia Mono, Cascadia Code, Consolas, Courier New" FontSize="13"
+                       Foreground="{DynamicResource TextSecondaryBrush}" MouseLeftButtonUp="SettingsLink_Click"
+                       MouseEnter="SettingsLink_Hover" MouseLeave="SettingsLink_Hover"/>
         </StackPanel>
     </Grid>
 </Window>

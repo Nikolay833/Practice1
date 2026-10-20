@@ -122,6 +122,17 @@ internal interface IPillActivity
     FrameworkElement? CreateMinimal();
 }
 
+/// <summary>An island element that needs the keyboard when clicked (the island then lets go of its no-activate style).</summary>
+internal interface IWantsKeyboard
+{
+}
+
+/// <summary>A tab that takes typing (the terminal, the notes): opening it from a shortcut puts the keyboard there.</summary>
+internal interface IFocusableTab
+{
+    void FocusInput();
+}
+
 /// <summary>Convenience base class: events, defaults for "no tab", "not active".</summary>
 internal abstract class PillActivityBase : IPillActivity
 {

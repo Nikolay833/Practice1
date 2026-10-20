@@ -6,11 +6,11 @@ using Dropshelf.Services;
 namespace Dropshelf.Activities.Terminal;
 
 /// <summary>
-/// The island's only tab: a real PowerShell or Command Prompt (Settings) in a pseudo console, drawn straight on the
+/// The island's first tab: a real PowerShell or Command Prompt (Settings) in a pseudo console, drawn straight on the
 /// transparent island. Anything that runs in a console runs here, including interactive tools such as claude. The shell
 /// starts the first time the island opens and keeps running while it is closed.
 /// </summary>
-internal sealed class TerminalActivity : PillActivityBase, IDisposable
+internal sealed class TerminalActivity : PillActivityBase, IFocusableTab, IDisposable
 {
     private readonly SettingsService _settings;
     private TerminalScreen? _screen;
@@ -39,7 +39,7 @@ internal sealed class TerminalActivity : PillActivityBase, IDisposable
     }
 
     /// <summary>Puts the keyboard in the terminal (the island must already be allowed to take it).</summary>
-    public void FocusScreen()
+    public void FocusInput()
     {
         if (_screen != null)
         {

@@ -10,7 +10,8 @@ namespace Dropshelf.Activities;
 
 /// <summary>
 /// The tab switcher that floats under the open island: a glass capsule of round icon buttons, with a lighter circle that
-/// glides (spring) behind the selected one. Each tab shows its title as a tooltip.
+/// glides (spring) behind the selected one. Each tab shows its title as a tooltip. On the transparent island it is
+/// <see cref="Plain"/> instead: just the tab names in light grey monospace, the selected one bright, nothing around them.
 /// </summary>
 internal sealed class ActivityTabBar : Border
 {
@@ -24,6 +25,8 @@ internal sealed class ActivityTabBar : Border
     }
 
     private static readonly Brush ThumbFill = Frozen(Color.FromArgb(0x38, 0xFF, 0xFF, 0xFF));
+    private static readonly Brush Clear = Frozen(Color.FromArgb(0x01, 0, 0, 0)); // invisible, but a layered window still gets the click
+    private static readonly FontFamily Mono = new("Cascadia Mono, Cascadia Code, Consolas, Courier New");
 
     private readonly Border _thumb;
     private readonly TranslateTransform _thumbShift = new();
@@ -32,6 +35,8 @@ internal sealed class ActivityTabBar : Border
     private readonly Spring _x = new(0, 520, 0.85);
     private readonly FrameLoop _loop;
     private string _selected = string.Empty;
+    private IReadOnlyList<(string Id, string Title, string Glyph)> _source = Array.Empty<(string, string, string)>();
+    private bool _plain;
 
     public ActivityTabBar()
     {
@@ -63,30 +68,65 @@ internal sealed class ActivityTabBar : Border
 
     public string Selected => _selected;
 
+    /// <summary>Words instead of a glass capsule of icons (the transparent island).</summary>
+    public bool Plain
+    {
+        get => _plain;
+        set
+        {
+            if (_plain != value)
+            {
+                _plain = value;
+                SetTabs(_source);
+            }
+        }
+    }
+
     /// <summary>Rebuilds the buttons: one per tab, showing <c>Glyph</c> (Segoe Fluent Icons) with <c>Title</c> as tooltip.</summary>
     public void SetTabs(IReadOnlyList<(string Id, string Title, string Glyph)> tabs)
     {
+        _source = tabs;
         _strip.Children.Clear();
         _tabs.Clear();
+        if (_plain)
+        {
+            Background = Clear;
+            BorderBrush = null;
+        }
+        else
+        {
+            SetResourceReference(BackgroundProperty, "GlassFillBrush");
+            SetResourceReference(BorderBrushProperty, "GlassRimBrush");
+        }
+
         foreach ((string id, string title, string glyph) in tabs)
         {
             var text = new TextBlock
             {
-                Text = glyph,
-                FontSize = 14,
+                Text = _plain ? title.ToLowerInvariant() : glyph,
+                FontSize = _plain ? 13 : 14,
                 VerticalAlignment = VerticalAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Center,
             };
-            text.SetResourceReference(TextBlock.FontFamilyProperty, "IconFont");
+            if (_plain)
+            {
+                text.FontFamily = Mono;
+            }
+            else
+            {
+                text.SetResourceReference(TextBlock.FontFamilyProperty, "IconFont");
+            }
+
             var root = new Border
             {
-                Width = ButtonSize,
+                Width = _plain ? double.NaN : ButtonSize,
                 Height = ButtonSize,
+                Padding = _plain ? new Thickness(8, 0, 8, 0) : new Thickness(0),
                 CornerRadius = new CornerRadius(ButtonSize / 2),
-                Background = Brushes.Transparent,
+                Background = _plain ? Clear : Brushes.Transparent,
                 Cursor = Cursors.Hand,
                 Child = text,
-                ToolTip = title,
+                ToolTip = _plain ? null : title,
                 Margin = new Thickness(0, 0, Gap, 0),
             };
             var tab = new Tab { Id = id, Root = root, Glyph = text };
@@ -144,7 +184,7 @@ internal sealed class ActivityTabBar : Border
     private void Retarget(bool animate)
     {
         int index = _tabs.FindIndex(t => t.Id == _selected);
-        if (index < 0)
+        if (index < 0 || _plain) // plain tabs show the selection by brightness alone
         {
             _thumb.Visibility = Visibility.Collapsed;
             return;

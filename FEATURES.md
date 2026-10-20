@@ -24,7 +24,7 @@
 14. [File tools: convert, resize, compress, zip](#14-file-tools-convert-resize-compress-zip)
 15. [Screenshots and copying text out of images](#15-screenshots-and-copying-text-out-of-images)
 16. [The terminal](#16-the-terminal)
-17. [Removed: shelf, clock, notes and Today](#17-removed-shelf-clock-notes-and-today)
+17. [Notes, and removed tabs](#17-notes-and-removed-tabs)
 18. [Calendar and weather](#18-calendar-and-weather)
 19. [Looks: the Apple design, colours, animations](#19-looks-the-apple-design-colours-animations)
 20. [Hiding during games, videos and presentations](#20-hiding-during-games-videos-and-presentations)
@@ -216,15 +216,17 @@ and about 16 times a second when you are close.
   opens it, so the browser tabs, address bar or title bar underneath stay usable: after a click there it stays closed
   until the mouse has left it.
 - **Click:** with *Open on hover* off, click it to open. **Ctrl+Shift+N** or the tray's *Terminal* opens it with the
-  keyboard already in the terminal.
+  keyboard already in the terminal; the tray's *Notes* does the same for the notes.
 - It **closes by itself** a quarter of a second after the mouse leaves, and **at once when you click anywhere else**,
-  but never while you are typing in the terminal.
+  but never while you are typing in the terminal or the notes.
 - Opening uses a soft, slightly bouncy spring like the Dynamic Island.
 
 ### What is inside
 
-The open island (720 × 400) is the **terminal** (see [section 16](#16-the-terminal)); it is the only thing in it, so
-there is no tab switcher. Under it floats a small round glass **settings** button.
+The open island (720 × 400) has two tabs: the **terminal** (see [section 16](#16-the-terminal)) and **notes** (see
+[section 17](#17-notes-and-removed-tabs)). Under it are the tab names, `terminal` and `notes`, in the same light grey
+monospaced text (the open one bright), and `settings`. With *Transparent island* off they are a small glass capsule of
+icons and a round glass settings button instead. Clicking a tab puts the keyboard straight into it.
 
 ---
 
@@ -573,13 +575,23 @@ Claude Code runs right there in the island (if it is installed on your PC, the s
 
 ---
 
-## 17. Removed: shelf, clock, notes and Today
+## 17. Notes, and removed tabs
 
-Earlier versions had more tabs in the island: a **Shelf** for files dragged onto the notch, a **Clock** (alarms,
-stopwatch, timer and Pomodoro), **Notes** and **Today** (week calendar and weather widget), plus a **Now Playing** tab.
-They have been removed so that the island is only the terminal. What they saved is left untouched in the data folder
-(`notes.json`, `shelf.json`, `alarms.json`, `timer.json`, `stopwatch.json`), so nothing you wrote is lost; Dropshelf
-simply no longer reads those files. The song that is playing still shows on the closed island, and the **basket**
+The **notes** tab sits next to the terminal and looks like it: no boxes or lines, just light grey monospaced text on
+the transparent island.
+
+- On the left: `+ new note` and the title of every note (its first line), newest first. The open note is bright, the
+  others dim; click one to open it.
+- On the right: when the note was last edited, `delete` (a note with text asks for a second click within a couple of
+  seconds), and the note itself. Just type; there is nothing to save.
+- **Ctrl+N** starts a new note, **Esc** lets go of the keyboard so the island can close.
+- Notes are saved half a second after you stop typing, encrypted for your Windows account, in `notes.json`. Notes
+  written in earlier versions come back as they were.
+
+Earlier versions also had a **Shelf** for files dragged onto the notch, a **Clock** (alarms, stopwatch, timer and
+Pomodoro), **Today** (week calendar and weather widget) and a **Now Playing** tab. They have been removed. What they
+saved is left untouched in the data folder (`shelf.json`, `alarms.json`, `timer.json`, `stopwatch.json`), so nothing is
+lost; Dropshelf simply no longer reads those files. The song that is playing still shows on the closed island, and the **basket**
 ([section 7](#7-the-basket)) still parks files for you.
 
 ---
@@ -829,6 +841,7 @@ Everything is in **`%LOCALAPPDATA%\Dropshelf`** (paste that into the Explorer ad
 |---|---|
 | `settings.json` | All settings (including the muted-notification app list) |
 | `clipboard.json` | Clipboard history (encrypted) |
+| `notes.json` | Your notes (encrypted) |
 | `Clipboard\` | Images from the clipboard history (PNG) |
 | `Items\` | Text and links you dropped into the basket (`.txt`, `.url`) |
 | `calendar.json` | Calendar links (encrypted) |
@@ -839,7 +852,7 @@ Everything is in **`%LOCALAPPDATA%\Dropshelf`** (paste that into the Explorer ad
 The program itself is in `%LOCALAPPDATA%\Programs\Dropshelf` (portable version) or managed by Windows in
 `C:\Program Files\WindowsApps` (MSIX version). Screenshots go to `Pictures\Screenshots`.
 
-Files from removed features (`notes.json`, `shelf.json`, `timer.json`, `stopwatch.json`, `alarms.json`) may still be
+Files from removed features (`shelf.json`, `timer.json`, `stopwatch.json`, `alarms.json`) may still be
 there from earlier versions; Dropshelf leaves them alone.
 
 If you report a problem, `dropshelf.log` is the file to send.

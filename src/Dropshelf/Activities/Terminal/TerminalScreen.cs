@@ -8,11 +8,6 @@ using Dropshelf.Services;
 
 namespace Dropshelf.Activities.Terminal;
 
-/// <summary>An island element that needs the keyboard when clicked (the island then lets go of its no-activate style).</summary>
-internal interface IWantsKeyboard
-{
-}
-
 /// <summary>
 /// Draws the terminal: monospaced light grey text straight on the (transparent) island, colours where programs use them, a
 /// soft block cursor, and a selection. Click to type; every key goes to the shell as a terminal would send it (Esc, Ctrl+C,

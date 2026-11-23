@@ -215,25 +215,11 @@
                                 <TextBlock Text="When off, click the island to open it" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
                             </StackPanel>
                         </CheckBox>
-                        <Border Style="{StaticResource Divider}"/>
-                        <CheckBox IsChecked="{Binding ScrollToChangeVolume, Mode=TwoWay}">
-                            <StackPanel>
-                                <TextBlock Text="Scroll over the island to change volume" Style="{StaticResource TextPrimary}"/>
-                                <TextBlock Text="Turn the mouse wheel on the closed island" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
-                            </StackPanel>
-                        </CheckBox>
-                        <Border Style="{StaticResource Divider}"/>
-                        <CheckBox IsChecked="{Binding ShakeToOpenBasket, Mode=TwoWay}">
-                            <StackPanel>
-                                <TextBlock Text="Shake to open basket" Style="{StaticResource TextPrimary}"/>
-                                <TextBlock Text="Shake the mouse left and right while dragging" Style="{StaticResource TextSecondary}" Margin="0,2,0,0"/>
-                            </StackPanel>
-                        </CheckBox>
                     </StackPanel>
                 </Border>
 
-                <TextBlock Text="Live Activities" Style="{StaticResource SectionLabel}"/>
-                <Border Style="{StaticResource Card}">
+                <TextBlock Text="Live Activities" Style="{StaticResource SectionLabel}" Visibility="Collapsed"/>
+                <Border Style="{StaticResource Card}" Visibility="Collapsed">
                     <StackPanel>
                         <CheckBox IsChecked="{Binding ShowNowPlaying, Mode=TwoWay}">
                             <StackPanel>
@@ -328,8 +314,8 @@
                     </StackPanel>
                 </Border>
 
-                <TextBlock Text="Notifications" Style="{StaticResource SectionLabel}"/>
-                <Border x:Name="NotificationsCard" Style="{StaticResource Card}">
+                <TextBlock Text="Notifications" Style="{StaticResource SectionLabel}" Visibility="Collapsed"/>
+                <Border x:Name="NotificationsCard" Style="{StaticResource Card}" Visibility="Collapsed">
                     <StackPanel>
                         <CheckBox IsChecked="{Binding NotificationsEnabled, Mode=TwoWay}">
                             <StackPanel>
@@ -383,8 +369,8 @@
                     </StackPanel>
                 </Border>
 
-                <TextBlock Text="Clipboard" Style="{StaticResource SectionLabel}"/>
-                <Border Style="{StaticResource Card}">
+                <TextBlock Text="Clipboard" Style="{StaticResource SectionLabel}" Visibility="Collapsed"/>
+                <Border Style="{StaticResource Card}" Visibility="Collapsed">
                     <StackPanel>
                         <CheckBox IsChecked="{Binding ClipboardHistoryEnabled, Mode=TwoWay}">
                             <StackPanel>
@@ -407,8 +393,8 @@
                     </StackPanel>
                 </Border>
 
-                <TextBlock Text="Screenshot" Style="{StaticResource SectionLabel}"/>
-                <Border Style="{StaticResource Card}">
+                <TextBlock Text="Screenshot" Style="{StaticResource SectionLabel}" Visibility="Collapsed"/>
+                <Border Style="{StaticResource Card}" Visibility="Collapsed">
                     <CheckBox IsChecked="{Binding ScreenshotHotkeyEnabled, Mode=TwoWay}">
                         <StackPanel>
                             <TextBlock Text="Screenshot shortcut (Ctrl + Shift + S)" Style="{StaticResource TextPrimary}"/>
@@ -438,8 +424,8 @@
                     </StackPanel>
                 </Border>
 
-                <TextBlock Text="Calendar &amp; Weather" Style="{StaticResource SectionLabel}"/>
-                <Border Style="{StaticResource Card}">
+                <TextBlock Text="Calendar &amp; Weather" Style="{StaticResource SectionLabel}" Visibility="Collapsed"/>
+                <Border Style="{StaticResource Card}" Visibility="Collapsed">
                     <StackPanel>
                         <CheckBox IsChecked="{Binding CalendarEnabled, Mode=TwoWay}">
                             <StackPanel>
@@ -475,7 +461,7 @@
                         </StackPanel>
                     </StackPanel>
                 </Border>
-                <Border Style="{StaticResource Card}">
+                <Border Style="{StaticResource Card}" Visibility="Collapsed">
                     <StackPanel>
                         <CheckBox IsChecked="{Binding WeatherEnabled, Mode=TwoWay}">
                             <StackPanel>
@@ -521,27 +507,6 @@
                 <TextBlock Text="Keyboard Shortcuts" Style="{StaticResource SectionLabel}"/>
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
-                        <Grid>
-                            <TextBlock Text="Open basket" Style="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
-                            <Border Style="{StaticResource KeyCap}" HorizontalAlignment="Right">
-                                <TextBlock Text="Ctrl Shift B" Style="{StaticResource TextSecondary}"/>
-                            </Border>
-                        </Grid>
-                        <Border Style="{StaticResource Divider}"/>
-                        <Grid>
-                            <TextBlock Text="Clipboard history" Style="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
-                            <Border Style="{StaticResource KeyCap}" HorizontalAlignment="Right">
-                                <TextBlock Text="Ctrl Shift V" Style="{StaticResource TextSecondary}"/>
-                            </Border>
-                        </Grid>
-                        <Border Style="{StaticResource Divider}"/>
-                        <Grid>
-                            <TextBlock Text="Take screenshot" Style="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
-                            <Border Style="{StaticResource KeyCap}" HorizontalAlignment="Right">
-                                <TextBlock Text="Ctrl Shift S" Style="{StaticResource TextSecondary}"/>
-                            </Border>
-                        </Grid>
-                        <Border Style="{StaticResource Divider}"/>
                         <Grid>
                             <TextBlock Text="Terminal" Style="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
                             <Border Style="{StaticResource KeyCap}" HorizontalAlignment="Right">

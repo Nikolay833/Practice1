@@ -26,10 +26,7 @@ internal sealed class TrayService : IDisposable
             Padding = new WinForms.Padding(4),
         };
 
-        AddItem("Open Dropshelf", showIsland);
-        AddItem("Open basket", openBasket);
-        AddItem("Clipboard history", openClipboard);
-        AddItem("Take screenshot", screenshot);
+        // Terminal-only build: the basket, clipboard and screenshot items are gone with their features.
         AddItem("Terminal", openTerminal);
         _menu.Items.Add(new WinForms.ToolStripSeparator());
         AddItem("Settings…", openSettings);

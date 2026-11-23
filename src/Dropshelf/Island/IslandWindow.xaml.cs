@@ -38,14 +38,17 @@ public partial class IslandWindow : Window
     private const double CompactGap = 40;         // empty middle between the leading and trailing views
     private const double CompactPad = 12;         // space between a compact view and the island edge
     private const double Overshoot = 1.06;        // window headroom for the opening spring's overshoot
-    private const int HoverPollMs = 60;
+    private const int HoverPollMs = 40;
     private const int HoverIdlePollMs = 250;      // collapsed, cursor far from the island
     private const double HoverNearDip = 120;      // closer than this keeps the fast poll
-    private const int HoverDelayMs = 350;         // the cursor must rest on the notch this long: passing over it never opens it
+    private const int HoverDelayMs = 140;         // the cursor must rest on the notch this long: passing over it never opens it
     private const int HoverRestPx = 5;            // ...and move less than this between polls
     private const double BubbleWidth = 44;        // the split-island bubble: 32 wide plus its two 6 px shoulders
     private const double BubbleGap = -3;          // the shoulders overlap a little: 9 px between island and bubble, bridged by the neck
     private const double DotSpace = 12;           // room the privacy dot takes at the island's right end
+    private const double FadeInMs = 90;           // transparent island: the terminal fades in this fast...
+    private const double FadeOutMs = 70;          // ...and out, with no resize animation at all (cheapest on slow PCs)
+    private const double FadeLift = 6;            // and drops in from this many DIPs above
 
     private readonly SettingsService _settings;
     private readonly Action _openSettings;
@@ -65,6 +68,8 @@ public partial class IslandWindow : Window
     private readonly Spring _hide = new(0, 380, 1.0);                      // 1 = slid away above the screen (fullscreen app)
     private readonly Spring _bubble = new(0, 360, 0.72);                   // 1 = the split-island bubble is out
     private readonly FrameLoop _loop;
+    private double _fade;              // transparent island: 0 = terminal hidden, 1 = shown (a short linear tween, eased)
+    private double _fadeTarget;
 
     // Last values pushed to Win32 / WPF, so unchanged frames cost nothing.
     private int _winX = int.MinValue, _winY = int.MinValue, _winW, _winH;
@@ -403,7 +408,24 @@ public partial class IslandWindow : Window
         if (AnimationSettings.IsOff)
         {
             _progress.Snap(target);
+            _fade = _fadeTarget = target;
             ApplyLayout(settled: true);
+            return;
+        }
+
+        if (_transparent)
+        {
+            // Nothing of the island itself can be seen, so there is no shape to spring open: the window takes its open size
+            // at once (one resize) and only the terminal fades in. Closing fades it out and shrinks the window afterwards
+            // (OnFrame). A handful of frames either way, so the pop-up is quick and costs next to nothing.
+            _fadeTarget = target;
+            if (target > 0.5)
+            {
+                _progress.Snap(1);
+                ApplyLayout(settled: true);
+            }
+
+            _loop.Start();
             return;
         }
 
@@ -422,6 +444,16 @@ public partial class IslandWindow : Window
 
     private bool OnFrame(double dt)
     {
+        if (_fade != _fadeTarget)
+        {
+            double step = Math.Min(dt, 0.05) * 1000 / (_fadeTarget > _fade ? FadeInMs : FadeOutMs);
+            _fade = _fadeTarget > _fade ? Math.Min(_fadeTarget, _fade + step) : Math.Max(_fadeTarget, _fade - step);
+            if (_fade <= 0 && !_expanded && _transparent)
+            {
+                _progress.Snap(0); // faded out: now the window can shrink back to the closed notch
+            }
+        }
+
         _progress.Step(dt);
         _collapsedW.Step(dt);
         _collapsedH.Step(dt);
@@ -431,7 +463,7 @@ public partial class IslandWindow : Window
 
         bool settled = _progress.SettleIfClose(0.0005, 0.01) & _collapsedW.SettleIfClose(0.05, 0.5)
                        & _collapsedH.SettleIfClose(0.05, 0.5) & _compact.SettleIfClose(0.002, 0.02)
-                       & _hide.SettleIfClose(0.002, 0.02) & _bubble.SettleIfClose(0.002, 0.02);
+                       & _hide.SettleIfClose(0.002, 0.02) & _bubble.SettleIfClose(0.002, 0.02) & _fade == _fadeTarget;
         ApplyLayout(settled);
         if (settled)
         {
@@ -500,15 +532,30 @@ public partial class IslandWindow : Window
         CompactLayer.Visibility = compactOpacity > 0.001 ? Visibility.Visible : Visibility.Hidden;
         CompactLayer.Width = Math.Max(1, cw);
         CompactLayer.Height = Math.Max(1, ch);
-        double panel = Math.Clamp((p - 0.35) / 0.5, 0, 1);
+        double panel;
+        if (_transparent)
+        {
+            // Ease out (fast start, soft landing) on the way in, ease in on the way out. A translate, not a scale: scaling
+            // would re-rasterise every glyph of the terminal each frame.
+            double f = Math.Clamp(_fade, 0, 1);
+            panel = _fadeTarget > 0.5 ? 1 - (1 - f) * (1 - f) : f * f;
+            ExpandedScale.ScaleX = ExpandedScale.ScaleY = 1;
+            PanelShift.Y = AnimationSettings.IsFull ? -FadeLift * (1 - panel) : 0; // reduced motion: fade only, no slide
+        }
+        else
+        {
+            panel = Math.Clamp((p - 0.35) / 0.5, 0, 1);
+            double zoom = Lerp(0.92, 1, Math.Clamp(p, 0, 1));
+            ExpandedScale.ScaleX = zoom;
+            ExpandedScale.ScaleY = zoom;
+            PanelShift.Y = 0;
+        }
+
         ExpandedPanel.Opacity = panel;
         ExpandedPanel.Visibility = _expanded || panel > 0.001 ? Visibility.Visible : Visibility.Hidden;
         Switcher.Opacity = panel;
-        Switcher.Visibility = ExpandedPanel.Visibility;
+        Switcher.Visibility = _transparent ? Visibility.Collapsed : ExpandedPanel.Visibility; // settings are in the tray menu
         SwitcherShift.Y = -10 * (1 - panel);
-        double zoom = Lerp(0.92, 1, Math.Clamp(p, 0, 1));
-        ExpandedScale.ScaleX = zoom;
-        ExpandedScale.ScaleY = zoom;
 
         // Privacy dot at the island's right end, vertically centred on the closed island; it fades as the island opens.
         double dotOpacity = _privacyDot ? 1 - opening : 0;
@@ -534,7 +581,7 @@ public partial class IslandWindow : Window
             needW = Math.Max(needW, (int)Math.Ceiling(2 * (islandHalf + BubbleGap + BubbleWidth) * scale * 1.04));
         }
 
-        int needH = (int)Math.Ceiling((h + (_expanded || panel > 0.001 ? SwitcherSpace : 0)) * scale);
+        int needH = (int)Math.Ceiling((h + (_expanded || panel > 0.001 ? SwitcherRoom : 0)) * scale);
         int winW = _winW, winH = _winH;
         if (settled)
         {
@@ -551,7 +598,7 @@ public partial class IslandWindow : Window
             {
                 winW = Math.Max(winW, (int)Math.Ceiling((_collapsedW.Target + 2 * ShoulderOpen + 2 * (BubbleGap + BubbleWidth)) * scale * 1.06));
             }
-            winH = Math.Max(needH, (int)Math.Ceiling((headH + (t > 0.5 ? SwitcherSpace : 0)) * scale));
+            winH = Math.Max(needH, (int)Math.Ceiling((headH + (t > 0.5 ? SwitcherRoom : 0)) * scale));
         }
 
         int x = _monitor.Left + (_monitor.Width - winW) / 2;
@@ -579,6 +626,9 @@ public partial class IslandWindow : Window
     }
 
     private static double Lerp(double a, double b, double t) => a + (b - a) * t;
+
+    /// <summary>Room under the open island for the tab capsule; the transparent island has none (settings live in the tray).</summary>
+    private double SwitcherRoom => _transparent ? 0 : SwitcherSpace;
 
     /// <summary>
     /// The neck between the island and the split-off bubble: black from the top edge down to a soft concave waist at about half
@@ -631,7 +681,7 @@ public partial class IslandWindow : Window
     private bool IslandContains(NativeMethods.POINT p, int margin)
     {
         NativeMethods.RECT r = IslandRect();
-        int bottom = r.Bottom + (_expanded ? (int)Math.Round(SwitcherSpace * _monitor.Scale) : 0);
+        int bottom = r.Bottom + (_expanded ? (int)Math.Round(SwitcherRoom * _monitor.Scale) : 0);
         return p.X >= r.Left - margin && p.X < r.Right + margin && p.Y >= r.Top - margin && p.Y < bottom + margin;
     }
 
@@ -642,6 +692,7 @@ public partial class IslandWindow : Window
         {
             _loop.Stop();
             _progress.Snap(_expanded ? 1 : 0);
+            _fade = _fadeTarget = _expanded ? 1 : 0;
             _collapsedW.Snap(_collapsedW.Target);
             _collapsedH.Snap(_collapsedH.Target);
             _compact.Snap(_compact.Target);
@@ -892,6 +943,7 @@ public partial class IslandWindow : Window
         }
 
         SetTextColor(_transparent ? LightGrey : Colors.White);
+        _fade = _fadeTarget = _expanded ? 1 : 0;
         _lastW = _lastH = _lastR = -1;
         ApplyLayout(settled: !_loop.IsRunning);
     }

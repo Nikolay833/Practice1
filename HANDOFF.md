@@ -32,9 +32,24 @@ Current state (build **1.0.30**):
 Removed on purpose (the owner asked): the Shelf, Clock (timer/stopwatch/alarms), Today and Now Playing tabs. Their old
 data files are left untouched in `%LOCALAPPDATA%\Dropshelf`.
 
+## Terminal-only build (newest, branch `claude/zen-ritchie-sl6m5j`)
+
+The owner now uses a weak **x64 Ryzen 3 laptop** (Windows 11, about 5 GB RAM free) and wants only the terminal:
+
+- Notes tab removed again (the 1.0.30 commit is reverted).
+- `App.StartServices` starts only settings, the hotkey/message window, the terminal, the island, the tray and the
+  fullscreen watcher. No HUDs, popup hider, media, battery, Bluetooth, notifications, weather, calendar, clipboard,
+  basket, screenshots or mouse hook. Their code is still in the repo; Settings hides their sections; the tray has only
+  Terminal, Settings, Uninstall and Quit (left-click opens the terminal).
+- Transparent island: no size spring. The window takes its open size at once and the terminal fades in in 90 ms with a
+  6 DIP drop (fade only under reduced motion), out in 70 ms, then the window shrinks. No tab switcher.
+- Hover delay 140 ms (poll 40 ms near the notch). Ctrl+Shift+N still opens it with the keyboard in the terminal.
+- csproj: no concurrent GC, workstation GC, no TieredPGO, ReadyToRun on publish.
+- Give the owner the **x64** artifact link (`Dropshelf-win-x64`), not arm64.
+
 ## Working rules
 
-- **Branch**: develop and push only on `claude/festive-mayer-m3hm15`. Do not open a pull request unless asked.
+- **Branch**: the terminal-only build lives on `claude/zen-ritchie-sl6m5j` (from `claude/festive-mayer-m3hm15`). Do not open a pull request unless asked.
 - **No model names** in commits, PRs or code.
 - **Do not copy Droppy's code or assets.** `Droppy-16.0.1-arm64.dmg` in the repo root is only a reference the owner
   added; leave it alone.

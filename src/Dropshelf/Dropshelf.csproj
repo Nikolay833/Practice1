@@ -20,6 +20,15 @@
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <!-- DPI awareness (PerMonitorV2) is declared in app.manifest, which is the right place for a WPF app. -->
     <NoWarn>$(NoWarn);WFAC010</NoWarn>
+    <!-- Light on a slow laptop with little free RAM: no background GC thread (the app allocates very little), workstation GC,
+         and precompiled code so start-up and the first pop-up do not wait for the JIT. -->
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <TieredPGO>false</TieredPGO>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' != ''">
+    <PublishReadyToRun>true</PublishReadyToRun>
   </PropertyGroup>
 
   <ItemGroup>

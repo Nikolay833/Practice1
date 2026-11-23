@@ -66,7 +66,10 @@
                     <Grid x:Name="ExpandedPanel" Width="720" Height="400" VerticalAlignment="Top" HorizontalAlignment="Center"
                           Opacity="0" Visibility="Hidden" IsHitTestVisible="False" RenderTransformOrigin="0.5,0">
                         <Grid.RenderTransform>
-                            <ScaleTransform x:Name="ExpandedScale"/>
+                            <TransformGroup>
+                                <ScaleTransform x:Name="ExpandedScale"/>
+                                <TranslateTransform x:Name="PanelShift"/>
+                            </TransformGroup>
                         </Grid.RenderTransform>
 
                         <act:CrossfadeHost x:Name="Pages" Margin="26,18,26,20"/>

@@ -42,6 +42,8 @@ public partial class App : Application
     private bool _uninstalling;
     private bool _deleteDataOnUninstall;
     private SettingsService? _settings;
+    // The terminal-only build leaves most of these unset; the code that uses them stays null-safe so a feature can come back.
+#pragma warning disable CS0649, CS0169
     private ItemStore? _basketStore;
     private MessageWindow? _messages;
     private HotkeyService? _hotkeys;
@@ -83,6 +85,7 @@ public partial class App : Application
     private NotificationActivity? _notificationPill;
     private ArmNotice? _armNotice;
     private DispatcherTimer? _armNoticeTimer;
+#pragma warning restore CS0649, CS0169
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -159,81 +162,39 @@ public partial class App : Application
         AnimationSettings.Attach(_settings.Current);
         _theme = new ThemeService(_settings); // accent resources; must exist before any window is created
         IslandWindow.SetTextColor(_settings.Current.IslandTransparent ? IslandWindow.LightGrey : System.Windows.Media.Colors.White);
-        _basketStore = new ItemStore();
-
         _messages = new MessageWindow();
         _hotkeys = new HotkeyService(_messages);
 
-        // The screen brightness changed (keys, slider, Lenovo's driver): Windows says so at once, well before WMI reports it,
-        // so the popup hider is already on the lookout when Windows' brightness popup appears.
-        _messages.WatchBrightness();
-        _messages.BrightnessChanged += () =>
-        {
-            if (_brightness != null && _settings.Current.ReplaceWindowsOsd && _settings.Current.ShowBrightnessHud)
-            {
-                _osd?.Suppress(_brightness);
-            }
-        };
-        _clipboard = new ClipboardHistoryService(_messages, _settings);
-
-        _mouseHook = new MouseHook();
-        _mouseHook.Wheel += (_, _, delta) => _volume?.ScrollBy(delta);
-        _shake = new ShakeDetector(_mouseHook);
-        // The mouse hook runs on its own thread and forwards events to the UI thread, so this runs on the UI thread.
-        _shake.Shaken += () =>
-        {
-            if (_settings.Current.ShakeToOpenBasket)
-            {
-                ShowBasketAtCursor();
-            }
-        };
-
-        _activityHost = new ActivityHost { SplitEnabled = _settings.Current.SplitIsland };
+        // Terminal-only build for slow laptops: no HUDs, popup hider, media, battery, Bluetooth, notifications, weather,
+        // calendar, clipboard history, basket, screenshots or mouse hook. Nothing runs in the background but the shell and a
+        // cheap cursor poll, so the island costs almost no CPU or memory while it is closed.
+        _activityHost = new ActivityHost { SplitEnabled = false };
         StartActivities();
 
         _island = new IslandWindow(_settings, ShowSettings, _activityHost);
-        _island.WheelRegionSink = region => _mouseHook.SetWheelRegion(region);
         _island.Show();
-
-        TryStep("privacy dot", () =>
-        {
-            _privacy = new PrivacyMonitor();
-            _privacy.Changed += ApplyPrivacyDot;
-            _privacy.Enabled = _settings.Current.ShowPrivacyDots;
-        });
 
         _fullscreen = new FullscreenWatcher(_settings);
         _fullscreen.Changed += fullscreen =>
         {
             _activityHost.SetFullscreen(fullscreen);
             _island.SetFullscreen(fullscreen);
-            _osd?.SetIslandVisible(!fullscreen); // the island is hidden: give Windows' own volume popup back meanwhile
-            ApplyVolumeKeys();
         };
         if (_fullscreen.IsFullscreen)
         {
-            _osd?.SetIslandVisible(false);
             _activityHost.SetFullscreen(true); // a fullscreen app was already in front at start-up
             _island.SetFullscreen(true);
         }
 
         _tray = new TrayService(
-            showIsland: () => _island.ShowExpanded(),
-            openBasket: ShowBasketAtCursor,
-            openClipboard: () => ShowClipboard(fromHotkey: false),
+            showIsland: () => _island.ShowTerminal(),
+            openBasket: () => { },
+            openClipboard: () => { },
             openSettings: ShowSettings,
             uninstall: PackageIdentity.IsPackaged ? OpenAppsSettings : Uninstall,
             quit: QuitByUser,
-            screenshot: () => _screenshot?.Begin(),
+            screenshot: () => { },
             openTerminal: () => _island.ShowTerminal());
-        OcrActions.Message += text => _tray?.ShowBalloon("Dropshelf", text);
-
-        _screenshot = new ScreenshotService(_toast!);
-
-        if (!_hotkeys.Register(HotkeyService.BasketId, NativeMethods.MOD_CONTROL | NativeMethods.MOD_SHIFT, NativeMethods.VK_B, ShowBasketAtCursor))
-        {
-            _tray.ShowBalloon("Dropshelf", "Ctrl+Shift+B is already used by another app, so the basket hotkey is unavailable.");
-        }
 
         if (!_hotkeys.Register(HotkeyService.TerminalId, NativeMethods.MOD_CONTROL | NativeMethods.MOD_SHIFT, NativeMethods.VK_N, () => _island.ShowTerminal()))
         {
@@ -270,10 +231,6 @@ public partial class App : Application
         }
 
         _settings.Changed += OnSettingChanged;
-        ApplyMouseHookSetting();
-        ApplyVolumeKeys();
-        ApplyClipboardSetting();
-        ApplyScreenshotSetting();
         ScheduleOneTimeNotices();
     }
 
@@ -300,103 +257,14 @@ public partial class App : Application
         }
     }
 
-    /// <summary>
-    /// Creates the pill activities. Each one is set up on its own: if Core Audio, WinRT or WMI is missing on this machine the
-    /// matching feature stays off and the rest of the app is unaffected.
-    /// </summary>
+    /// <summary>Creates the only activity this build has: the terminal. If it cannot be set up the island says so.</summary>
     private void StartActivities()
     {
-        _osd = new OsdSuppressor { Gate = hud => _activityHost!.IslandVisibleFor(hud) };
-        _osd.Enabled = _settings!.Current.ReplaceWindowsOsd;
-
-        TryStep("indicators", () =>
-        {
-            _indicator = new IndicatorActivity(_settings!) { Osd = _osd };
-            IndicatorActivity indicator = _indicator;
-            _osd.CapsPopupSeen = () => Dispatcher.BeginInvoke(DispatcherPriority.Send, new Action(() => indicator.CapsJustChanged()));
-            _activityHost!.Register(_indicator);
-        });
-
-        TryStep("audio endpoint", () => _audio = new AudioEndpointService());
-        if (_audio is { IsAvailable: true })
-        {
-            TryStep("volume HUD", () =>
-            {
-                _volume = new VolumeActivity(_audio, _settings!, _osd, _indicator);
-                _activityHost!.Register(_volume);
-            });
-        }
-
-        TryStep("now playing", () =>
-        {
-            _media = new MediaSessionService();
-            _nowPlaying = new NowPlayingActivity(_media, _audio, _settings!);
-            _activityHost!.Register(_nowPlaying);
-            _ = _media.StartAsync();
-        });
-
-        TryStep("brightness HUD", () =>
-        {
-            _brightness = new BrightnessActivity(_settings!, _osd);
-            _activityHost!.Register(_brightness);
-            _ = _brightness.StartAsync();
-        });
-
-        TryStep("battery HUD", () =>
-        {
-            _battery = new BatteryActivity(_settings!);
-            _activityHost!.Register(_battery);
-        });
-
-        TryStep("Bluetooth HUD", () =>
-        {
-            _bluetooth = new BluetoothActivity(_settings!);
-            _activityHost!.Register(_bluetooth);
-            _bluetooth.Start();
-        });
-
-        // Round 2: toast HUD + progress (shared by tools, screenshot, timer, meetings), then the features on top of them.
-        _toast = new ToastActivity();
-        _activityHost!.Register(_toast);
-        _progress = new ProgressActivity();
-        _activityHost.Register(_progress);
-        _tools = new ToolsService(_progress, _toast);
-        _armNotice = new ArmNotice(_settings!, _progress, _toast);
-
-        TryStep("notifications", () =>
-        {
-            _notifications = new NotificationService(_settings!);
-            _notificationPill = new NotificationActivity(_settings!, _notifications, _activityHost, () => _fullscreen?.IsFullscreen == true);
-            _activityHost.Register(_notificationPill);
-        });
-
         TryStep("terminal", () =>
         {
             _terminal = new TerminalActivity(_settings!);
-            _activityHost.Register(_terminal);
+            _activityHost!.Register(_terminal);
         });
-
-        TryStep("downloads", () =>
-        {
-            _downloads = new DownloadActivity(_settings!);
-            _activityHost.Register(_downloads);
-            _activityHost.Register(_downloads.Done);
-        });
-
-        TryStep("weather", () =>
-        {
-            _weather = new WeatherService(_settings!);
-            _weatherPill = new WeatherPillActivity(_settings!, _weather);
-            _activityHost.Register(_weatherPill);
-        });
-
-        TryStep("calendar", () =>
-        {
-            _calendar = new CalendarService(_settings!);
-            _meeting = new MeetingActivity(_settings!, _calendar, _toast);
-            _activityHost.Register(_meeting);
-        });
-
     }
 
     protected override void OnExit(ExitEventArgs e)
@@ -561,7 +429,7 @@ public partial class App : Application
                 ApplyClipboardSetting();
                 break;
             case nameof(AppSettings.ClipboardHistorySize):
-                _clipboard!.ApplySettings();
+                _clipboard?.ApplySettings();
                 break;
             case nameof(AppSettings.ScreenshotHotkeyEnabled):
                 ApplyScreenshotSetting();
@@ -600,6 +468,11 @@ public partial class App : Application
     /// <summary>Ctrl+Shift+S is only registered while the screenshot setting is on; a taken combination is announced once.</summary>
     private void ApplyScreenshotSetting()
     {
+        if (_screenshot == null)
+        {
+            return;
+        }
+
         bool enabled = _settings!.Current.ScreenshotHotkeyEnabled;
         if (enabled && !_screenshotHotkeyRegistered)
         {
@@ -624,6 +497,11 @@ public partial class App : Application
     /// </summary>
     private void ApplyMouseHookSetting()
     {
+        if (_mouseHook == null)
+        {
+            return;
+        }
+
         bool wheel = _settings!.Current.ScrollToChangeVolume && _volume != null;
         if (_island != null)
         {
@@ -682,6 +560,11 @@ public partial class App : Application
     /// <summary>Clipboard listener and Ctrl+Shift+V are only active while history is enabled.</summary>
     private void ApplyClipboardSetting()
     {
+        if (_clipboard == null)
+        {
+            return;
+        }
+
         _clipboard!.ApplySettings();
 
         bool enabled = _settings!.Current.ClipboardHistoryEnabled;

@@ -47,6 +47,26 @@ internal sealed class TerminalScreen : FrameworkElement, IWantsKeyboard
     private readonly List<VtCell[]?> _drawn = new();   // what each row visual currently shows
     private readonly DrawingVisual _overlay = new();
     private bool _paintQueued;
+    private bool _paused;
+
+    /// <summary>Nothing is drawn while paused; un-pausing draws whatever changed meanwhile.</summary>
+    public bool Paused
+    {
+        get => _paused;
+        set
+        {
+            if (_paused == value)
+            {
+                return;
+            }
+
+            _paused = value;
+            if (!value)
+            {
+                Redraw();
+            }
+        }
+    }
     private long _lastPaint;
     private DispatcherTimer? _paintTimer;
     private const int MinPaintMs = 33;   // at most ~30 paints a second: every paint re-sends the whole layered window
@@ -161,9 +181,9 @@ internal sealed class TerminalScreen : FrameworkElement, IWantsKeyboard
     {
         _paintQueued = false;
         _lastPaint = Environment.TickCount64;
-        if (!IsVisible)
+        if (!IsVisible || _paused)
         {
-            return; // the island is closed: draw nothing now, IsVisibleChanged repaints when it opens
+            return; // the island is closed: draw nothing now; opening it (IsVisibleChanged, Paused) repaints
         }
 
         VtScreen screen = _session.Screen;

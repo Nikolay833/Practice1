@@ -48,6 +48,11 @@ The owner now uses a weak **x64 Ryzen 3 laptop** (Windows 11, about 5 GB RAM fre
 - Terminal drawing (`TerminalScreen`): one retained `DrawingVisual` per row plus an overlay (selection, cursor). A
   paint redraws only rows whose cells changed, at most ~30 paints a second, and nothing while the island is closed.
 - Single-file exe is no longer compressed (a compressed bundle unpacks into RAM each start); GC `ConserveMemory` 7.
+- Input: hovering the notch only shows the terminal. A click on the notch (solid under the cursor on the transparent
+  island) or anywhere on the open island puts the keyboard in it. When the mouse leaves while the terminal has the
+  keyboard, the island hides but keeps it (`_keepKeyboard`; panel stays Visible at opacity 0 so WPF keeps focus,
+  terminal `Paused`), so typing and Enter keep working blind. Clicking the desktop or another window (Deactivated)
+  ends that.
 - Give the owner the **x64** artifact link (`Dropshelf-win-x64`), not arm64.
 
 ## Working rules

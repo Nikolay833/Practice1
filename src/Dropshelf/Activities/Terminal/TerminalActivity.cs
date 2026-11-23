@@ -34,7 +34,7 @@ internal sealed class TerminalActivity : PillActivityBase, IDisposable
 
     public override FrameworkElement? CreateExpanded()
     {
-        _screen = new TerminalScreen(Session);
+        _screen = new TerminalScreen(Session) { Paused = _paused };
         return new Grid { Children = { _screen } };
     }
 
@@ -47,6 +47,22 @@ internal sealed class TerminalActivity : PillActivityBase, IDisposable
             System.Windows.Input.Keyboard.Focus(_screen);
         }
     }
+
+    /// <summary>The island cannot be seen (closed, or open at zero opacity while you type blind): skip drawing.</summary>
+    public bool Paused
+    {
+        get => _paused;
+        set
+        {
+            _paused = value;
+            if (_screen != null)
+            {
+                _screen.Paused = value;
+            }
+        }
+    }
+
+    private bool _paused;
 
     public void Dispose() => Session.Dispose();
 }

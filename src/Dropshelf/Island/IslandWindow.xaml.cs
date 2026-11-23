@@ -91,6 +91,8 @@ public partial class IslandWindow : Window
     private IntPtr _previousForeground;
     private bool _privacyDot;
     private bool _transparent;         // no black notch: invisible while closed, transparent with light grey text while open
+    private bool _keepKeyboard;
+    private TerminalActivity? _terminalScreen;        // closed, but the terminal still has the keyboard: typing goes on until a click elsewhere
 
     // Fully transparent to the eye but not to the mouse: a layered window lets clicks through pixels that are completely clear.
     private static readonly SolidColorBrush ClearBrush = Frozen(Color.FromArgb(0x01, 0, 0, 0));
@@ -132,13 +134,13 @@ public partial class IslandWindow : Window
         MouseEnter += (_, _) => _collapseTimer.Stop();
         MouseLeave += (_, _) => ScheduleCollapse();
 
-        // A click on the collapsed island expands it (the only way in when hover-expand is off).
+        // A click on the collapsed island opens it with the keyboard in the terminal (hovering only shows it).
         PreviewMouseLeftButtonDown += (_, e) =>
         {
             // A button on an interactive HUD ("Copy text") is a click on that button, not a request to open.
             if (!_expanded && FindAncestor<System.Windows.Controls.Primitives.ButtonBase>(e.OriginalSource as DependencyObject) == null)
             {
-                Expand();
+                Expand(focus: true);
             }
         };
 
@@ -146,7 +148,15 @@ public partial class IslandWindow : Window
         PreviewMouseDown += OnPreviewMouseDown;
         Deactivated += (_, _) =>
         {
+            // A click on the desktop or another window: the terminal lets go of the keyboard.
             RestoreNoActivate();
+            if (_keepKeyboard)
+            {
+                _keepKeyboard = false;
+                Keyboard.ClearFocus();
+                ApplyLayout(settled: !_loop.IsRunning);
+            }
+
             ScheduleCollapse();
         };
     }
@@ -204,7 +214,8 @@ public partial class IslandWindow : Window
         _collapseTimer.Start();
     }
 
-    private void Expand(string? tab = null)
+    /// <param name="focus">A click (or the hotkey): put the keyboard in the terminal. Hovering only shows it.</param>
+    private void Expand(string? tab = null, bool focus = false)
     {
         _hoverTimer.Stop();
         _hoverSince = 0;
@@ -235,9 +246,36 @@ public partial class IslandWindow : Window
         Switcher.IsHitTestVisible = true;
         _outsideTimer.Start();
         AnimateTo(1);
+        _keepKeyboard = false; // open again: if you were typing blind, the keyboard simply stays where it is
+        if (focus)
+        {
+            FocusTerminal();
+        }
     }
 
-    private void Collapse()
+    /// <summary>
+    /// A click on the notch opens the island with the keyboard already in the terminal, so you can type at once. If the
+    /// keyboard is already there (you kept typing while the island was closed) nothing changes.
+    /// </summary>
+    private void FocusTerminal()
+    {
+        TerminalActivity? terminal = _activities.Activities.OfType<TerminalActivity>().FirstOrDefault();
+        if (terminal == null || _tab != terminal.Id)
+        {
+            return;
+        }
+
+        if (_activationAllowed && IsActive && Keyboard.FocusedElement is IWantsKeyboard)
+        {
+            return;
+        }
+
+        AllowActivation();
+        Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(terminal.FocusScreen));
+        ScheduleCollapse(); // AllowActivation stopped the collapse timer; it closes the island again once the mouse leaves
+    }
+
+    private void Collapse(bool keepKeyboard = false)
     {
         _collapseTimer.Stop();
         if (!_expanded)
@@ -246,8 +284,13 @@ public partial class IslandWindow : Window
         }
 
         _expanded = false;
-        Keyboard.ClearFocus();
-        RestoreNoActivate();
+        _keepKeyboard = keepKeyboard;
+        if (!keepKeyboard)
+        {
+            Keyboard.ClearFocus();
+            RestoreNoActivate();
+        }
+
         _activities.SetExpandedOpen(false);
         ExpandedPanel.IsHitTestVisible = false;
         Switcher.IsHitTestVisible = false;
@@ -293,7 +336,8 @@ public partial class IslandWindow : Window
 
         // An interactive HUD (screenshot "Copy text") needs the mouse: solid under the cursor, no hover-expand, and it stays up.
         bool interactiveHud = _activities.IsHudShowing && _activities.Content is { Interactive: true };
-        bool solid = onIsland && (!hoverExpand || interactiveHud);
+        // On the transparent island the notch is the trigger: solid under the cursor, so a click there opens it at once.
+        bool solid = onIsland && (!hoverExpand || interactiveHud || _transparent);
         WindowHelper.SetClickThrough(_hwnd, !solid);
         if (interactiveHud && onIsland)
         {
@@ -380,12 +424,7 @@ public partial class IslandWindow : Window
     private void OnCollapseTick(object? sender, EventArgs e)
     {
         _collapseTimer.Stop();
-        if (_activationAllowed && IsActive && Keyboard.FocusedElement is System.Windows.Controls.Primitives.TextBoxBase or IWantsKeyboard)
-        {
-            _collapseTimer.Start(); // typing in the terminal: the island stays open for as long as it has the keyboard
-            return;
-        }
-
+        bool typing = _activationAllowed && IsActive && Keyboard.FocusedElement is System.Windows.Controls.Primitives.TextBoxBase or IWantsKeyboard;
         bool hovered = NativeMethods.GetCursorPos(out var cursor) && IslandContains(cursor, 0);
         if (hovered || Environment.TickCount64 < _holdUntilTick || Mouse.Captured != null)
         {
@@ -394,7 +433,9 @@ public partial class IslandWindow : Window
             return;
         }
 
-        Collapse();
+        // The mouse left. While the terminal has the keyboard the island hides but keeps it: you can go on typing (Enter
+        // runs the command) and see the answer when you point at the notch again. A click anywhere else ends that.
+        Collapse(keepKeyboard: typing);
     }
 
     // ---- Animation ------------------------------------------------------------------------------
@@ -552,7 +593,14 @@ public partial class IslandWindow : Window
         }
 
         ExpandedPanel.Opacity = panel;
-        ExpandedPanel.Visibility = _expanded || panel > 0.001 ? Visibility.Visible : Visibility.Hidden;
+        // While you type blind the panel stays "visible" at zero opacity: a hidden element would lose the keyboard. The
+        // terminal skips drawing meanwhile and catches up when the island opens again.
+        ExpandedPanel.Visibility = _expanded || panel > 0.001 || _keepKeyboard ? Visibility.Visible : Visibility.Hidden;
+        _terminalScreen ??= _activities.Activities.OfType<TerminalActivity>().FirstOrDefault();
+        if (_terminalScreen != null)
+        {
+            _terminalScreen.Paused = panel <= 0.001;
+        }
         Switcher.Opacity = panel;
         Switcher.Visibility = _transparent ? Visibility.Collapsed : ExpandedPanel.Visibility; // settings are in the tray menu
         SwitcherShift.Y = -10 * (1 - panel);
@@ -728,6 +776,11 @@ public partial class IslandWindow : Window
 
         if (target == null)
         {
+            if (_transparent)
+            {
+                FocusTerminal(); // a click anywhere on the open transparent island means "let me type"
+            }
+
             return;
         }
 

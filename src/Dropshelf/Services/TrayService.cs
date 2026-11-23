@@ -14,7 +14,7 @@ internal sealed class TrayService : IDisposable
     private readonly Drawing.Icon? _ownedIcon;
 
     public TrayService(Action showIsland, Action openBasket, Action openClipboard, Action openSettings, Action uninstall, Action quit,
-        Action screenshot, Action openTerminal, Action openNotes)
+        Action screenshot, Action openTerminal)
     {
         _menu = new WinForms.ContextMenuStrip
         {
@@ -31,7 +31,6 @@ internal sealed class TrayService : IDisposable
         AddItem("Clipboard history", openClipboard);
         AddItem("Take screenshot", screenshot);
         AddItem("Terminal", openTerminal);
-        AddItem("Notes", openNotes);
         _menu.Items.Add(new WinForms.ToolStripSeparator());
         AddItem("Settings…", openSettings);
         // The MSIX build is removed by Windows (Settings > Apps), not by a cleanup script of its own: the item says so and opens that page.

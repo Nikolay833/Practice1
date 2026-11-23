@@ -8,6 +8,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
 using Dropshelf.Activities;
+using Dropshelf.Activities.Terminal;
 using Dropshelf.Animation;
 using Dropshelf.Interop;
 using Dropshelf.Services;
@@ -108,7 +109,7 @@ public partial class IslandWindow : Window
         ApplyLook();
         _activities.SecondaryChanged += OnSecondaryChanged;
         CenterGap.Width = new GridLength(CompactGap);
-        Tabs.TabClicked += OnTabClicked;
+        Tabs.TabClicked += id => SelectTab(id);
         _activities.CompactChanged += OnCompactChanged;
         _activities.TabsChanged += RebuildTabs;
         RebuildTabs();
@@ -743,39 +744,25 @@ public partial class IslandWindow : Window
     }
 
     /// <summary>Ctrl+Shift+N or the tray: opens the island with the keyboard in the terminal.</summary>
-    public void ShowTerminal() => ShowTab("terminal");
-
-    /// <summary>The tray: opens the island with the keyboard in the notes.</summary>
-    public void ShowNotes() => ShowTab("notes");
-
-    private void ShowTab(string id)
+    public void ShowTerminal()
     {
-        IPillActivity? activity = _activities.Activities.FirstOrDefault(a => a.Id == id);
+        TerminalActivity? terminal = _activities.Activities.OfType<TerminalActivity>().FirstOrDefault();
         _holdUntilTick = Environment.TickCount64 + 4000;
-        Expand(activity?.Id);
-        if (activity is not IFocusableTab tab)
+        Expand(terminal?.Id);
+        if (terminal == null)
         {
             return;
         }
 
         AllowActivation();
-        Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(tab.FocusInput));
+        Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(terminal.FocusScreen));
 
-        // AllowActivation stopped the collapse timer. If the foreground change was refused the tab never gets the keyboard,
-        // so restart it: it keeps the island open while the tab has the keyboard or until _holdUntilTick, then lets it close.
+        // AllowActivation stopped the collapse timer. If the foreground change was refused the terminal never gets the keyboard,
+        // so restart it: it keeps the island open while the terminal has the keyboard or until _holdUntilTick, then lets it close.
         ScheduleCollapse();
     }
 
     private void Settings_Click(object sender, RoutedEventArgs e) => _openSettings();
-
-    private void SettingsLink_Click(object sender, MouseButtonEventArgs e)
-    {
-        _openSettings();
-        e.Handled = true;
-    }
-
-    private void SettingsLink_Hover(object sender, MouseEventArgs e) =>
-        SettingsLink.SetResourceReference(TextBlock.ForegroundProperty, SettingsLink.IsMouseOver ? "TextBrush" : "TextSecondaryBrush");
 
     // ---- Tabs ---------------------------------------------------------------------------------------
 
@@ -784,7 +771,6 @@ public partial class IslandWindow : Window
     {
         "media" => "\uEC4F",   // music note
         "terminal" => "\uE756", // command prompt
-        "notes" => "\uE70B",    // quick note
         _ => "\uE10F",         // home
     };
 
@@ -804,18 +790,6 @@ public partial class IslandWindow : Window
         if (_tab == null || tabs.All(t => t.Id != _tab))
         {
             SelectTab(null, instant: !_expanded); // the activity behind the current tab went away (playback ended...)
-        }
-    }
-
-    /// <summary>A tab was clicked: show it, and if it takes typing (terminal, notes) put the keyboard there.</summary>
-    private void OnTabClicked(string id)
-    {
-        SelectTab(id);
-        if (_expanded && _activities.TabActivities.FirstOrDefault(a => a.Id == _tab) is IFocusableTab tab)
-        {
-            AllowActivation();
-            Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(tab.FocusInput));
-            ScheduleCollapse(); // as in ShowTab: stays open while the tab has the keyboard
         }
     }
 
@@ -918,9 +892,6 @@ public partial class IslandWindow : Window
         }
 
         SetTextColor(_transparent ? LightGrey : Colors.White);
-        Tabs.Plain = _transparent;
-        SettingsButton.Visibility = _transparent ? Visibility.Collapsed : Visibility.Visible;
-        SettingsLink.Visibility = _transparent ? Visibility.Visible : Visibility.Collapsed;
         _lastW = _lastH = _lastR = -1;
         ApplyLayout(settled: !_loop.IsRunning);
     }

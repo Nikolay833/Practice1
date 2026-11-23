@@ -52,6 +52,13 @@ internal static class NativeMethods
         public IntPtr dwExtraInfo;
     }
 
+    /// <summary>WDA_EXCLUDEFROMCAPTURE (Windows 10 2004+): the window is left out of screenshots and screen sharing.</summary>
+    public const uint WDA_EXCLUDEFROMCAPTURE = 0x11;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool SetWindowDisplayAffinity(IntPtr hWnd, uint dwAffinity);
+
     [DllImport("user32.dll", SetLastError = true)]
     public static extern IntPtr SetWindowsHookEx(int idHook, LowLevelMouseProc lpfn, IntPtr hMod, uint dwThreadId);
 

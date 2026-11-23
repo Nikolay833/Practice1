@@ -91,6 +91,10 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
+        // Every Dropshelf window (the island and terminal, settings, dialogs) is left out of screen sharing and recordings.
+        EventManager.RegisterClassHandler(typeof(Window), FrameworkElement.LoadedEvent, new RoutedEventHandler((sender, _) =>
+            WindowHelper.ExcludeFromCapture(new System.Windows.Interop.WindowInteropHelper((Window)sender).Handle)));
+
         // First run or update: copy the exe to %LOCALAPPDATA%\Programs\Dropshelf and continue from there. A running
         // instance is asked to quit first, so launching a newer exe replaces the installed one.
         if (Installer.TryInstallAndRelaunch(e.Args))

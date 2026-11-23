@@ -74,6 +74,19 @@ internal static class WindowHelper
         }
     }
 
+    /// <summary>
+    /// Leaves the window out of screen capture: Google Meet, Teams, Zoom, Discord and OBS sharing, the Snipping Tool and
+    /// recordings show what is behind it, as if it were not there. It stays fully visible on your own screen. Needs Windows 10
+    /// 2004 or newer; older systems just ignore it.
+    /// </summary>
+    public static void ExcludeFromCapture(IntPtr hwnd)
+    {
+        if (hwnd != IntPtr.Zero && !NativeMethods.SetWindowDisplayAffinity(hwnd, NativeMethods.WDA_EXCLUDEFROMCAPTURE))
+        {
+            Services.Log.Info($"Could not hide a window from screen capture (error {System.Runtime.InteropServices.Marshal.GetLastWin32Error()})");
+        }
+    }
+
     /// <summary>Hides a window from Alt+Tab and (optionally) stops it from taking focus when clicked.</summary>
     public static void MakeToolWindow(IntPtr hwnd, bool noActivate)
     {

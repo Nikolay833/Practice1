@@ -53,6 +53,8 @@ The owner now uses a weak **x64 Ryzen 3 laptop** (Windows 11, about 5 GB RAM fre
   keyboard, the island hides but keeps it (`_keepKeyboard`; panel stays Visible at opacity 0 so WPF keeps focus,
   terminal `Paused`), so typing and Enter keep working blind. Clicking the desktop or another window (Deactivated)
   ends that.
+- Hidden from screen sharing: every WPF window gets `SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)` on Loaded
+  (class handler in `App.OnStartup`), the tray menu on Opened. Shows on the owner's screen, not in Meet/recordings.
 - Give the owner the **x64** artifact link (`Dropshelf-win-x64`), not arm64.
 
 ## Working rules

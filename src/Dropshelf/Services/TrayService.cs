@@ -26,6 +26,8 @@ internal sealed class TrayService : IDisposable
             Padding = new WinForms.Padding(4),
         };
 
+        _menu.Opened += (_, _) => Interop.WindowHelper.ExcludeFromCapture(_menu.Handle); // not in screen sharing either
+
         // Terminal-only build: the basket, clipboard and screenshot items are gone with their features.
         AddItem("Terminal", openTerminal);
         _menu.Items.Add(new WinForms.ToolStripSeparator());

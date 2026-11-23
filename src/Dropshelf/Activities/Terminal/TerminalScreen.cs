@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using Dropshelf.Services;
 
 namespace Dropshelf.Activities.Terminal;
@@ -37,6 +39,18 @@ internal sealed class TerminalScreen : FrameworkElement, IWantsKeyboard
     private (int Row, int Col)? _selStart;
     private (int Row, int Col)? _selEnd;
 
+    // Drawing: one retained visual per row plus an overlay (selection, cursor) on top. A repaint only redraws the rows whose
+    // cells changed since they were last drawn, so a spinner or a typed character costs one row, not the whole screen, and
+    // nothing at all is drawn while the island is closed.
+    private readonly VisualCollection _visuals;
+    private readonly List<DrawingVisual> _rows = new();
+    private readonly List<VtCell[]?> _drawn = new();   // what each row visual currently shows
+    private readonly DrawingVisual _overlay = new();
+    private bool _paintQueued;
+    private long _lastPaint;
+    private DispatcherTimer? _paintTimer;
+    private const int MinPaintMs = 33;   // at most ~30 paints a second: every paint re-sends the whole layered window
+
     public TerminalScreen(TerminalSession session)
     {
         _session = session;
@@ -50,17 +64,28 @@ internal sealed class TerminalScreen : FrameworkElement, IWantsKeyboard
         _cellWidth = Math.Max(4, probe.WidthIncludingTrailingWhitespace);
         _cellHeight = Math.Ceiling(FontSize * 1.32);
 
+        _visuals = new VisualCollection(this) { _overlay };
         _session.Changed += OnChanged;
-        Loaded += (_, _) => _dpiScale = VisualTreeHelper.GetDpi(this).PixelsPerDip;
-        IsKeyboardFocusWithinChanged += (_, _) => InvalidateVisual();
+        Loaded += (_, _) =>
+        {
+            _dpiScale = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+            ForgetRows();
+            Redraw();
+        };
+        IsKeyboardFocusWithinChanged += (_, _) => Redraw();
+        IsVisibleChanged += (_, _) => Redraw(); // catch up on output that arrived while the island was closed
     }
+
+    protected override int VisualChildrenCount => _visuals.Count;
+
+    protected override Visual GetVisualChild(int index) => _visuals[index];
 
     private double _dpiScale = 1;
 
     private void OnChanged()
     {
         _scrollOffset = 0;
-        InvalidateVisual();
+        Redraw();
     }
 
     // ---- Size --------------------------------------------------------------------------------------------
@@ -68,6 +93,8 @@ internal sealed class TerminalScreen : FrameworkElement, IWantsKeyboard
     protected override void OnRenderSizeChanged(SizeChangedInfo sizeInfo)
     {
         base.OnRenderSizeChanged(sizeInfo);
+        ForgetRows();
+        Redraw();
         int columns = Math.Max(20, (int)((ActualWidth - 2 * Pad) / _cellWidth));
         int rows = Math.Max(4, (int)((ActualHeight - 2 * Pad) / _cellHeight));
         if (ActualWidth < 40 || ActualHeight < 40)
@@ -87,17 +114,100 @@ internal sealed class TerminalScreen : FrameworkElement, IWantsKeyboard
 
     // ---- Drawing -------------------------------------------------------------------------------------------
 
-    protected override void OnRender(DrawingContext dc)
-    {
-        dc.DrawRectangle(HitBrush, null, new Rect(RenderSize));
-        VtScreen screen = _session.Screen;
-        List<VtCell[]> lines = VisibleLines(screen);
+    /// <summary>Only the invisible hit area: the text lives in the row visuals, which <see cref="Paint"/> keeps up to date.</summary>
+    protected override void OnRender(DrawingContext dc) => dc.DrawRectangle(HitBrush, null, new Rect(RenderSize));
 
-        for (int row = 0; row < lines.Count; row++)
+    /// <summary>Asks for one repaint at render priority; any number of changes before it is drawn cost a single paint.</summary>
+    private void Redraw()
+    {
+        if (_paintQueued)
         {
-            DrawLine(dc, lines[row], row);
+            return;
         }
 
+        _paintQueued = true;
+        long wait = MinPaintMs - (Environment.TickCount64 - _lastPaint);
+        if (wait <= 0)
+        {
+            Dispatcher.BeginInvoke(DispatcherPriority.Render, new Action(Paint));
+            return;
+        }
+
+        // Output is streaming in (claude writing, a spinner): wait for the rest of the frame and draw it all at once.
+        if (_paintTimer == null)
+        {
+            _paintTimer = new DispatcherTimer(DispatcherPriority.Render);
+            _paintTimer.Tick += (_, _) =>
+            {
+                _paintTimer.Stop();
+                Paint();
+            };
+        }
+
+        _paintTimer.Interval = TimeSpan.FromMilliseconds(wait);
+        _paintTimer.Start();
+    }
+
+    /// <summary>Every row is drawn again on the next paint (size or DPI changed).</summary>
+    private void ForgetRows()
+    {
+        for (int i = 0; i < _drawn.Count; i++)
+        {
+            _drawn[i] = null;
+        }
+    }
+
+    private void Paint()
+    {
+        _paintQueued = false;
+        _lastPaint = Environment.TickCount64;
+        if (!IsVisible)
+        {
+            return; // the island is closed: draw nothing now, IsVisibleChanged repaints when it opens
+        }
+
+        VtScreen screen = _session.Screen;
+        List<VtCell[]> lines = VisibleLines(screen);
+        while (_rows.Count < lines.Count)
+        {
+            var visual = new DrawingVisual();
+            _rows.Add(visual);
+            _drawn.Add(null);
+            _visuals.Insert(_visuals.Count - 1, visual); // rows stay under the overlay
+        }
+
+        while (_rows.Count > lines.Count)
+        {
+            _visuals.Remove(_rows[^1]);
+            _rows.RemoveAt(_rows.Count - 1);
+            _drawn.RemoveAt(_drawn.Count - 1);
+        }
+
+        int width = screen.Columns;
+        for (int row = 0; row < lines.Count; row++)
+        {
+            ReadOnlySpan<VtCell> cells = lines[row].AsSpan(0, Math.Min(lines[row].Length, width));
+            VtCell[]? drawn = _drawn[row];
+            if (drawn != null && drawn.Length == cells.Length
+                && MemoryMarshal.AsBytes(cells).SequenceEqual(MemoryMarshal.AsBytes(drawn.AsSpan())))
+            {
+                continue; // unchanged since it was drawn
+            }
+
+            using (DrawingContext dc = _rows[row].RenderOpen())
+            {
+                DrawLine(dc, lines[row], row);
+            }
+
+            _drawn[row] = cells.ToArray();
+        }
+
+        using DrawingContext overlay = _overlay.RenderOpen();
+        DrawOverlay(overlay, screen);
+    }
+
+    private void DrawOverlay(DrawingContext dc, VtScreen screen)
+    {
         DrawSelection(dc);
 
         if (_scrollOffset == 0 && screen.CursorVisible && !_session.HasEnded)
@@ -406,7 +516,7 @@ internal sealed class TerminalScreen : FrameworkElement, IWantsKeyboard
         Keyboard.Focus(this);
         _selStart = _selEnd = CellAt(e.GetPosition(this));
         CaptureMouse();
-        InvalidateVisual();
+        Redraw();
         e.Handled = true;
     }
 
@@ -416,7 +526,7 @@ internal sealed class TerminalScreen : FrameworkElement, IWantsKeyboard
         if (IsMouseCaptured && _selStart != null)
         {
             _selEnd = CellAt(e.GetPosition(this));
-            InvalidateVisual();
+            Redraw();
         }
     }
 
@@ -480,7 +590,7 @@ internal sealed class TerminalScreen : FrameworkElement, IWantsKeyboard
     {
         _scrollOffset = Math.Max(0, _scrollOffset + lines);
         ClearSelection();
-        InvalidateVisual();
+        Redraw();
     }
 
     private (int Row, int Col) CellAt(Point p) =>
@@ -537,7 +647,7 @@ internal sealed class TerminalScreen : FrameworkElement, IWantsKeyboard
         if (_selStart != null)
         {
             _selStart = _selEnd = null;
-            InvalidateVisual();
+            Redraw();
         }
     }
 }

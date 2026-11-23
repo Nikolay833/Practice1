@@ -33,7 +33,6 @@ jobs:
           -p:Version=1.0.${{ github.run_number }}
           -p:PublishSingleFile=true
           -p:IncludeNativeLibrariesForSelfExtract=true
-          -p:EnableCompressionInSingleFile=true
           -o out
 
       - name: Name exe after its architecture

@@ -45,6 +45,9 @@ The owner now uses a weak **x64 Ryzen 3 laptop** (Windows 11, about 5 GB RAM fre
   6 DIP drop (fade only under reduced motion), out in 70 ms, then the window shrinks. No tab switcher.
 - Hover delay 140 ms (poll 40 ms near the notch). Ctrl+Shift+N still opens it with the keyboard in the terminal.
 - csproj: no concurrent GC, workstation GC, no TieredPGO, ReadyToRun on publish.
+- Terminal drawing (`TerminalScreen`): one retained `DrawingVisual` per row plus an overlay (selection, cursor). A
+  paint redraws only rows whose cells changed, at most ~30 paints a second, and nothing while the island is closed.
+- Single-file exe is no longer compressed (a compressed bundle unpacks into RAM each start); GC `ConserveMemory` 7.
 - Give the owner the **x64** artifact link (`Dropshelf-win-x64`), not arm64.
 
 ## Working rules

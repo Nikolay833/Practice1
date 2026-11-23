@@ -23,6 +23,8 @@
     <!-- Light on a slow laptop with little free RAM: no background GC thread (the app allocates very little), workstation GC,
          and precompiled code so start-up and the first pop-up do not wait for the JIT. -->
     <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <!-- The single-file exe is not compressed: a compressed bundle is unpacked into memory on every start (more RAM, slower
+         start). The download is zipped anyway, so it is not bigger to fetch. -->
     <ServerGarbageCollection>false</ServerGarbageCollection>
     <TieredPGO>false</TieredPGO>
   </PropertyGroup>
@@ -33,6 +35,11 @@
 
   <ItemGroup>
     <Resource Include="Assets\app.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Let the GC compact harder and keep the heap small instead of trading memory for speed (0 = default, 9 = most). -->
+    <RuntimeHostConfigurationOption Include="System.GC.ConserveMemory" Value="7" />
   </ItemGroup>
 
   <ItemGroup>

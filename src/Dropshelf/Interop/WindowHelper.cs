@@ -180,6 +180,22 @@ internal static class WindowHelper
             }
         }
 
+        if (NativeMethods.GetForegroundWindow() == hwnd)
+        {
+            return true;
+        }
+
+        // Still refused (the click that asked for it went to a hook, not to this app). A key press lifts Windows' foreground
+        // lock, so tap Alt around the request; the window ignores the lone Alt (it never enters menu mode). Last resort:
+        // SwitchToThisWindow, which the shell itself uses for Alt+Tab.
+        NativeMethods.keybd_event((byte)NativeMethods.VK_MENU, 0, 0, UIntPtr.Zero);
+        NativeMethods.SetForegroundWindow(hwnd);
+        NativeMethods.keybd_event((byte)NativeMethods.VK_MENU, 0, NativeMethods.KEYEVENTF_KEYUP, UIntPtr.Zero);
+        if (NativeMethods.GetForegroundWindow() != hwnd)
+        {
+            NativeMethods.SwitchToThisWindow(hwnd, true);
+        }
+
         return NativeMethods.GetForegroundWindow() == hwnd;
     }
 

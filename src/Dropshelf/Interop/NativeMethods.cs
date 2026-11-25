@@ -18,6 +18,12 @@ internal static class NativeMethods
     public const int WM_MBUTTONDOWN = 0x0207;
     public const int WM_SYSCOMMAND = 0x0112;
     public const int SC_KEYMENU = 0xF100;
+
+    [DllImport("user32.dll")]
+    public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
+
+    [DllImport("user32.dll")]
+    public static extern void SwitchToThisWindow(IntPtr hWnd, [MarshalAs(UnmanagedType.Bool)] bool fAltTab);
     public const int WM_MBUTTONUP = 0x0208;
     public const int WM_MOUSEWHEEL = 0x020A;
     public const uint WM_QUIT = 0x0012;

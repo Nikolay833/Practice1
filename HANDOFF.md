@@ -57,13 +57,15 @@ The owner now uses a weak **x64 Ryzen 3 laptop** (Windows 11, about 5 GB RAM fre
   (class handler in `App.OnStartup`), the tray menu on Opened. Shows on the owner's screen, not in Meet/recordings.
 - Text is now **dark grey** (`VtScreen.DefaultFore` 0x4A4A4F, `IslandWindow.LightGrey` kept as the name).
 - Middle click anywhere (low-level hook, `MouseHook.CatchMiddleClick`, swallowed): `IslandWindow.ToggleView` opens the
-  terminal pinned (`_pinned`) until another middle click or a click elsewhere. Alt + middle click:
+  terminal pinned (`_pinned`) until another middle click or a click elsewhere. Ctrl + middle click (was Alt):
   `StartTypingHidden` gives the terminal the keyboard without opening it. Top hover/click still work.
 - Terminal is monochrome: `TerminalScreen.DrawLine` ignores program colours (all text `DefaultFore`), coloured or inverse
   backgrounds become a faint grey band.
 - `IslandWindow.WndProc` swallows `WM_SYSCOMMAND/SC_KEYMENU`: a lone Alt release (after Alt + middle click) used to put
   the window in menu mode and eat the next keys. `StartTypingHidden` retries the foreground change once and logs
   "Typing without opening: active=..., keyboard in ..." to `dropshelf.log`.
+- `WindowHelper.ForceForeground`: AttachThreadInput first; if refused, Alt tap around SetForegroundWindow (lifts the
+  foreground lock), then SwitchToThisWindow.
 - Give the owner the **x64** artifact link (`Dropshelf-win-x64`), not arm64.
 
 ## Working rules

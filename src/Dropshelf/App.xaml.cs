@@ -178,12 +178,12 @@ public partial class App : Application
         _island = new IslandWindow(_settings, ShowSettings, _activityHost);
         _island.Show();
 
-        // Middle click anywhere opens the terminal to look at; Alt + middle click types into it without opening it. The
+        // Middle click anywhere opens the terminal to look at; Ctrl + middle click types into it without opening it. The
         // low-level mouse hook runs on its own thread and only looks at button presses, so it costs next to nothing.
         _mouseHook = new MouseHook { CatchMiddleClick = true };
-        _mouseHook.MiddleClick += alt =>
+        _mouseHook.MiddleClick += ctrl =>
         {
-            if (alt)
+            if (ctrl)
             {
                 _island.StartTypingHidden();
             }

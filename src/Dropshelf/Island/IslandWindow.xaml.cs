@@ -189,7 +189,7 @@ public partial class IslandWindow : Window
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        // Releasing Alt on its own (after Alt + middle click) would put the window into Windows' menu mode, which swallows
+        // Releasing Alt on its own (for example after the Alt tap that lifts the foreground lock) would put the window into Windows' menu mode, which swallows
         // the next keys you type. The island has no menu, so that never happens here; Alt combinations still reach the terminal.
         if (msg == NativeMethods.WM_SYSCOMMAND && (wParam.ToInt64() & 0xFFF0) == NativeMethods.SC_KEYMENU)
         {
@@ -881,7 +881,7 @@ public partial class IslandWindow : Window
     }
 
     /// <summary>
-    /// Alt + middle click: the keyboard goes to the terminal but the island stays closed. Type, press Enter, look later by
+    /// Ctrl + middle click: the keyboard goes to the terminal but the island stays closed. Type, press Enter, look later by
     /// pointing at the notch or middle-clicking. A click on the desktop or another window gives the keyboard back.
     /// </summary>
     public void StartTypingHidden()

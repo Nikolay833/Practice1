@@ -59,7 +59,7 @@ internal sealed class MouseHook : IDisposable
     /// <summary>Wheel turned inside the region set by <see cref="SetWheelRegion"/>: x, y and the raw wheel delta (120 per notch, positive = away from the user).</summary>
     public event Action<int, int, int>? Wheel;
 
-    /// <summary>The middle button was pressed anywhere (true when Alt was held). Only while <see cref="CatchMiddleClick"/>.</summary>
+    /// <summary>The middle button was pressed anywhere (true when Ctrl was held). Only while <see cref="CatchMiddleClick"/>.</summary>
     public event Action<bool>? MiddleClick;
 
     /// <summary>Middle clicks are taken by Dropshelf (the terminal trigger) and never reach the window under the mouse.</summary>
@@ -185,8 +185,8 @@ internal sealed class MouseHook : IDisposable
                 {
                     if (msg == NativeMethods.WM_MBUTTONDOWN)
                     {
-                        bool alt = (NativeMethods.GetAsyncKeyState(NativeMethods.VK_MENU) & 0x8000) != 0;
-                        _dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(() => MiddleClick?.Invoke(alt)));
+                        bool ctrl = (NativeMethods.GetAsyncKeyState(NativeMethods.VK_CONTROL) & 0x8000) != 0;
+                        _dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(() => MiddleClick?.Invoke(ctrl)));
                     }
 
                     return (IntPtr)1; // swallow both halves: the app under the mouse must not get a lone press or release

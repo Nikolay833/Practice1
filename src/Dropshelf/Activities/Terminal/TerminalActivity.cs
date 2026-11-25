@@ -1,6 +1,7 @@
 using System;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Dropshelf.Services;
 
 namespace Dropshelf.Activities.Terminal;
@@ -63,6 +64,37 @@ internal sealed class TerminalActivity : PillActivityBase, IDisposable
     }
 
     private bool _paused;
+
+    /// <summary>
+    /// A key typed while the terminal is hidden (the keyboard hook): sent to the shell the way the terminal itself would send
+    /// it. Ctrl+V pastes the clipboard.
+    /// </summary>
+    public void TypeKey(Key key, string? text, bool ctrl, bool shift, bool alt)
+    {
+        if (ctrl && !alt && key == Key.V)
+        {
+            try
+            {
+                if (System.Windows.Clipboard.ContainsText())
+                {
+                    string paste = System.Windows.Clipboard.GetText().Replace("\r\n", "\r").Replace('\n', '\r');
+                    Session.Send(Session.Screen.BracketedPaste ? "\x1b[200~" + paste + "\x1b[201~" : paste);
+                }
+            }
+            catch (System.Runtime.InteropServices.COMException)
+            {
+                // Clipboard busy; skip this paste.
+            }
+
+            return;
+        }
+
+        string? send = TerminalScreen.Translate(Session.Screen, key, ctrl, shift, alt) ?? text;
+        if (send != null)
+        {
+            Session.Send(send);
+        }
+    }
 
     public void Dispose() => Session.Dispose();
 }

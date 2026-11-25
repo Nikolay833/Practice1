@@ -49,6 +49,7 @@ public partial class App : Application
     private HotkeyService? _hotkeys;
     private ClipboardHistoryService? _clipboard;
     private MouseHook? _mouseHook;
+    private KeyboardHook? _keyboardHook;
     private ShakeDetector? _shake;
     private TrayService? _tray;
     private IslandWindow? _island;
@@ -181,11 +182,24 @@ public partial class App : Application
         // Middle click anywhere opens the terminal to look at; Ctrl + middle click types into it without opening it. The
         // low-level mouse hook runs on its own thread and only looks at button presses, so it costs next to nothing.
         _mouseHook = new MouseHook { CatchMiddleClick = true };
+        // Ctrl + middle click: every key goes straight to the terminal through a keyboard hook, whatever window is in front,
+        // until the next left or right click anywhere. No focus change is involved, so Windows cannot refuse it.
+        _keyboardHook = new KeyboardHook();
+        _keyboardHook.KeyPressed += (key, text, ctrl, shift, alt) => _terminal?.TypeKey(key, text, ctrl, shift, alt);
+        _mouseHook.ButtonDown += () =>
+        {
+            if (_keyboardHook.IsRunning)
+            {
+                _keyboardHook.Stop();
+                Log.Info("Hidden typing stopped by a click");
+            }
+        };
         _mouseHook.MiddleClick += ctrl =>
         {
             if (ctrl)
             {
-                _island.StartTypingHidden();
+                _keyboardHook.Start();
+                Log.Info("Hidden typing started (keyboard hook)");
             }
             else
             {
@@ -313,6 +327,7 @@ public partial class App : Application
         });
         TryStep("audio endpoint", () => _audio?.Dispose());
         TryStep("theme", () => _theme?.Dispose());
+        TryStep("keyboard hook", () => _keyboardHook?.Dispose());
         TryStep("mouse hook", () => _mouseHook?.Dispose());
         TryStep("shake detector", () => _shake?.Dispose());
         TryStep("hotkeys", () => _hotkeys?.Dispose());

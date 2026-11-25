@@ -66,6 +66,10 @@ The owner now uses a weak **x64 Ryzen 3 laptop** (Windows 11, about 5 GB RAM fre
   "Typing without opening: active=..., keyboard in ..." to `dropshelf.log`.
 - `WindowHelper.ForceForeground`: AttachThreadInput first; if refused, Alt tap around SetForegroundWindow (lifts the
   foreground lock), then SwitchToThisWindow.
+- Ctrl + middle click now starts `Services/KeyboardHook` (WH_KEYBOARD_LL on its own thread, only while on): every
+  non-modifier key is swallowed and sent to `TerminalActivity.TypeKey` (ToUnicodeEx for text, `TerminalScreen.Translate`
+  for special keys, Ctrl+V pastes). Alt and Win combos pass through. Any left/right click (`MouseHook.ButtonDown`) stops
+  it. The focus-based `StartTypingHidden` was logging active=True but the owner still could not type, so it is unused.
 - Give the owner the **x64** artifact link (`Dropshelf-win-x64`), not arm64.
 
 ## Working rules

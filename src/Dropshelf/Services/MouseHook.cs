@@ -65,6 +65,9 @@ internal sealed class MouseHook : IDisposable
     /// <summary>Middle clicks are taken by Dropshelf (the terminal trigger) and never reach the window under the mouse.</summary>
     public bool CatchMiddleClick { get; set; }
 
+    /// <summary>A left or right button was pressed anywhere (raised on the UI thread). Never swallowed.</summary>
+    public event Action? ButtonDown;
+
     /// <summary>
     /// Captures the mouse wheel over a screen rectangle: wheel events there are delivered to <see cref="Wheel"/> and are
     /// not passed on to the window underneath. Pass <c>null</c> to stop capturing. Requires the hook to be installed.
@@ -190,6 +193,11 @@ internal sealed class MouseHook : IDisposable
                     }
 
                     return (IntPtr)1; // swallow both halves: the app under the mouse must not get a lone press or release
+                }
+
+                if (msg is NativeMethods.WM_LBUTTONDOWN or 0x0204 && ButtonDown != null) // 0x0204 = WM_RBUTTONDOWN
+                {
+                    _dispatcher.BeginInvoke(DispatcherPriority.Input, ButtonDown);
                 }
 
                 if (msg == NativeMethods.WM_MOUSEWHEEL && _wheelRegion is { } region)

@@ -407,7 +407,7 @@ internal sealed class TerminalScreen : FrameworkElement, IWantsKeyboard
             return;
         }
 
-        string? send = Translate(key, ctrl, shift, alt);
+        string? send = Translate(_session.Screen, key, ctrl, shift, alt);
         if (send != null)
         {
             ClearSelection();
@@ -430,10 +430,10 @@ internal sealed class TerminalScreen : FrameworkElement, IWantsKeyboard
     }
 
     /// <summary>The bytes a VT terminal sends for a key; null for keys that type text (they arrive as text input).</summary>
-    private string? Translate(Key key, bool ctrl, bool shift, bool alt)
+    internal static string? Translate(VtScreen screen, Key key, bool ctrl, bool shift, bool alt)
     {
         string mod = (shift ? 1 : 0) + (alt ? 2 : 0) + (ctrl ? 4 : 0) is var m and > 0 ? $";{m + 1}" : string.Empty;
-        bool app = _session.Screen.CursorKeysApplication && mod.Length == 0;
+        bool app = screen.CursorKeysApplication && mod.Length == 0;
         string Arrow(char c) => app ? $"\x1bO{c}" : mod.Length > 0 ? $"\x1b[1{mod}{c}" : $"\x1b[{c}";
         string Tilde(int n) => $"\x1b[{n}{mod}~";
 

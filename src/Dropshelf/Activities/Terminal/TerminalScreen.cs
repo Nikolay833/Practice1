@@ -27,7 +27,7 @@ internal sealed class TerminalScreen : FrameworkElement, IWantsKeyboard
     private const double Pad = 2;
 
     private static readonly Brush HitBrush = Frozen(Color.FromArgb(0x01, 0, 0, 0));   // invisible, but takes the mouse
-    private static readonly Brush SelectionBrush = Frozen(Color.FromArgb(0x55, 0xD4, 0xD4, 0xD4));
+    private static readonly Brush SelectionBrush = Frozen(Color.FromArgb(0x55, 0x4A, 0x4A, 0x4F));
 
     private readonly TerminalSession _session;
     private readonly Typeface _typeface;
@@ -235,11 +235,11 @@ internal sealed class TerminalScreen : FrameworkElement, IWantsKeyboard
             var cell = new Rect(Pad + screen.CursorX * _cellWidth, Pad + screen.CursorY * _cellHeight, _cellWidth, _cellHeight);
             if (IsKeyboardFocusWithin)
             {
-                dc.DrawRectangle(Brush(0xD4D4D4, 0.55), null, cell);
+                dc.DrawRectangle(Brush(VtScreen.DefaultFore, 0.55), null, cell);
             }
             else
             {
-                dc.DrawRectangle(null, new Pen(Brush(0xD4D4D4, 0.5), 1), new Rect(cell.X + 0.5, cell.Y + 0.5, cell.Width - 1, cell.Height - 1));
+                dc.DrawRectangle(null, new Pen(Brush(VtScreen.DefaultFore, 0.5), 1), new Rect(cell.X + 0.5, cell.Y + 0.5, cell.Width - 1, cell.Height - 1));
             }
         }
     }

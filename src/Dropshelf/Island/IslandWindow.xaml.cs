@@ -92,11 +92,12 @@ public partial class IslandWindow : Window
     private bool _privacyDot;
     private bool _transparent;         // no black notch: invisible while closed, transparent with light grey text while open
     private bool _keepKeyboard;
+    private bool _pinned;              // opened with a middle click: stays open until another middle click or a click elsewhere
     private TerminalActivity? _terminalScreen;        // closed, but the terminal still has the keyboard: typing goes on until a click elsewhere
 
     // Fully transparent to the eye but not to the mouse: a layered window lets clicks through pixels that are completely clear.
     private static readonly SolidColorBrush ClearBrush = Frozen(Color.FromArgb(0x01, 0, 0, 0));
-    internal static readonly Color LightGrey = Color.FromRgb(0xD0, 0xD0, 0xD4);
+    internal static readonly Color LightGrey = Color.FromRgb(0x4A, 0x4A, 0x4F); // the island text colour (now dark grey; the name is kept)
 
     internal IslandWindow(SettingsService settings, Action openSettings, ActivityHost activities)
     {
@@ -284,6 +285,7 @@ public partial class IslandWindow : Window
         }
 
         _expanded = false;
+        _pinned = false;
         _keepKeyboard = keepKeyboard;
         if (!keepKeyboard)
         {
@@ -424,6 +426,11 @@ public partial class IslandWindow : Window
     private void OnCollapseTick(object? sender, EventArgs e)
     {
         _collapseTimer.Stop();
+        if (_pinned)
+        {
+            return; // middle-click view: only a middle click or a click elsewhere closes it (OnOutsideTick)
+        }
+
         bool typing = _activationAllowed && IsActive && Keyboard.FocusedElement is System.Windows.Controls.Primitives.TextBoxBase or IWantsKeyboard;
         bool hovered = NativeMethods.GetCursorPos(out var cursor) && IslandContains(cursor, 0);
         if (hovered || Environment.TickCount64 < _holdUntilTick || Mouse.Captured != null)
@@ -845,6 +852,53 @@ public partial class IslandWindow : Window
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Middle click anywhere: opens the terminal to look at (no keyboard), wherever the mouse is; it stays open until the next
+    /// middle click or a click somewhere else. A middle click while it is open closes it (typing, if it had the keyboard, goes on).
+    /// </summary>
+    public void ToggleView()
+    {
+        if (_expanded)
+        {
+            bool typing = _activationAllowed && IsActive && Keyboard.FocusedElement is IWantsKeyboard;
+            Collapse(keepKeyboard: typing);
+            return;
+        }
+
+        Expand();
+        _pinned = true;
+        _collapseTimer.Stop();
+    }
+
+    /// <summary>
+    /// Alt + middle click: the keyboard goes to the terminal but the island stays closed. Type, press Enter, look later by
+    /// pointing at the notch or middle-clicking. A click on the desktop or another window gives the keyboard back.
+    /// </summary>
+    public void StartTypingHidden()
+    {
+        if (_expanded)
+        {
+            FocusTerminal();
+            return;
+        }
+
+        TerminalActivity? terminal = _activities.Activities.OfType<TerminalActivity>().FirstOrDefault();
+        if (terminal == null)
+        {
+            return;
+        }
+
+        if (_tab != terminal.Id)
+        {
+            SelectTab(terminal.Id, instant: true);
+        }
+
+        _keepKeyboard = true;
+        ApplyLayout(settled: !_loop.IsRunning); // keeps the (invisible) terminal "visible" so it can hold the keyboard
+        AllowActivation();
+        Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(terminal.FocusScreen));
     }
 
     /// <summary>Ctrl+Shift+N or the tray: opens the island with the keyboard in the terminal.</summary>

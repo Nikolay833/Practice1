@@ -55,6 +55,10 @@ The owner now uses a weak **x64 Ryzen 3 laptop** (Windows 11, about 5 GB RAM fre
   ends that.
 - Hidden from screen sharing: every WPF window gets `SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)` on Loaded
   (class handler in `App.OnStartup`), the tray menu on Opened. Shows on the owner's screen, not in Meet/recordings.
+- Text is now **dark grey** (`VtScreen.DefaultFore` 0x4A4A4F, `IslandWindow.LightGrey` kept as the name).
+- Middle click anywhere (low-level hook, `MouseHook.CatchMiddleClick`, swallowed): `IslandWindow.ToggleView` opens the
+  terminal pinned (`_pinned`) until another middle click or a click elsewhere. Alt + middle click:
+  `StartTypingHidden` gives the terminal the keyboard without opening it. Top hover/click still work.
 - Give the owner the **x64** artifact link (`Dropshelf-win-x64`), not arm64.
 
 ## Working rules

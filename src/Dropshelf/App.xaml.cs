@@ -178,6 +178,22 @@ public partial class App : Application
         _island = new IslandWindow(_settings, ShowSettings, _activityHost);
         _island.Show();
 
+        // Middle click anywhere opens the terminal to look at; Alt + middle click types into it without opening it. The
+        // low-level mouse hook runs on its own thread and only looks at button presses, so it costs next to nothing.
+        _mouseHook = new MouseHook { CatchMiddleClick = true };
+        _mouseHook.MiddleClick += alt =>
+        {
+            if (alt)
+            {
+                _island.StartTypingHidden();
+            }
+            else
+            {
+                _island.ToggleView();
+            }
+        };
+        _mouseHook.Install();
+
         _fullscreen = new FullscreenWatcher(_settings);
         _fullscreen.Changed += fullscreen =>
         {
@@ -501,9 +517,9 @@ public partial class App : Application
     /// </summary>
     private void ApplyMouseHookSetting()
     {
-        if (_mouseHook == null)
+        if (_mouseHook != null)
         {
-            return;
+            return; // terminal build: the hook is always on, for the middle-click trigger
         }
 
         bool wheel = _settings!.Current.ScrollToChangeVolume && _volume != null;

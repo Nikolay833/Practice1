@@ -75,7 +75,7 @@ internal sealed class VtScreen
     public event Action<string>? Reply;
 
     /// <summary>Default text colour (light grey).</summary>
-    public static int DefaultFore => 0xD4D4D4;
+    public static int DefaultFore => 0x4A4A4F; // dark grey text on the clear island
 
     // ---- Size ----------------------------------------------------------------------------------------
 

@@ -299,18 +299,15 @@ internal sealed class TerminalScreen : FrameworkElement, IWantsKeyboard
                 }
             }
 
-            bool inverse = (first.Flags & 4) != 0;
-            int fore = first.Fore == -1 ? VtScreen.DefaultFore : first.Fore;
-            int back = first.Back;
-            if (inverse)
-            {
-                (fore, back) = (back == -1 ? 0x1C1C1E : back, fore);
-            }
+            // Monochrome on purpose: every program's colours are ignored and all text is the same dark grey. A coloured or
+            // inverse background (a selected menu item, a highlighted line) becomes a faint grey band so it still shows.
+            bool highlighted = (first.Flags & 4) != 0 || first.Back != -1;
+            int fore = VtScreen.DefaultFore;
 
             double left = Pad + start * _cellWidth;
-            if (back != -1)
+            if (highlighted)
             {
-                dc.DrawRectangle(Brush(back, inverse ? 0.85 : 0.55), null, new Rect(left, y, (x - start) * _cellWidth, _cellHeight));
+                dc.DrawRectangle(Brush(VtScreen.DefaultFore, 0.16), null, new Rect(left, y, (x - start) * _cellWidth, _cellHeight));
             }
 
             string run = text.ToString();

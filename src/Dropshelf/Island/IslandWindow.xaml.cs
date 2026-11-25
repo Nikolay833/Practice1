@@ -189,6 +189,14 @@ public partial class IslandWindow : Window
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
+        // Releasing Alt on its own (after Alt + middle click) would put the window into Windows' menu mode, which swallows
+        // the next keys you type. The island has no menu, so that never happens here; Alt combinations still reach the terminal.
+        if (msg == NativeMethods.WM_SYSCOMMAND && (wParam.ToInt64() & 0xFFF0) == NativeMethods.SC_KEYMENU)
+        {
+            handled = true;
+            return IntPtr.Zero;
+        }
+
         if (msg is NativeMethods.WM_DISPLAYCHANGE or NativeMethods.WM_DPICHANGED)
         {
             // Re-anchor after WPF has handled the change.
@@ -897,8 +905,27 @@ public partial class IslandWindow : Window
 
         _keepKeyboard = true;
         ApplyLayout(settled: !_loop.IsRunning); // keeps the (invisible) terminal "visible" so it can hold the keyboard
+        UpdateLayout();
         AllowActivation();
-        Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(terminal.FocusScreen));
+        terminal.FocusScreen();
+
+        // Windows sometimes refuses the first foreground change; check once the click has settled and try again.
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+        {
+            if (!_keepKeyboard || _expanded)
+            {
+                return;
+            }
+
+            if (!IsActive)
+            {
+                WindowHelper.ForceForeground(_hwnd);
+                Activate();
+            }
+
+            terminal.FocusScreen();
+            Log.Info($"Typing without opening: active={IsActive}, keyboard in {Keyboard.FocusedElement?.GetType().Name ?? "nothing"}");
+        }));
     }
 
     /// <summary>Ctrl+Shift+N or the tray: opens the island with the keyboard in the terminal.</summary>
